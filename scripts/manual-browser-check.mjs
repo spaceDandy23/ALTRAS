@@ -282,6 +282,20 @@ async function completeAttempt({ perfect }) {
   await waitFor("Boolean(document.querySelector('.result-board'))", 'lesson result');
 }
 
+async function completeOrderMatters({ perfect }) {
+  await answerFindWord(perfect ? 'less' : 'more', 'keyboard');
+  await continueActivity('keyboard');
+  await answerFindWord(perfect ? 'subtracted' : 'added');
+  await continueActivity();
+  await answerOrganize(['five', 'less than', 'a number']);
+  await continueActivity();
+  await answerOrganize(['a number', 'subtracted from', 'twelve']);
+  await continueActivity();
+  await answerOrganize(['four', 'more than', 'twice a number']);
+  await continueActivity();
+  await waitFor("Boolean(document.querySelector('.result-board'))", 'Order Matters result');
+}
+
 function log(message) {
   process.stdout.write(`✓ ${message}\n`);
 }
@@ -450,17 +464,101 @@ try {
   await navigate(appBase);
   await waitFor("Boolean(document.querySelector('.home-start'))", 'home after lesson clear');
   const clearedHome = await evaluate("document.querySelector('.home-start').textContent");
-  if (!clearedHome.includes('Order Matters') || !clearedHome.includes('View Lesson 2'))
+  if (!clearedHome.includes('Order Matters') || !clearedHome.includes('Start Lesson 2'))
     throw new Error('Home did not point to the unlocked next lesson');
   await clickByText('.home-actions a', 'View all lessons');
   await waitFor("Boolean(document.querySelector('.lesson-path'))", 'unlocked hub');
   const unlocked = await evaluate("document.querySelectorAll('.lesson-node--locked').length === 0");
   if (!unlocked) throw new Error('Lesson 2 did not unlock');
   await evaluate("document.querySelectorAll('.lesson-path a')[1].click()");
-  await waitFor("Boolean(document.querySelector('.preview-board'))", 'Lesson 2 preview');
-  await captureAtBothSizes('phase2.1-lesson-preview.png');
-  await assertNoViewportOverflow('Lesson preview');
-  log('passing attempt unlocks the deliberate Lesson 2 preview');
+  await waitFor("Boolean(document.querySelector('.lesson-overview__hero'))", 'Lesson 2 overview');
+  const lessonTwoOverview = await evaluate(
+    "document.querySelector('.lesson-overview').textContent",
+  );
+  if (!lessonTwoOverview.includes('5 activities') || !lessonTwoOverview.includes('70% to pass'))
+    throw new Error('Lesson 2 overview details are incomplete');
+  await captureAtBothSizes('phase2.2-lesson-overview.png');
+  await assertNoViewportOverflow('Lesson 2 overview');
+  await clickByText('.lesson-summary .button', 'Start lesson');
+  await waitFor("Boolean(document.querySelector('.choice-grid'))", 'Lesson 2 first activity');
+
+  await answerFindWord('more');
+  await continueActivity();
+  await evaluate("document.querySelector('.lesson-exit').click()");
+  await waitFor(
+    'Boolean(document.querySelector(\'[role="alertdialog"]\'))',
+    'Lesson 2 exit dialog',
+  );
+  await evaluate("document.querySelector('.dialog .button--danger').click()");
+  await waitFor(
+    "Boolean(document.querySelector('.lesson-summary'))",
+    'Lesson 2 overview after exit',
+  );
+  await clickByText('.lesson-summary .button', 'Resume lesson');
+  await waitFor("Boolean(document.querySelector('.choice-grid'))", 'resumed Lesson 2 activity');
+  const lessonTwoResume = await evaluate(
+    "document.querySelector('.lesson-player__identity strong').textContent",
+  );
+  if (!lessonTwoResume.includes('2 of 5')) throw new Error('Lesson 2 did not resume at activity 2');
+  await captureAtBothSizes('phase2.2-find-the-word.png');
+  await assertNoViewportOverflow('Lesson 2 Find the Word');
+
+  await answerFindWord('added');
+  await continueActivity();
+  await captureAtBothSizes('phase2.2-organize-translate.png');
+  await assertNoViewportOverflow('Lesson 2 Organize and Translate');
+  await answerOrganize(['five', 'less than', 'a number']);
+  await continueActivity();
+  await answerOrganize(['a number', 'subtracted from', 'twelve']);
+  await continueActivity();
+  await answerOrganize(['four', 'more than', 'twice a number']);
+  await continueActivity();
+  await waitFor(
+    "Boolean(document.querySelector('.result-page--failed'))",
+    'failed Lesson 2 result',
+  );
+  log('Lesson 2 exit, resume, five activities, and failed result work normally');
+
+  await clickByText('.result-actions .button--primary', 'Retry lesson');
+  await waitFor("Boolean(document.querySelector('.choice-grid'))", 'Lesson 2 retry');
+  await completeOrderMatters({ perfect: true });
+  await waitFor(
+    "Boolean(document.querySelector('.result-page--cleared'))",
+    'cleared Lesson 2 result',
+  );
+  const lessonTwoResult = await evaluate("document.querySelector('.result-board').textContent");
+  if (
+    lessonTwoResult.includes('View next lesson') ||
+    !lessonTwoResult.includes('Review lesson') ||
+    !lessonTwoResult.includes('Lessons')
+  )
+    throw new Error('Final Lesson 2 result actions are invalid');
+  await captureAtBothSizes('phase2.2-result.png');
+  await assertNoViewportOverflow('Lesson 2 result');
+
+  await send('Page.reload');
+  await waitFor(
+    "Boolean(document.querySelector('.result-page--cleared'))",
+    'Lesson 2 result refresh',
+  );
+  await send('Network.emulateNetworkConditions', {
+    offline: true,
+    latency: 0,
+    downloadThroughput: 0,
+    uploadThroughput: 0,
+  });
+  await send('Page.reload');
+  await waitFor(
+    "Boolean(document.querySelector('.result-page--cleared'))",
+    'offline Lesson 2 result reload',
+  );
+  await send('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+  log('Lesson 2 retry, clear, result actions, persistence, and offline reopening work');
 
   await logout();
   await register(secondUsername, 'Second Learner');
@@ -472,7 +570,14 @@ try {
     throw new Error('Progress leaked between users');
   await logout();
   await login(firstUsername);
-  log('switching local users keeps lesson progress isolated and existing login works');
+  await navigate(`${appBase}/lessons`);
+  await waitFor("Boolean(document.querySelector('.lesson-path'))", 'first user restored hub');
+  const restoredLessonTwo = await evaluate(
+    "document.querySelectorAll('.lesson-node')[1].textContent",
+  );
+  if (!restoredLessonTwo.includes('Cleared') || !restoredLessonTwo.includes('Best score 100%'))
+    throw new Error('First user Lesson 2 progress was not restored');
+  log('switching local users keeps Lesson 2 progress isolated and existing login works');
 } finally {
   socket.close();
 }

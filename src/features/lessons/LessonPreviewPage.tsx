@@ -1,57 +1,6 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { BackLink } from '@/components/ui/BackLink';
-import { Panel } from '@/components/ui/Panel';
-import { db } from '@/db/database';
-import { useAuthStore } from '@/stores/auth.store';
-import { useContentStore } from '@/stores/content.store';
-import type { LearningLesson } from './domain/content.schemas';
-import type { LessonProgress } from '@/types/learning';
-import { getLesson } from './content/content.service';
-import { getLessonProgress } from './progress/progress.service';
-import { ContentState } from './components/ContentState';
+import { Navigate, useParams } from 'react-router-dom';
 
 export function LessonPreviewPage() {
   const { lessonId = '' } = useParams();
-  const user = useAuthStore((state) => state.user);
-  const contentStatus = useContentStore((state) => state.status);
-  const [lesson, setLesson] = useState<LearningLesson | null>(null);
-  const [progress, setProgress] = useState<LessonProgress | null>(null);
-
-  useEffect(() => {
-    if (!user || contentStatus !== 'ready') return;
-    void Promise.all([getLesson(db, lessonId), getLessonProgress(db, user.id, lessonId)]).then(
-      ([loadedLesson, loadedProgress]) => {
-        setLesson(loadedLesson);
-        setProgress(loadedProgress);
-      },
-    );
-  }, [contentStatus, lessonId, user]);
-
-  return (
-    <ContentState>
-      <div className="standard-page preview-page page-enter">
-        <BackLink to="/lessons" label="Back to lessons" />
-        {!lesson || !progress ? (
-          <p>Opening preview…</p>
-        ) : (
-          <Panel className="preview-board" accent={progress.status === 'locked' ? 'red' : 'blue'}>
-            <span className="preview-board__symbol" aria-hidden="true">
-              {progress.status === 'locked' ? '⌁' : '→'}
-            </span>
-            <p className="preview-board__status">
-              Lesson 2 · {progress.status === 'locked' ? 'Locked' : 'Unlocked'}
-            </p>
-            <h1>{lesson.title}</h1>
-            <p>{lesson.shortDescription}</p>
-            <p className="preview-board__note">
-              {progress.status === 'locked'
-                ? 'Clear “Words That Signal Operations” to unlock Lesson 2.'
-                : 'Lesson 2 is unlocked. Activities are not included in this version of ALTRAS.'}
-            </p>
-          </Panel>
-        )}
-      </div>
-    </ContentState>
-  );
+  return <Navigate to={`/lessons/${lessonId}`} replace />;
 }

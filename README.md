@@ -48,7 +48,7 @@ The hierarchy is:
 Section → Unit → Lesson → instructional blocks and activities
 ```
 
-Lessons use stable string IDs, a content version, prerequisite ID, passing threshold, concepts, safe text-only instructional blocks, and activities. Phase 2 supports:
+Lessons use stable string IDs, a content version, prerequisite ID, passing threshold, concepts, safe text-only instructional blocks, and activities. The current packaged-content version is 2. Phase 2 supports:
 
 - `find-word`: choose a stable choice ID to complete a verbal statement.
 - `organize-translate`: arrange stable token IDs into an exact verbal sequence without requiring drag-and-drop.
@@ -88,13 +88,20 @@ A tested v1→v2 upgrade preserves representative accounts, profiles, settings, 
 
 XP is deliberately simple: `best score + (best stars × 10)`, for a maximum of 130 XP per lesson. Progress stores the derived best-performance XP; each attempt exposes only the positive improvement. Repeating the same or a lower result awards no additional XP.
 
+## Playable lessons
+
+- **Words That Signal Operations** contains six activities introducing common operation words and order-sensitive phrases.
+- **Order Matters** unlocks after the first lesson is cleared. Its five activities practice “less than,” “subtracted from,” “more than,” and subtraction written in named order using the existing Find-the-Word and Organize-and-Translate formats.
+
+Packaged-content version 2 changed Lesson 2 from a preview to a playable lesson while retaining its stable lesson ID and prerequisite. Existing Lesson 1 attempts and progress remain separate from content installation and are preserved.
+
 ## Current limitations
 
 - Data is isolated per browser and computer; different computers do not synchronize.
 - Clearing browser/site data removes local accounts and learning records.
 - Backup/import and research export are not available yet.
-- Only one lesson is playable and only two activity formats are supported.
-- Lesson 2 is an unlocked preview after Lesson 1 is cleared.
+- Only two lessons and two activity formats are currently available.
+- There is no Lesson 3. Additional lessons are deferred until finalized, reviewed content is provided.
 - XP values are provisional and there are no levels, streaks, achievements, or leaderboards.
 
 See [`docs/PHASE_PLAN.md`](docs/PHASE_PLAN.md) for the complete scope, deferred ideas, and future phases.

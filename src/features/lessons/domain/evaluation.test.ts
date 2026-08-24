@@ -13,6 +13,25 @@ describe('activity evaluation', () => {
     expect(evaluateActivity(activity, 'different-choice')).toBe(false);
   });
 
+  it('evaluates every Order Matters intended answer and rejects an incorrect one', () => {
+    const lesson = packagedContent.lessons.find(
+      (candidate) => candidate.id === 'lesson-order-matters',
+    );
+    if (!lesson) throw new Error('Missing Order Matters fixture.');
+
+    for (const activity of lesson.activities) {
+      const correctAnswer =
+        activity.type === 'find-word' ? activity.correctChoiceId : activity.correctTokenSequence;
+      const incorrectAnswer =
+        activity.type === 'find-word'
+          ? activity.choices.find((choice) => choice.id !== activity.correctChoiceId)?.id
+          : [...activity.correctTokenSequence].reverse();
+
+      expect(evaluateActivity(activity, correctAnswer), activity.id).toBe(true);
+      expect(evaluateActivity(activity, incorrectAnswer ?? 'incorrect'), activity.id).toBe(false);
+    }
+  });
+
   it('evaluates Organize-and-Translate by exact token sequence', () => {
     const activity = activities.find((candidate) => candidate.type === 'organize-translate');
     if (!activity || activity.type !== 'organize-translate') throw new Error('Missing fixture.');

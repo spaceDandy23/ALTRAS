@@ -23,8 +23,13 @@ function answerFor(activity: LessonActivity, correct: boolean): string | string[
     : [...activity.correctTokenSequence.slice(1), activity.correctTokenSequence[0]];
 }
 
-async function answerAndComplete(database: AltrasDatabase, userId: string, correctCount: number) {
-  const lesson = await getLesson(database, 'lesson-operation-signals');
+async function answerAndComplete(
+  database: AltrasDatabase,
+  userId: string,
+  correctCount: number,
+  lessonId = 'lesson-operation-signals',
+) {
+  const lesson = await getLesson(database, lessonId);
   const attempt = await startOrResumeAttempt(database, userId, lesson.id);
   for (const [index, activity] of lesson.activities.entries()) {
     await submitActivityAnswer(
@@ -161,5 +166,55 @@ describe('attempt persistence and lesson progression', () => {
 
     expect(repeated.answers).toHaveLength(1);
     expect(repeated.answers[0].isCorrect).toBe(false);
+  });
+
+  it('persists and resumes an Order Matters attempt after Lesson 1 is cleared', async () => {
+    await answerAndComplete(database, firstUserId, 5);
+    const lesson = await getLesson(database, 'lesson-order-matters');
+    const started = await startOrResumeAttempt(database, firstUserId, lesson.id);
+    await submitActivityAnswer(
+      database,
+      started.id,
+      lesson.activities[0].id,
+      answerFor(lesson.activities[0], true),
+    );
+
+    const resumed = await startOrResumeAttempt(database, firstUserId, lesson.id);
+
+    expect(resumed.id).toBe(started.id);
+    expect(resumed.contentVersion).toBe(2);
+    expect(resumed.answers).toHaveLength(1);
+    await expect(database.lessonAttempts.get(started.id)).resolves.toMatchObject({
+      status: 'active',
+      lessonId: 'lesson-order-matters',
+    });
+  });
+
+  it('records Lesson 2 score, stars, XP, and isolated progress without creating Lesson 3', async () => {
+    await answerAndComplete(database, firstUserId, 6);
+    const completed = await answerAndComplete(database, firstUserId, 5, 'lesson-order-matters');
+
+    expect(completed).toMatchObject({
+      finalScore: 100,
+      starCount: 3,
+      cleared: true,
+      xpImprovement: 130,
+    });
+    await expect(
+      getLessonProgress(database, firstUserId, 'lesson-order-matters'),
+    ).resolves.toMatchObject({
+      status: 'cleared',
+      bestScore: 100,
+      bestStarCount: 3,
+      attemptCount: 1,
+      xpAwarded: 130,
+    });
+    await expect(
+      getLessonProgress(database, secondUserId, 'lesson-order-matters'),
+    ).resolves.toMatchObject({ status: 'locked', bestScore: 0, attemptCount: 0 });
+    await expect(database.lessons.count()).resolves.toBe(2);
+    await expect(database.lessonProgress.where('userId').equals(firstUserId).count()).resolves.toBe(
+      2,
+    );
   });
 });

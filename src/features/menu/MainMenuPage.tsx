@@ -23,13 +23,13 @@ export function MainMenuPage() {
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
     void getLessonHubData(db, user.id).then(async (nextHub) => {
-      const playable = nextHub.entries.find(({ lesson }) => lesson.contentStatus === 'playable');
-      const [attempt, xp] = await Promise.all([
-        playable ? getActiveAttempt(db, user.id, playable.lesson.id) : Promise.resolve(null),
+      const playable = nextHub.entries.filter(({ lesson }) => lesson.contentStatus === 'playable');
+      const [attempts, xp] = await Promise.all([
+        Promise.all(playable.map(({ lesson }) => getActiveAttempt(db, user.id, lesson.id))),
         getTotalXp(db, user.id),
       ]);
       setHub(nextHub);
-      setActiveAttempt(attempt);
+      setActiveAttempt(attempts.find((attempt) => attempt !== null) ?? null);
       setTotalXp(xp);
     });
   }, [contentStatus, user]);
@@ -60,7 +60,7 @@ export function MainMenuPage() {
       ? `View Lesson ${nextEntry.lesson.displayOrder}`
       : nextEntry?.progress.attemptCount
         ? 'Try lesson again'
-        : 'Start Lesson 1';
+        : `Start Lesson ${nextEntry?.lesson.displayOrder ?? 1}`;
 
   return (
     <ContentState>

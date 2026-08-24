@@ -1,6 +1,6 @@
 import { packagedContentSchema, type PackagedContent } from '../domain/content.schemas';
 
-export const PACKAGED_CONTENT_VERSION = 1;
+export const PACKAGED_CONTENT_VERSION = 2;
 
 const content: PackagedContent = {
   version: PACKAGED_CONTENT_VERSION,
@@ -202,14 +202,150 @@ const content: PackagedContent = {
       unitId: 'unit-operation-words',
       title: 'Order Matters',
       shortDescription: 'Practice phrases whose word order changes the mathematical expression.',
-      concepts: ['Less than', 'Subtracted from', 'Division order'],
+      concepts: ['Less than', 'Subtracted from', 'More than', 'Difference in named order'],
       displayOrder: 2,
       prerequisiteLessonId: 'lesson-operation-signals',
-      contentStatus: 'preview',
+      contentStatus: 'playable',
       passingThreshold: 70,
-      contentVersion: 1,
-      instructionalContent: [],
-      activities: [],
+      contentVersion: 2,
+      instructionalContent: [
+        {
+          id: 'intro-order-sensitive-phrases',
+          type: 'paragraph',
+          title: 'Read order-sensitive phrases carefully',
+          body: 'Some verbal phrases name quantities in a different order from the mathematical expression. Identify the operation phrase, then decide which quantity must be written first.',
+        },
+        {
+          id: 'example-six-less-than',
+          type: 'example',
+          phrase: 'six less than a number',
+          expression: 'n − 6',
+          note: '“Less than” subtracts the first quantity from the quantity named afterward.',
+        },
+        {
+          id: 'example-subtracted-from-twelve',
+          type: 'example',
+          phrase: 'a number subtracted from twelve',
+          expression: '12 − n',
+          note: '“Subtracted from” reverses the apparent spoken order.',
+        },
+        {
+          id: 'example-four-more-than-twice',
+          type: 'example',
+          phrase: 'four more than twice a number',
+          expression: '2n + 4',
+          note: '“More than” adds to the quantity named afterward.',
+        },
+        {
+          id: 'example-difference-twelve-number',
+          type: 'example',
+          phrase: 'the difference of twelve and a number',
+          expression: '12 − n',
+          note: '“The difference of A and B” preserves the named order as A − B.',
+        },
+        {
+          id: 'warning-check-subtraction-order',
+          type: 'warning',
+          title: 'Check which quantity comes first',
+          body: 'For “less than” and “subtracted from,” the quantity named afterward is written first. “More than” adds to the quantity named afterward. “The difference of A and B” keeps A first and B second.',
+        },
+      ],
+      activities: [
+        {
+          id: 'order-find-less-than',
+          type: 'find-word',
+          title: 'Find the order-sensitive word',
+          prompt: 'Choose the word that makes the phrase match the expression.',
+          mathStatement: 'n − 6',
+          sentenceBefore: 'Six',
+          sentenceAfter: 'than a number',
+          choices: [
+            { id: 'less', label: 'less' },
+            { id: 'more', label: 'more' },
+            { id: 'times', label: 'times' },
+          ],
+          correctChoiceId: 'less',
+          hint: { body: 'Start with n and subtract six.' },
+          explanation: {
+            title: 'Correct word: less',
+            body: '“Six less than a number” means start with n and subtract six: n − 6.',
+          },
+        },
+        {
+          id: 'order-find-subtracted-from',
+          type: 'find-word',
+          title: 'Find the reversal phrase',
+          prompt: 'Choose the word that makes the phrase match the expression.',
+          mathStatement: '12 − n',
+          sentenceBefore: 'A number',
+          sentenceAfter: 'from twelve',
+          choices: [
+            { id: 'added', label: 'added' },
+            { id: 'subtracted', label: 'subtracted' },
+            { id: 'multiplied', label: 'multiplied' },
+          ],
+          correctChoiceId: 'subtracted',
+          hint: { body: 'The quantity after “from” is written first.' },
+          explanation: {
+            title: 'Correct word: subtracted',
+            body: '“A number subtracted from twelve” starts with twelve and removes n, so it is 12 − n, not n − 12.',
+          },
+        },
+        {
+          id: 'order-organize-less-than',
+          type: 'organize-translate',
+          title: 'Order a less-than phrase',
+          prompt: 'Arrange the tokens into the phrase that matches the expression.',
+          mathStatement: 'n − 5',
+          tokens: [
+            { id: 'number', label: 'a number' },
+            { id: 'less-than', label: 'less than' },
+            { id: 'five', label: 'five' },
+          ],
+          correctTokenSequence: ['five', 'less-than', 'number'],
+          hint: { body: 'The phrase begins with the amount being subtracted.' },
+          explanation: {
+            title: 'The number after “less than” comes first',
+            body: '“Five less than a number” is n − 5 because the value following “less than” comes first in the expression.',
+          },
+        },
+        {
+          id: 'order-organize-subtracted-from',
+          type: 'organize-translate',
+          title: 'Order a subtracted-from phrase',
+          prompt: 'Arrange the tokens into the phrase that matches the expression.',
+          mathStatement: '12 − n',
+          tokens: [
+            { id: 'twelve', label: 'twelve' },
+            { id: 'subtracted-from', label: 'subtracted from' },
+            { id: 'a-number', label: 'a number' },
+          ],
+          correctTokenSequence: ['a-number', 'subtracted-from', 'twelve'],
+          hint: { body: '“From twelve” tells you that twelve is written first.' },
+          explanation: {
+            title: '“Subtracted from” reverses the order',
+            body: '“A number subtracted from twelve” means begin with twelve, then subtract n: 12 − n.',
+          },
+        },
+        {
+          id: 'order-organize-more-than',
+          type: 'organize-translate',
+          title: 'Order a more-than phrase',
+          prompt: 'Arrange the tokens into the phrase that matches the expression.',
+          mathStatement: '2n + 4',
+          tokens: [
+            { id: 'twice-number', label: 'twice a number' },
+            { id: 'four', label: 'four' },
+            { id: 'more-than', label: 'more than' },
+          ],
+          correctTokenSequence: ['four', 'more-than', 'twice-number'],
+          hint: { body: 'First identify 2n, then add four.' },
+          explanation: {
+            title: 'Add four to twice the number',
+            body: '“Twice a number” is 2n. “Four more than” tells us to add four, giving 2n + 4.',
+          },
+        },
+      ],
     },
   ],
 };

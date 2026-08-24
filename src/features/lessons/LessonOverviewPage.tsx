@@ -38,6 +38,7 @@ export function LessonOverviewPage() {
 
   if (!user) return null;
   const begin = async () => {
+    if (progress?.status === 'locked') return;
     const attempt = await startOrResumeAttempt(db, user.id, lessonId);
     navigate(`/lessons/${lessonId}/play/${attempt.id}`);
   };
@@ -63,60 +64,68 @@ export function LessonOverviewPage() {
                   <span>{lesson.passingThreshold}% to pass</span>
                   {progress.attemptCount > 0 && <span>Best score {progress.bestScore}%</span>}
                 </div>
-                <div className="lesson-overview__actions lesson-summary">
-                  <Button onClick={() => void begin()}>
-                    {active
-                      ? 'Resume lesson'
-                      : progress.attemptCount > 0
-                        ? 'Try again'
-                        : 'Start lesson'}
-                  </Button>
-                  {active && (
-                    <Button variant="quiet" onClick={() => setConfirmRestart(true)}>
-                      Restart lesson
+                {progress.status === 'locked' ? (
+                  <p className="lesson-overview__actions lesson-summary">
+                    Clear Words That Signal Operations to unlock this lesson.
+                  </p>
+                ) : (
+                  <div className="lesson-overview__actions lesson-summary">
+                    <Button onClick={() => void begin()}>
+                      {active
+                        ? 'Resume lesson'
+                        : progress.attemptCount > 0
+                          ? 'Try again'
+                          : 'Start lesson'}
                     </Button>
-                  )}
-                </div>
+                    {active && (
+                      <Button variant="quiet" onClick={() => setConfirmRestart(true)}>
+                        Restart lesson
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="lesson-overview__equation" aria-hidden="true">
                 words <span>→</span> math
               </div>
             </section>
-            <section className="lesson-reference" aria-labelledby="operation-words-heading">
-              <h2 id="operation-words-heading">Operation words</h2>
-              {lesson.instructionalContent
-                .filter((block) => block.type === 'paragraph')
-                .map((block) => (
-                  <p className="lesson-reference__intro" key={block.id}>
-                    {block.body}
-                  </p>
-                ))}
-              <div className="operation-examples">
+            {progress.status !== 'locked' && (
+              <section className="lesson-reference" aria-labelledby="operation-words-heading">
+                <h2 id="operation-words-heading">Operation words</h2>
                 {lesson.instructionalContent
-                  .filter((block) => block.type === 'example')
+                  .filter((block) => block.type === 'paragraph')
+                  .map((block) => (
+                    <p className="lesson-reference__intro" key={block.id}>
+                      {block.body}
+                    </p>
+                  ))}
+                <div className="operation-examples">
+                  {lesson.instructionalContent
+                    .filter((block) => block.type === 'example')
+                    .map((block) =>
+                      block.type === 'example' ? (
+                        <article className="operation-example" key={block.id}>
+                          <div>
+                            <span>{block.phrase}</span>
+                            <strong>{block.expression}</strong>
+                          </div>
+                          <p>{block.note}</p>
+                        </article>
+                      ) : null,
+                    )}
+                </div>
+                {lesson.instructionalContent
+                  .filter((block) => block.type === 'warning')
                   .map((block) =>
-                    block.type === 'example' ? (
-                      <article className="operation-example" key={block.id}>
-                        <div>
-                          <span>{block.phrase}</span>
-                          <strong>{block.expression}</strong>
-                        </div>
-                        <p>{block.note}</p>
-                      </article>
+                    block.type === 'warning' ? (
+                      <aside className="order-warning" key={block.id}>
+                        <h3>Order matters</h3>
+                        <p>{block.body}</p>
+                      </aside>
                     ) : null,
                   )}
-              </div>
-              {lesson.instructionalContent
-                .filter((block) => block.type === 'warning')
-                .map((block) =>
-                  block.type === 'warning' ? (
-                    <aside className="order-warning" key={block.id}>
-                      <h3>Order matters</h3>
-                      <p>{block.body}</p>
-                    </aside>
-                  ) : null,
-                )}
-            </section>
+              </section>
+            )}
           </>
         )}
         <ConfirmDialog

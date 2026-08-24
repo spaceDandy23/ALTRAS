@@ -24,8 +24,8 @@
 - Discriminated `find-word` and `organize-translate` activity union
 - Zod-validated, versioned, idempotent local content initialization
 - Additive Dexie v2 migration with content, progress, and attempt tables
-- One six-activity playable lesson and one prerequisite-gated preview lesson
-- Lesson hub, overview/instruction board, active player, result page, and preview route
+- One six-activity introductory lesson and one prerequisite-gated five-activity `Order Matters` lesson
+- Lesson hub, overview/instruction board, active player, and result page; the legacy preview URL redirects to the normal lesson overview
 - Immediate answer persistence, session recovery, resume, confirmed restart, and preserved abandoned history
 - Centralized evaluation, scoring, stars, passing, unlocking, and XP policies
 - Best-result protection, improvement-only XP, and idempotent completion
@@ -41,6 +41,15 @@
 - Progress and attempts are not reseeded or deleted when content updates.
 - Lesson content updates must bump the lesson content version. Removed older-version items are ignored when reconstructing the current lesson.
 - Future incompatible semantic changes should use new IDs or a reviewed migration, especially if active attempts exist.
+
+### Phase 2.2 content expansion
+
+- `PACKAGED_CONTENT_VERSION` is 2; the Dexie schema remains version 2 because this is a packaged-content update, not a storage-shape change.
+- Lesson 2 retains the stable `lesson-order-matters` ID and its Lesson 1 prerequisite, so existing unlock progress remains valid.
+- Its learning objective is to translate phrases where spoken order affects mathematical order: “less than,” “subtracted from,” “more than,” and “the difference of A and B.”
+- The lesson contains two Find-the-Word activities and three Organize-and-Translate activities, for five activities total.
+- Initialization upserts the new metadata and items without modifying accounts, sessions, settings, attempts, or progress.
+- There is currently no Lesson 3. Additional lessons remain deferred until finalized educational content is provided.
 
 ## Policies
 
