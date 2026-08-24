@@ -2,7 +2,7 @@ import type { LessonProgress } from '@/types/learning';
 
 const labels: Record<LessonProgress['status'], string> = {
   locked: 'Locked',
-  available: 'Available',
+  available: 'Not started',
   'in-progress': 'In progress',
   cleared: 'Cleared',
 };

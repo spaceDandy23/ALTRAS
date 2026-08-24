@@ -41,7 +41,10 @@ export function OrganizeTranslateActivityView({
       >
         {activity.mathStatement}
       </div>
-      <section className="translation-builder" aria-label="Your arranged translation">
+      <section
+        className={`translation-builder ${submitted ? `translation-builder--${submitted.isCorrect ? 'correct' : 'incorrect'}` : ''}`}
+        aria-label="Your arranged translation"
+      >
         <span className="translation-builder__label">Your translation</span>
         <div className="selected-token-list" aria-live="polite">
           {sequence.length === 0 && (
@@ -101,7 +104,11 @@ export function OrganizeTranslateActivityView({
           </div>
         </>
       )}
-      {hintVisible && !submitted && <p className="activity-hint">Hint: {activity.hint?.body}</p>}
+      {hintVisible && !submitted && (
+        <p className="activity-hint" role="status">
+          <strong>Hint:</strong> {activity.hint?.body}
+        </p>
+      )}
     </div>
   );
 }

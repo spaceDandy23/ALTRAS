@@ -43,8 +43,7 @@ export function LoginPage() {
   return (
     <AuthFrame>
       <div className="auth-card__heading">
-        <p className="eyebrow">Welcome back, solver</p>
-        <h1>Continue learning</h1>
+        <h1>Sign in to ALTRAS</h1>
         <p>Sign in to the account saved on this device.</p>
       </div>
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
@@ -69,7 +68,7 @@ export function LoginPage() {
           required
         />
         <Button type="submit" fullWidth disabled={submitting}>
-          {submitting ? 'Checking…' : 'Enter ALTRAS'}
+          {submitting ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
       <p className="auth-switch">

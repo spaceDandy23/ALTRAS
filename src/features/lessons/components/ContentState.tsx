@@ -18,8 +18,7 @@ export function ContentState({ children }: { children: ReactNode }) {
   if (status === 'error') {
     return (
       <Panel className="lesson-error" accent="red">
-        <p className="eyebrow">Content check failed</p>
-        <h1>Lessons could not be prepared.</h1>
+        <h1>Lessons could not be prepared</h1>
         <p>{error}</p>
         <button className="button button--danger" onClick={() => void initialize()}>
           Try again

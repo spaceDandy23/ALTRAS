@@ -31,7 +31,7 @@ export function LessonPreviewPage() {
   return (
     <ContentState>
       <div className="standard-page preview-page page-enter">
-        <BackLink to="/lessons" />
+        <BackLink to="/lessons" label="Back to lessons" />
         {!lesson || !progress ? (
           <p>Opening preview…</p>
         ) : (
@@ -39,20 +39,15 @@ export function LessonPreviewPage() {
             <span className="preview-board__symbol" aria-hidden="true">
               {progress.status === 'locked' ? '⌁' : '→'}
             </span>
-            <p className="eyebrow">
-              Lesson 2 · {progress.status === 'locked' ? 'Locked' : 'Unlocked preview'}
+            <p className="preview-board__status">
+              Lesson 2 · {progress.status === 'locked' ? 'Locked' : 'Unlocked'}
             </p>
             <h1>{lesson.title}</h1>
             <p>{lesson.shortDescription}</p>
-            <div className="concept-list">
-              {lesson.concepts.map((concept) => (
-                <span key={concept}>{concept}</span>
-              ))}
-            </div>
             <p className="preview-board__note">
               {progress.status === 'locked'
-                ? 'Clear “Words That Signal Operations” to unlock this preview.'
-                : 'You unlocked this lesson. Its full activities will be added in the next learning release.'}
+                ? 'Clear “Words That Signal Operations” to unlock Lesson 2.'
+                : 'Lesson 2 is unlocked. Activities are not included in this version of ALTRAS.'}
             </p>
           </Panel>
         )}

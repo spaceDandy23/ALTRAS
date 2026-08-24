@@ -1,71 +1,124 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Panel } from '@/components/ui/Panel';
+import { db } from '@/db/database';
+import { ContentState } from '@/features/lessons/components/ContentState';
+import { StarRating } from '@/features/lessons/components/StarRating';
+import { getActiveAttempt } from '@/features/lessons/attempts/attempt.service';
+import {
+  getLessonHubData,
+  getTotalXp,
+  type LessonHubData,
+} from '@/features/lessons/progress/progress.service';
 import { useAuthStore } from '@/stores/auth.store';
-
-const menuItems = [
-  {
-    to: '/lessons',
-    symbol: '→',
-    kicker: 'Start here',
-    title: 'Lessons',
-    description: 'Play guided activities and build your translation skills.',
-    accent: 'yellow',
-  },
-  {
-    to: '/profile',
-    symbol: '★',
-    kicker: 'Your space',
-    title: 'Profile',
-    description: 'View and update your local student identity.',
-    accent: 'blue',
-  },
-  {
-    to: '/settings',
-    symbol: '⚙',
-    kicker: 'Make it yours',
-    title: 'Settings',
-    description: 'Adjust volume choices and animation preferences.',
-    accent: 'red',
-  },
-] as const;
+import { useContentStore } from '@/stores/content.store';
+import type { LessonAttempt } from '@/types/learning';
 
 export function MainMenuPage() {
   const user = useAuthStore((state) => state.user);
+  const contentStatus = useContentStore((state) => state.status);
+  const [hub, setHub] = useState<LessonHubData | null>(null);
+  const [activeAttempt, setActiveAttempt] = useState<LessonAttempt | null>(null);
+  const [totalXp, setTotalXp] = useState(0);
+
+  useEffect(() => {
+    if (!user || contentStatus !== 'ready') return;
+    void getLessonHubData(db, user.id).then(async (nextHub) => {
+      const playable = nextHub.entries.find(({ lesson }) => lesson.contentStatus === 'playable');
+      const [attempt, xp] = await Promise.all([
+        playable ? getActiveAttempt(db, user.id, playable.lesson.id) : Promise.resolve(null),
+        getTotalXp(db, user.id),
+      ]);
+      setHub(nextHub);
+      setActiveAttempt(attempt);
+      setTotalXp(xp);
+    });
+  }, [contentStatus, user]);
+
+  const activeEntry = hub?.entries.find(({ progress }) => progress.status === 'in-progress');
+  const nextEntry =
+    activeEntry ??
+    hub?.entries.find(
+      ({ progress }) => progress.status !== 'locked' && progress.status !== 'cleared',
+    ) ??
+    hub?.entries.find(({ progress }) => progress.status === 'cleared');
+  const actionDestination = activeAttempt
+    ? `/lessons/${activeAttempt.lessonId}/play/${activeAttempt.id}`
+    : nextEntry
+      ? nextEntry.lesson.contentStatus === 'preview'
+        ? `/lessons/${nextEntry.lesson.id}/preview`
+        : `/lessons/${nextEntry.lesson.id}`
+      : '/lessons';
+  const completedActivities = activeAttempt?.answers.length ?? 0;
+  const totalActivities = nextEntry?.lesson.activities.length ?? 0;
+  const earnedStarCount = Math.max(
+    0,
+    ...(hub?.entries.map(({ progress }) => progress.bestStarCount) ?? []),
+  );
+  const actionLabel = activeAttempt
+    ? `Continue Lesson ${nextEntry ? nextEntry.lesson.displayOrder : 1}`
+    : nextEntry?.lesson.contentStatus === 'preview'
+      ? `View Lesson ${nextEntry.lesson.displayOrder}`
+      : nextEntry?.progress.attemptCount
+        ? 'Try lesson again'
+        : 'Start Lesson 1';
+
   return (
-    <div className="menu-page page-enter">
-      <section className="menu-hero">
-        <div>
-          <p className="eyebrow">Ready when you are</p>
-          <h1>
-            Hello, <span>{user?.displayName}</span>!
-          </h1>
-          <p className="menu-hero__lead">Choose your next move and let the words become math.</p>
-        </div>
-        <Panel className="example-board" accent="yellow">
-          <span className="example-board__label">Translate this idea</span>
-          <p>“six less than twice a number”</p>
-          <span className="example-board__arrow" aria-hidden="true">
-            →
-          </span>
-          <strong>2x − 6</strong>
-        </Panel>
-      </section>
-      <nav className="menu-grid" aria-label="Main menu">
-        {menuItems.map((item, index) => (
-          <Link to={item.to} className={`menu-card menu-card--${item.accent}`} key={item.to}>
-            <span className="menu-card__number">0{index + 1}</span>
-            <span className="menu-card__symbol" aria-hidden="true">
-              {item.symbol}
-            </span>
-            <span className="eyebrow">{item.kicker}</span>
-            <strong>{item.title}</strong>
-            <span className="menu-card__description">{item.description}</span>
-            <span className="menu-card__action">
-              Open <span aria-hidden="true">→</span>
-            </span>
-          </Link>
-        ))}
-      </nav>
-    </div>
+    <ContentState>
+      <div className="menu-page page-enter">
+        {!hub || !nextEntry ? (
+          <p className="home-loading">Preparing your lesson…</p>
+        ) : (
+          <section className="home-start menu-grid" aria-labelledby="home-title">
+            <p className="home-welcome">Welcome back, {user?.displayName}.</p>
+            <div className="home-start__lesson">
+              <div className="home-start__marker" aria-hidden="true">
+                {nextEntry.progress.status === 'cleared' ? '✓' : nextEntry.lesson.displayOrder}
+              </div>
+              <div className="home-start__content">
+                <span className="home-start__position">
+                  Lesson {nextEntry.lesson.displayOrder} · {hub.unit.title}
+                </span>
+                <h1 id="home-title">{nextEntry.lesson.title}</h1>
+                <p>{nextEntry.lesson.shortDescription}</p>
+                {activeAttempt && totalActivities > 0 ? (
+                  <div className="home-progress">
+                    <div className="home-progress__track" aria-hidden="true">
+                      <span
+                        style={{ width: `${(completedActivities / totalActivities) * 100}%` }}
+                      />
+                    </div>
+                    <span>
+                      {completedActivities} of {totalActivities} activities completed
+                    </span>
+                  </div>
+                ) : nextEntry.lesson.contentStatus === 'preview' ? (
+                  <p className="home-complete">Unlocked · Lesson preview</p>
+                ) : nextEntry.progress.status === 'cleared' ? (
+                  <p className="home-complete">Lesson 1 complete. Lesson 2 is unlocked.</p>
+                ) : (
+                  <p className="home-not-started">Not started · {totalActivities} activities</p>
+                )}
+                <div className="home-actions">
+                  <Link
+                    className="button button--primary home-primary-action"
+                    to={actionDestination}
+                  >
+                    {actionLabel}
+                    <span aria-hidden="true">→</span>
+                  </Link>
+                  <Link className="home-lessons-link" to="/lessons">
+                    View all lessons
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <div className="home-summary" aria-label="Learning progress">
+              <span>{totalXp} XP</span>
+              <StarRating count={earnedStarCount} />
+            </div>
+          </section>
+        )}
+      </div>
+    </ContentState>
   );
 }

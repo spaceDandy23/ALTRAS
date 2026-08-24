@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Panel } from '@/components/ui/Panel';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -9,7 +8,11 @@ import type { LearningLesson } from './domain/content.schemas';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { getLesson } from './content/content.service';
 import { getAttempt, startOrResumeAttempt } from './attempts/attempt.service';
-import { getLessonProgress } from './progress/progress.service';
+import {
+  getLessonHubData,
+  getLessonProgress,
+  type LessonHubEntry,
+} from './progress/progress.service';
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
 
@@ -21,6 +24,7 @@ export function LessonResultPage() {
   const [lesson, setLesson] = useState<LearningLesson | null>(null);
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
+  const [nextEntry, setNextEntry] = useState<LessonHubEntry | null>(null);
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
@@ -28,10 +32,18 @@ export function LessonResultPage() {
       getLesson(db, lessonId),
       getAttempt(db, user.id, attemptId),
       getLessonProgress(db, user.id, lessonId),
-    ]).then(([loadedLesson, loadedAttempt, loadedProgress]) => {
+      getLessonHubData(db, user.id),
+    ]).then(([loadedLesson, loadedAttempt, loadedProgress, hub]) => {
       setLesson(loadedLesson);
       setAttempt(loadedAttempt);
       setProgress(loadedProgress);
+      setNextEntry(
+        hub.entries.find(
+          ({ lesson: candidate, progress: candidateProgress }) =>
+            candidate.prerequisiteLessonId === loadedLesson.id &&
+            candidateProgress.status !== 'locked',
+        ) ?? null,
+      );
     });
   }, [attemptId, contentStatus, lessonId, user]);
 
@@ -51,22 +63,28 @@ export function LessonResultPage() {
     navigate(`/lessons/${lesson.id}/play/${next.id}`);
   };
   const correct = attempt.answers.filter((answer) => answer.isCorrect).length;
+  const nextDestination = nextEntry
+    ? nextEntry.lesson.contentStatus === 'preview'
+      ? `/lessons/${nextEntry.lesson.id}/preview`
+      : `/lessons/${nextEntry.lesson.id}`
+    : '/lessons';
 
   return (
     <ContentState>
       <div
         className={`result-page result-page--${attempt.cleared ? 'cleared' : 'failed'} page-enter`}
       >
-        <Panel className="result-board" accent={attempt.cleared ? 'yellow' : 'red'}>
+        <main className="result-board" aria-live="polite">
           <div className="result-board__mark" aria-hidden="true">
             {attempt.cleared ? '✓' : '↻'}
           </div>
-          <p className="eyebrow">{attempt.cleared ? 'Lesson cleared' : 'Keep building'}</p>
-          <h1>{attempt.cleared ? 'You translated the signals.' : 'One more pass can clear it.'}</h1>
+          <h1>{attempt.cleared ? 'Lesson complete' : 'Try again'}</h1>
           <p>
             {attempt.cleared
-              ? 'The next lesson is now available.'
-              : 'Review the operation words and watch order-sensitive phrases.'}
+              ? nextEntry
+                ? `${nextEntry.lesson.title} is now unlocked.`
+                : 'Your result has been saved.'
+              : `A score of ${lesson.passingThreshold}% is required. Review operation words and order-sensitive phrases.`}
           </p>
           <div className="result-score">
             <strong>{attempt.finalScore}%</strong>
@@ -76,28 +94,27 @@ export function LessonResultPage() {
           </div>
           <StarRating count={attempt.starCount ?? 0} />
           <div className="result-metrics">
-            <div>
-              <span>XP improvement</span>
-              <strong>+{attempt.xpImprovement}</strong>
-            </div>
-            <div>
-              <span>Best score</span>
-              <strong>{progress.bestScore}%</strong>
-            </div>
-            <div>
-              <span>Attempts</span>
-              <strong>{progress.attemptCount}</strong>
-            </div>
+            {attempt.xpImprovement > 0 && <span>+{attempt.xpImprovement} XP</span>}
+            <span>Best score {progress.bestScore}%</span>
+            <span>
+              {progress.attemptCount} {progress.attemptCount === 1 ? 'attempt' : 'attempts'}
+            </span>
           </div>
           <div className="result-actions">
+            {attempt.cleared && nextEntry ? (
+              <Link className="button button--primary" to={nextDestination}>
+                View next lesson
+              </Link>
+            ) : (
+              <Button onClick={() => void retry()}>
+                {attempt.cleared ? 'Review lesson' : 'Retry lesson'}
+              </Button>
+            )}
             <Link className="button button--quiet" to="/lessons">
-              Lesson hub
+              Lessons
             </Link>
-            <Button onClick={() => void retry()}>
-              {attempt.cleared ? 'Play again' : 'Retry lesson'}
-            </Button>
           </div>
-        </Panel>
+        </main>
       </div>
     </ContentState>
   );

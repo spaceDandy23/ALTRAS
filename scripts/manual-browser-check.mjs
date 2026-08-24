@@ -81,6 +81,52 @@ async function clickByText(selector, label) {
   })()`);
 }
 
+async function pressKey(key, code = key) {
+  const virtualKeyCode = code === 'Space' ? 32 : code === 'Enter' ? 13 : 0;
+  const params = {
+    key,
+    code,
+    windowsVirtualKeyCode: virtualKeyCode,
+    nativeVirtualKeyCode: virtualKeyCode,
+  };
+  await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...params });
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', ...params });
+}
+
+async function keyboardClickByText(selector, label) {
+  await evaluate(`(() => {
+    const element = [...document.querySelectorAll(${JSON.stringify(selector)})]
+      .find((candidate) => candidate.textContent.trim() === ${JSON.stringify(label)});
+    if (!element) throw new Error(${JSON.stringify(`Missing control: ${label}`)});
+    element.focus();
+  })()`);
+  await pressKey(' ', 'Space');
+}
+
+async function pointerClickByText(selector, label) {
+  const point = await evaluate(`(() => {
+    const element = [...document.querySelectorAll(${JSON.stringify(selector)})]
+      .find((candidate) => candidate.textContent.trim() === ${JSON.stringify(label)});
+    if (!element) throw new Error(${JSON.stringify(`Missing control: ${label}`)});
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    button: 'left',
+    clickCount: 1,
+    ...point,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    button: 'left',
+    clickCount: 1,
+    ...point,
+  });
+}
+
 async function capture(name, width = 1366, height = 768) {
   await send('Emulation.setDeviceMetricsOverride', {
     width,
@@ -88,6 +134,8 @@ async function capture(name, width = 1366, height = 768) {
     deviceScaleFactor: 1,
     mobile: false,
   });
+  await evaluate('document.activeElement?.blur()');
+  await evaluate('window.scrollTo(0, 0)');
   await new Promise((resolve) => setTimeout(resolve, 500));
   const { data } = await send('Page.captureScreenshot', {
     format: 'png',
@@ -96,9 +144,37 @@ async function capture(name, width = 1366, height = 768) {
   await writeFile(path.join(artifactDirectory, name), Buffer.from(data, 'base64'));
 }
 
-async function register(username, displayName) {
+async function captureAtBothSizes(name) {
+  await capture(name);
+  await capture(name.replace('.png', '-1920x1080.png'), 1920, 1080);
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 1366,
+    height: 768,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+}
+
+async function assertNoViewportOverflow(label) {
+  const dimensions = await evaluate(`({
+    innerWidth,
+    innerHeight,
+    scrollWidth: document.documentElement.scrollWidth,
+    scrollHeight: document.documentElement.scrollHeight
+  })`);
+  if (dimensions.scrollWidth > dimensions.innerWidth) {
+    throw new Error(`${label} has horizontal viewport overflow`);
+  }
+  return dimensions;
+}
+
+async function register(username, displayName, captureScreen = false) {
   await navigate(`${appBase}/register`);
   await waitFor("Boolean(document.querySelector('form'))", 'registration form');
+  if (captureScreen) {
+    await captureAtBothSizes('phase2.1-register.png');
+    await assertNoViewportOverflow('Registration');
+  }
   await setInput('[autocomplete="name"]', displayName);
   await setInput('[autocomplete="username"]', username.toLocaleUpperCase('en-US'));
   await setInput('[autocomplete="new-password"]', password, 0);
@@ -127,10 +203,29 @@ async function logout() {
   await waitFor("location.pathname === '/login'", 'logout');
 }
 
-async function answerFindWord(choice) {
+async function answerFindWord(choice, interaction = 'pointer') {
   await waitFor("Boolean(document.querySelector('.choice-grid'))", 'Find-the-Word activity');
-  await clickByText('.choice-option', choice);
-  await clickByText('.activity-actions .button', 'Submit answer');
+  if (interaction === 'keyboard') {
+    await evaluate(`(() => {
+      const option = [...document.querySelectorAll('.choice-option')]
+        .find((candidate) => candidate.textContent.trim() === ${JSON.stringify(choice)});
+      if (!option) throw new Error(${JSON.stringify(`Missing choice: ${choice}`)});
+      option.querySelector('input').focus();
+    })()`);
+    await pressKey(' ', 'Space');
+    const selectedByKeyboard = await evaluate(
+      "Boolean(document.activeElement?.matches('.choice-option input') && document.activeElement.checked)",
+    );
+    if (!selectedByKeyboard) throw new Error('Keyboard did not select the focused radio option');
+    await waitFor(
+      "!document.querySelector('.activity-actions .button--primary').disabled",
+      'keyboard selection to enable submission',
+    );
+    await keyboardClickByText('.activity-actions .button', 'Submit answer');
+  } else {
+    await pointerClickByText('.choice-option', choice);
+    await pointerClickByText('.activity-actions .button', 'Submit answer');
+  }
   await waitFor("Boolean(document.querySelector('.answer-feedback'))", 'answer feedback');
 }
 
@@ -144,15 +239,26 @@ async function answerOrganize(labels) {
       const element = [...document.querySelectorAll('.available-token')]
         .find((candidate) => candidate.textContent.replace(/^\\+\\s*/, '').trim() === ${JSON.stringify(label)});
       if (!element) throw new Error(${JSON.stringify(`Missing phrase token: ${label}`)});
-      element.click();
+      element.scrollIntoView({ block: 'center' });
     })()`);
+    await pointerClickByText('.available-token', `+ ${label}`);
   }
-  await clickByText('.activity-actions .button', 'Submit translation');
+  await pointerClickByText('.activity-actions .button', 'Submit translation');
   await waitFor("Boolean(document.querySelector('.answer-feedback'))", 'translation feedback');
 }
 
-async function continueActivity() {
-  await evaluate("document.querySelector('.answer-feedback .button').click()");
+async function continueActivity(interaction = 'pointer') {
+  if (interaction === 'keyboard') {
+    const label = await evaluate(
+      "document.querySelector('.answer-feedback .button').textContent.trim()",
+    );
+    await keyboardClickByText('.answer-feedback .button', label);
+  } else {
+    const label = await evaluate(
+      "document.querySelector('.answer-feedback .button').textContent.trim()",
+    );
+    await pointerClickByText('.answer-feedback .button', label);
+  }
   await waitFor("!document.querySelector('.answer-feedback')", 'feedback to close');
   await waitFor(
     "Boolean(document.querySelector('.choice-grid, .available-token-list, .result-board'))",
@@ -161,8 +267,8 @@ async function continueActivity() {
 }
 
 async function completeAttempt({ perfect }) {
-  await answerFindWord(perfect ? 'sum' : 'difference');
-  await continueActivity();
+  await answerFindWord(perfect ? 'sum' : 'difference', 'keyboard');
+  await continueActivity('keyboard');
   await answerFindWord(perfect ? 'product' : 'quotient');
   await continueActivity();
   await answerFindWord('quotient');
@@ -183,6 +289,7 @@ function log(message) {
 try {
   await mkdir(artifactDirectory, { recursive: true });
   await send('Page.enable');
+  await send('Page.bringToFront');
   await send('Runtime.enable');
   await send('Network.enable');
   await send('Storage.clearDataForOrigin', { origin: appBase, storageTypes: 'all' });
@@ -195,18 +302,45 @@ try {
 
   await navigate(appBase);
   await waitFor("location.pathname === '/login'", 'guest route protection');
-  await register(firstUsername, 'Manual Learner');
+  await captureAtBothSizes('phase2.1-login.png');
+  await assertNoViewportOverflow('Login');
+  await register(firstUsername, 'Manual Learner', true);
   log('created the first local account');
 
-  await capture('phase2-main-1366x768.png');
-  await capture('phase2-main-1920x1080.png', 1920, 1080);
+  await capture('phase2.1-main-1366x768.png');
+  await capture('phase2.1-main-1920x1080.png', 1920, 1080);
   await send('Emulation.setDeviceMetricsOverride', {
     width: 1366,
     height: 768,
     deviceScaleFactor: 1,
     mobile: false,
   });
-  log('charcoal main menu fits 1366×768 and 1920×1080');
+  await assertNoViewportOverflow('Main menu');
+  await evaluate("document.querySelector('.user-menu summary').focus()");
+  await pressKey(' ', 'Space');
+  await waitFor("document.querySelector('.user-menu').open", 'keyboard account menu opening');
+  const accountLinks = await evaluate(
+    "document.querySelectorAll('.user-menu__popover a, .user-menu__popover button').length",
+  );
+  if (accountLinks !== 3) throw new Error('Account menu actions are incomplete');
+  await pressKey(' ', 'Space');
+  await waitFor("!document.querySelector('.user-menu').open", 'keyboard account menu closing');
+  log('focused learning start fits 1366×768 and 1920×1080');
+
+  await evaluate("document.querySelector('.user-menu').open = true");
+  await evaluate('document.querySelector(\'.user-menu a[href="/profile"]\').click()');
+  await waitFor("Boolean(document.querySelector('.profile-layout'))", 'profile page');
+  await captureAtBothSizes('phase2.1-profile.png');
+  await assertNoViewportOverflow('Profile');
+  await evaluate('document.querySelector(\'.app-header a[href="/"]\').click()');
+  await waitFor("Boolean(document.querySelector('.home-start'))", 'home after profile');
+  await evaluate("document.querySelector('.user-menu').open = true");
+  await evaluate('document.querySelector(\'.user-menu a[href="/settings"]\').click()');
+  await waitFor("Boolean(document.querySelector('.settings-grid'))", 'settings page');
+  await captureAtBothSizes('phase2.1-settings.png');
+  await assertNoViewportOverflow('Settings');
+  await evaluate('document.querySelector(\'.app-header a[href="/"]\').click()');
+  await waitFor("Boolean(document.querySelector('.home-start'))", 'home after settings');
 
   await evaluate('document.querySelector(\'a[href="/lessons"]\').click()');
   await waitFor(
@@ -215,12 +349,14 @@ try {
   );
   const initiallyLocked = await evaluate("Boolean(document.querySelector('.lesson-node--locked'))");
   if (!initiallyLocked) throw new Error('Lesson 2 was not initially locked');
-  await capture('phase2-lesson-hub.png');
+  await captureAtBothSizes('phase2.1-lesson-hub.png');
+  await assertNoViewportOverflow('Lesson hub');
   log('lesson hub shows Lesson 1 available and Lesson 2 locked');
 
   await evaluate("document.querySelector('.lesson-path a').click()");
   await waitFor("Boolean(document.querySelector('.lesson-overview__hero'))", 'lesson overview');
-  await capture('phase2-lesson-overview.png');
+  await captureAtBothSizes('phase2.1-lesson-overview.png');
+  await assertNoViewportOverflow('Lesson overview');
   await clickByText('.lesson-summary .button', 'Start lesson');
   await waitFor("Boolean(document.querySelector('.choice-grid'))", 'first activity');
 
@@ -230,7 +366,15 @@ try {
   await waitFor('Boolean(document.querySelector(\'[role="alertdialog"]\'))', 'exit confirmation');
   await evaluate("document.querySelector('.dialog .button--danger').click()");
   await waitFor("Boolean(document.querySelector('.lesson-summary'))", 'overview after exit');
-  await clickByText('.lesson-summary .button--primary', 'Resume lesson');
+  await navigate(appBase);
+  await waitFor("Boolean(document.querySelector('.home-progress'))", 'home resume progress');
+  const homeResume = await evaluate("document.querySelector('.home-start').textContent");
+  if (
+    !homeResume.includes('1 of 6 activities completed') ||
+    !homeResume.includes('Continue Lesson 1')
+  )
+    throw new Error('Home did not identify the incomplete lesson as the next action');
+  await evaluate("document.querySelector('.home-primary-action').click()");
   await waitFor("Boolean(document.querySelector('.choice-grid'))", 'resumed activity');
   const resumedNumber = await evaluate(
     "document.querySelector('.lesson-player__identity strong').textContent",
@@ -239,7 +383,7 @@ try {
   await evaluate("document.querySelector('.lesson-exit').click()");
   await evaluate("document.querySelector('.dialog .button--danger').click()");
   await waitFor("Boolean(document.querySelector('.lesson-summary'))", 'overview before restart');
-  await clickByText('.lesson-summary .button--quiet', 'Restart from the beginning');
+  await clickByText('.lesson-summary .button--quiet', 'Restart lesson');
   await waitFor(
     'Boolean(document.querySelector(\'[role="alertdialog"]\'))',
     'restart confirmation',
@@ -248,14 +392,20 @@ try {
   await waitFor("Boolean(document.querySelector('.choice-grid'))", 'restarted lesson');
   log('exit, resume, and confirmed restart preserve attempt history');
 
-  await capture('phase2-find-the-word.png');
-  await answerFindWord('difference');
+  await captureAtBothSizes('phase2.1-find-the-word.png');
+  const findWordDimensions = await assertNoViewportOverflow('Find the Word');
+  if (findWordDimensions.scrollHeight > findWordDimensions.innerHeight)
+    throw new Error('Find the Word requires unnecessary scrolling at 1366×768');
+  await answerFindWord('difference', 'keyboard');
   await continueActivity();
   await answerFindWord('quotient');
   await continueActivity();
   await answerFindWord('quotient');
   await continueActivity();
-  await capture('phase2-organize-translate.png');
+  await captureAtBothSizes('phase2.1-organize-translate.png');
+  const organizeDimensions = await assertNoViewportOverflow('Organize and Translate');
+  if (organizeDimensions.scrollHeight > organizeDimensions.innerHeight)
+    throw new Error('Organize and Translate requires unnecessary scrolling at 1366×768');
   await answerOrganize(['six', 'less than', 'a number']);
   await continueActivity();
   await answerOrganize(['a number', 'subtracted from', 'twelve']);
@@ -263,14 +413,16 @@ try {
   await answerOrganize(['the sum of', 'three times a number', 'and', 'seven']);
   await continueActivity();
   await waitFor("Boolean(document.querySelector('.result-page--failed'))", 'failed result');
-  await capture('phase2-result-failed.png');
+  await captureAtBothSizes('phase2.1-result-failed.png');
+  await assertNoViewportOverflow('Failed result');
   log('failed attempt remains recorded and Lesson 2 stays locked');
 
   await clickByText('.result-actions .button--primary', 'Retry lesson');
   await waitFor("Boolean(document.querySelector('.choice-grid'))", 'retry');
   await completeAttempt({ perfect: true });
   await waitFor("Boolean(document.querySelector('.result-page--cleared'))", 'cleared result');
-  await capture('phase2-result-cleared.png');
+  await captureAtBothSizes('phase2.1-result-cleared.png');
+  await assertNoViewportOverflow('Cleared result');
   log('perfect retry clears Lesson 1, awards three stars, and improves XP once');
 
   await send('Page.reload');
@@ -295,12 +447,19 @@ try {
   });
   log('completed result and progress survive refresh and offline reopening');
 
-  await clickByText('.result-actions .button--quiet', 'Lesson hub');
+  await navigate(appBase);
+  await waitFor("Boolean(document.querySelector('.home-start'))", 'home after lesson clear');
+  const clearedHome = await evaluate("document.querySelector('.home-start').textContent");
+  if (!clearedHome.includes('Order Matters') || !clearedHome.includes('View Lesson 2'))
+    throw new Error('Home did not point to the unlocked next lesson');
+  await clickByText('.home-actions a', 'View all lessons');
   await waitFor("Boolean(document.querySelector('.lesson-path'))", 'unlocked hub');
   const unlocked = await evaluate("document.querySelectorAll('.lesson-node--locked').length === 0");
   if (!unlocked) throw new Error('Lesson 2 did not unlock');
   await evaluate("document.querySelectorAll('.lesson-path a')[1].click()");
   await waitFor("Boolean(document.querySelector('.preview-board'))", 'Lesson 2 preview');
+  await captureAtBothSizes('phase2.1-lesson-preview.png');
+  await assertNoViewportOverflow('Lesson preview');
   log('passing attempt unlocks the deliberate Lesson 2 preview');
 
   await logout();
@@ -308,8 +467,8 @@ try {
   await evaluate('document.querySelector(\'a[href="/lessons"]\').click()');
   await waitFor("Boolean(document.querySelector('.lesson-path'))", 'second user hub');
   const secondLocked = await evaluate("Boolean(document.querySelector('.lesson-node--locked'))");
-  const secondBest = await evaluate("document.querySelector('.lesson-node__metrics').textContent");
-  if (!secondLocked || !secondBest.includes('Best 0%'))
+  const secondState = await evaluate("document.querySelector('.lesson-node').textContent");
+  if (!secondLocked || !secondState.includes('Not started'))
     throw new Error('Progress leaked between users');
   await logout();
   await login(firstUsername);

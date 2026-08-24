@@ -51,21 +51,33 @@ export function FindWordActivityView({
           <span>{activity.sentenceAfter}</span>
         </legend>
         <div className="choice-grid">
-          {activity.choices.map((choice) => (
-            <label
-              key={choice.id}
-              className={`choice-option ${selected === choice.id ? 'choice-option--selected' : ''}`}
-            >
-              <input
-                type="radio"
-                name={activity.id}
-                value={choice.id}
-                checked={visibleAnswer === choice.id}
-                onChange={() => setSelected(choice.id)}
-              />
-              <span>{choice.label}</span>
-            </label>
-          ))}
+          {activity.choices.map((choice) => {
+            const selectedChoice = visibleAnswer === choice.id;
+            const submittedState = submitted
+              ? selectedChoice
+                ? submitted.isCorrect
+                  ? 'choice-option--correct'
+                  : 'choice-option--incorrect'
+                : choice.id === activity.correctChoiceId
+                  ? 'choice-option--answer'
+                  : ''
+              : '';
+            return (
+              <label
+                key={choice.id}
+                className={`choice-option ${selected === choice.id ? 'choice-option--selected' : ''} ${submittedState}`}
+              >
+                <input
+                  type="radio"
+                  name={activity.id}
+                  value={choice.id}
+                  checked={visibleAnswer === choice.id}
+                  onChange={() => setSelected(choice.id)}
+                />
+                <span>{choice.label}</span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
       {!submitted && (
@@ -80,7 +92,11 @@ export function FindWordActivityView({
           </Button>
         </div>
       )}
-      {hintVisible && !submitted && <p className="activity-hint">Hint: {activity.hint?.body}</p>}
+      {hintVisible && !submitted && (
+        <p className="activity-hint" role="status">
+          <strong>Hint:</strong> {activity.hint?.body}
+        </p>
+      )}
     </div>
   );
 }

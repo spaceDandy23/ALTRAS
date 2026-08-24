@@ -15,7 +15,6 @@ export function EmptyState({
       <span className="empty-state__symbol" aria-hidden="true">
         {symbol}
       </span>
-      <p className="eyebrow">Coming next</p>
       <h1>{title}</h1>
       <div className="empty-state__copy">{children}</div>
     </Panel>

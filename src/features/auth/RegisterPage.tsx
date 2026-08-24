@@ -50,7 +50,6 @@ export function RegisterPage() {
   return (
     <AuthFrame>
       <div className="auth-card__heading auth-card__heading--compact">
-        <p className="eyebrow">Your local learning space</p>
         <h1>Create an account</h1>
         <p>Each student gets separate progress and settings on this computer.</p>
       </div>
@@ -99,7 +98,7 @@ export function RegisterPage() {
           required
         />
         <Button type="submit" fullWidth disabled={submitting} className="auth-form__submit">
-          {submitting ? 'Building your space…' : 'Create my account'}
+          {submitting ? 'Creating account…' : 'Create account'}
         </Button>
       </form>
       <p className="auth-switch">

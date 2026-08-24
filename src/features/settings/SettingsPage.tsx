@@ -43,6 +43,12 @@ export function SettingsPage() {
     void getUserSettings(db, user.id).then(setSettings);
   }, [user]);
 
+  useEffect(() => {
+    if (saveState !== 'saved') return;
+    const timeout = window.setTimeout(() => setSaveState('idle'), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [saveState]);
+
   if (!user || !settings) {
     return (
       <div className="standard-page">
@@ -71,13 +77,12 @@ export function SettingsPage() {
       <BackLink />
       <div className="page-heading page-heading--with-status">
         <div>
-          <p className="eyebrow">Tune your classroom</p>
           <h1>Settings</h1>
-          <p>These choices are saved only for {user.displayName}.</p>
+          <p>Preferences for {user.displayName} on this device.</p>
         </div>
         <span className={`save-state save-state--${saveState}`} role="status">
           {saveState === 'saving' && 'Saving…'}
-          {saveState === 'saved' && '✓ Saved locally'}
+          {saveState === 'saved' && '✓ Saved'}
           {saveState === 'error' && 'Could not save'}
         </span>
       </div>
@@ -86,8 +91,7 @@ export function SettingsPage() {
           <div className="settings-section__heading">
             <span aria-hidden="true">♫</span>
             <div>
-              <p className="eyebrow">Sound</p>
-              <h2>Volume levels</h2>
+              <h2>Sound</h2>
             </div>
           </div>
           <VolumeControl
@@ -106,14 +110,13 @@ export function SettingsPage() {
             onChange={(musicVolume) => void changeSetting({ musicVolume })}
           />
           <p className="settings-note">
-            Audio controls are ready for the sound library planned in a later phase.
+            These preferred volume levels are saved with this account.
           </p>
         </Panel>
         <Panel className="settings-section" accent="red">
           <div className="settings-section__heading">
             <span aria-hidden="true">✦</span>
             <div>
-              <p className="eyebrow">Motion</p>
               <h2>Animation</h2>
             </div>
           </div>

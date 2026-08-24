@@ -23,6 +23,7 @@ export function ActiveLessonPage() {
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [activityIndex, setActivityIndex] = useState(0);
   const [confirmExit, setConfirmExit] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
@@ -45,6 +46,12 @@ export function ActiveLessonPage() {
     );
   }, [attemptId, contentStatus, lessonId, navigate, user]);
 
+  useEffect(() => {
+    if (saveState !== 'saved') return;
+    const timeout = window.setTimeout(() => setSaveState('idle'), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [saveState]);
+
   if (!user || !lesson || !attempt) {
     return (
       <ContentState>
@@ -64,8 +71,14 @@ export function ActiveLessonPage() {
   );
 
   const submit = async (answer: ActivityAnswer) => {
-    const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer);
-    setAttempt(updated);
+    setSaveState('saving');
+    try {
+      const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer);
+      setAttempt(updated);
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
   };
 
   const continueLesson = async () => {
@@ -96,7 +109,15 @@ export function ActiveLessonPage() {
               Activity {activityIndex + 1} of {lesson.activities.length}
             </strong>
           </div>
-          <span className="lesson-player__saved">Saved locally ✓</span>
+          <span
+            className={`lesson-player__save-state lesson-player__save-state--${saveState}`}
+            role="status"
+            aria-live="polite"
+          >
+            {saveState === 'saving' && 'Saving…'}
+            {saveState === 'saved' && 'Answer saved'}
+            {saveState === 'error' && 'Could not save. Try again.'}
+          </span>
         </header>
         <div className="lesson-progress" aria-label={`${progressPercent}% complete`}>
           <span style={{ width: `${progressPercent}%` }} />
@@ -126,7 +147,9 @@ export function ActiveLessonPage() {
                 {submitted.isCorrect ? '✓' : '!'}
               </div>
               <div>
-                <p className="eyebrow">{submitted.isCorrect ? 'Correct' : 'Not quite'}</p>
+                <p className="answer-feedback__status">
+                  {submitted.isCorrect ? 'Correct' : 'Not quite'}
+                </p>
                 <h2>{activity.explanation.title}</h2>
                 <p>{activity.explanation.body}</p>
               </div>

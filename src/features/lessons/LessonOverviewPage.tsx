@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Panel } from '@/components/ui/Panel';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -12,7 +11,6 @@ import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { getLesson } from './content/content.service';
 import { getLessonProgress } from './progress/progress.service';
 import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attempts/attempt.service';
-import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
 
 export function LessonOverviewPage() {
@@ -51,74 +49,73 @@ export function LessonOverviewPage() {
   return (
     <ContentState>
       <div className="standard-page lesson-overview page-enter">
-        <BackLink to="/lessons" />
+        <BackLink to="/lessons" label="Back to lessons" />
         {!lesson || !progress ? (
           <p>Opening lesson…</p>
         ) : (
           <>
             <section className="lesson-overview__hero">
               <div>
-                <p className="eyebrow">Section 1 · Unit 1</p>
                 <h1>{lesson.title}</h1>
                 <p>{lesson.shortDescription}</p>
-                <div className="concept-list">
-                  {lesson.concepts.map((concept) => (
-                    <span key={concept}>{concept}</span>
-                  ))}
+                <div className="lesson-overview__meta" aria-label="Lesson details">
+                  <span>{lesson.activities.length} activities</span>
+                  <span>{lesson.passingThreshold}% to pass</span>
+                  {progress.attemptCount > 0 && <span>Best score {progress.bestScore}%</span>}
                 </div>
-              </div>
-              <Panel className="lesson-summary" accent="yellow">
-                <div>
-                  <span>Activities</span>
-                  <strong>{lesson.activities.length}</strong>
-                </div>
-                <div>
-                  <span>Passing score</span>
-                  <strong>{lesson.passingThreshold}%</strong>
-                </div>
-                <div>
-                  <span>Best result</span>
-                  <strong>{progress.bestScore}%</strong>
-                </div>
-                <StarRating count={progress.bestStarCount} />
-                <Button fullWidth onClick={() => void begin()}>
-                  {active
-                    ? 'Resume lesson'
-                    : progress.attemptCount > 0
-                      ? 'Try again'
-                      : 'Start lesson'}
-                </Button>
-                {active && (
-                  <Button fullWidth variant="quiet" onClick={() => setConfirmRestart(true)}>
-                    Restart from the beginning
+                <div className="lesson-overview__actions lesson-summary">
+                  <Button onClick={() => void begin()}>
+                    {active
+                      ? 'Resume lesson'
+                      : progress.attemptCount > 0
+                        ? 'Try again'
+                        : 'Start lesson'}
                   </Button>
-                )}
-              </Panel>
+                  {active && (
+                    <Button variant="quiet" onClick={() => setConfirmRestart(true)}>
+                      Restart lesson
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="lesson-overview__equation" aria-hidden="true">
+                words <span>→</span> math
+              </div>
             </section>
-            <section className="instruction-section">
-              <div className="section-heading">
-                <p className="eyebrow">Before you play</p>
-                <h2>Read the board</h2>
+            <section className="lesson-reference" aria-labelledby="operation-words-heading">
+              <h2 id="operation-words-heading">Operation words</h2>
+              {lesson.instructionalContent
+                .filter((block) => block.type === 'paragraph')
+                .map((block) => (
+                  <p className="lesson-reference__intro" key={block.id}>
+                    {block.body}
+                  </p>
+                ))}
+              <div className="operation-examples">
+                {lesson.instructionalContent
+                  .filter((block) => block.type === 'example')
+                  .map((block) =>
+                    block.type === 'example' ? (
+                      <article className="operation-example" key={block.id}>
+                        <div>
+                          <span>{block.phrase}</span>
+                          <strong>{block.expression}</strong>
+                        </div>
+                        <p>{block.note}</p>
+                      </article>
+                    ) : null,
+                  )}
               </div>
-              <div className="instruction-grid">
-                {lesson.instructionalContent.map((block) =>
-                  block.type === 'example' ? (
-                    <Panel className="instruction-card instruction-card--example" key={block.id}>
-                      <span>{block.phrase}</span>
-                      <strong>{block.expression}</strong>
-                      <p>{block.note}</p>
-                    </Panel>
-                  ) : (
-                    <Panel
-                      className={`instruction-card instruction-card--${block.type}`}
-                      key={block.id}
-                    >
-                      <h3>{block.title}</h3>
+              {lesson.instructionalContent
+                .filter((block) => block.type === 'warning')
+                .map((block) =>
+                  block.type === 'warning' ? (
+                    <aside className="order-warning" key={block.id}>
+                      <h3>Order matters</h3>
                       <p>{block.body}</p>
-                    </Panel>
-                  ),
+                    </aside>
+                  ) : null,
                 )}
-              </div>
             </section>
           </>
         )}

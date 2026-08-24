@@ -32,7 +32,7 @@ Preview the production build with `npm run preview`.
 ## Offline installation
 
 1. Run `npm run build`, then `npm run preview`.
-2. Open ALTRAS once and wait until the header says **Offline ready**.
+2. Open ALTRAS once and wait for the brief **Offline ready** confirmation in the header. It disappears after a few seconds.
 3. Use the browser's **Install app** action.
 4. Close and reopen the installed app with the network disabled.
 

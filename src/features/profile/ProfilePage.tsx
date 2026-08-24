@@ -19,6 +19,12 @@ export function ProfilePage() {
     void getProfile(db, user.id).then((profile) => setDisplayName(profile.displayName));
   }, [user]);
 
+  useEffect(() => {
+    if (!message) return;
+    const timeout = window.setTimeout(() => setMessage(''), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
+
   if (!user) return null;
 
   const handleSubmit = async (event: FormEvent) => {
@@ -28,7 +34,7 @@ export function ProfilePage() {
     try {
       const result = await updateDisplayName(db, user.id, displayName);
       replaceUser(result.user);
-      setMessage('Profile saved on this device.');
+      setMessage('Profile saved.');
     } catch {
       setError('Use a display name between 2 and 40 characters.');
     }
@@ -38,9 +44,8 @@ export function ProfilePage() {
     <div className="standard-page page-enter">
       <BackLink />
       <div className="page-heading">
-        <p className="eyebrow">Your local identity</p>
-        <h1>Student profile</h1>
-        <p>Manage the name shown around ALTRAS.</p>
+        <h1>Profile</h1>
+        <p>Manage the student name shown in ALTRAS.</p>
       </div>
       <div className="profile-layout">
         <Panel className="profile-badge" accent="blue">
@@ -55,8 +60,7 @@ export function ProfilePage() {
           </div>
         </Panel>
         <Panel className="profile-editor">
-          <p className="eyebrow">Edit profile</p>
-          <h2>What should we call you?</h2>
+          <h2>Display name</h2>
           <form onSubmit={(event) => void handleSubmit(event)}>
             <FormField
               label="Display name"
@@ -75,7 +79,7 @@ export function ProfilePage() {
           <div className="profile-editor__username">
             <span>Username</span>
             <strong>{user.normalizedUsername}</strong>
-            <small>Usernames identify local accounts and cannot be changed in Phase 1.</small>
+            <small>Your username identifies this account and cannot be changed.</small>
           </div>
         </Panel>
       </div>
