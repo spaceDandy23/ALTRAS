@@ -1,0 +1,217 @@
+import { packagedContentSchema, type PackagedContent } from '../domain/content.schemas';
+
+export const PACKAGED_CONTENT_VERSION = 1;
+
+const content: PackagedContent = {
+  version: PACKAGED_CONTENT_VERSION,
+  sections: [
+    {
+      id: 'section-translating-verbal-expressions',
+      title: 'Translating Verbal Expressions',
+      description: 'Learn how mathematical operations appear in everyday language.',
+      displayOrder: 1,
+      contentVersion: 1,
+    },
+  ],
+  units: [
+    {
+      id: 'unit-operation-words',
+      sectionId: 'section-translating-verbal-expressions',
+      title: 'Operation Words',
+      description: 'Recognize operation signals and preserve the intended order.',
+      displayOrder: 1,
+      contentVersion: 1,
+    },
+  ],
+  lessons: [
+    {
+      id: 'lesson-operation-signals',
+      sectionId: 'section-translating-verbal-expressions',
+      unitId: 'unit-operation-words',
+      title: 'Words That Signal Operations',
+      shortDescription:
+        'Connect common verbal phrases with addition, subtraction, multiplication, and division.',
+      concepts: ['Operation keywords', 'Verbal expressions', 'Order-sensitive phrases'],
+      displayOrder: 1,
+      contentStatus: 'playable',
+      passingThreshold: 70,
+      contentVersion: 1,
+      instructionalContent: [
+        {
+          id: 'intro-operation-signals',
+          type: 'paragraph',
+          title: 'Words can signal an operation',
+          body: 'A verbal expression describes mathematics using words. Signal words help us decide which operation to use, but we must also read the order carefully.',
+        },
+        {
+          id: 'example-sum',
+          type: 'example',
+          phrase: 'the sum of a number and five',
+          expression: 'n + 5',
+          note: 'Sum, plus, added to, and increased by commonly signal addition.',
+        },
+        {
+          id: 'example-difference',
+          type: 'example',
+          phrase: 'the difference of twelve and a number',
+          expression: '12 − n',
+          note: 'Difference and minus signal subtraction. Keep the named order.',
+        },
+        {
+          id: 'example-product',
+          type: 'example',
+          phrase: 'the product of three and a number',
+          expression: '3n',
+          note: 'Product, times, multiplied by, and of can signal multiplication.',
+        },
+        {
+          id: 'example-quotient',
+          type: 'example',
+          phrase: 'the quotient of a number and four',
+          expression: 'n ÷ 4',
+          note: 'Quotient, divided by, and per can signal division. Order matters.',
+        },
+        {
+          id: 'warning-less-than',
+          type: 'warning',
+          title: 'Watch “less than” and “subtracted from”',
+          body: 'These phrases reverse the apparent order: “six less than a number” is n − 6, and “a number subtracted from twelve” is 12 − n.',
+        },
+      ],
+      activities: [
+        {
+          id: 'find-sum',
+          type: 'find-word',
+          title: 'Find the addition word',
+          prompt: 'Choose the word that makes the verbal phrase match the expression.',
+          mathStatement: '8 + n',
+          sentenceBefore: 'The',
+          sentenceAfter: 'of eight and a number',
+          choices: [
+            { id: 'sum', label: 'sum' },
+            { id: 'difference', label: 'difference' },
+            { id: 'product', label: 'product' },
+          ],
+          correctChoiceId: 'sum',
+          hint: { body: 'Which operation does the plus sign show?' },
+          explanation: {
+            title: 'Correct word: sum',
+            body: '“Sum” names the result of addition, so the sum of eight and a number is 8 + n.',
+          },
+        },
+        {
+          id: 'find-product',
+          type: 'find-word',
+          title: 'Find the multiplication word',
+          prompt: 'Choose the operation word that describes the expression.',
+          mathStatement: '5x',
+          sentenceBefore: 'The',
+          sentenceAfter: 'of five and a number',
+          choices: [
+            { id: 'quotient', label: 'quotient' },
+            { id: 'product', label: 'product' },
+            { id: 'difference', label: 'difference' },
+          ],
+          correctChoiceId: 'product',
+          hint: { body: 'A number written beside a variable means multiplication.' },
+          explanation: {
+            title: 'Correct word: product',
+            body: '“Product” signals multiplication. The product of five and x is 5x.',
+          },
+        },
+        {
+          id: 'find-quotient',
+          type: 'find-word',
+          title: 'Find the division word',
+          prompt: 'Complete the phrase so it describes the expression precisely.',
+          mathStatement: 'n ÷ 4',
+          sentenceBefore: 'The',
+          sentenceAfter: 'of a number and four',
+          choices: [
+            { id: 'sum', label: 'sum' },
+            { id: 'quotient', label: 'quotient' },
+            { id: 'product', label: 'product' },
+          ],
+          correctChoiceId: 'quotient',
+          hint: { body: 'The expression divides a number by four.' },
+          explanation: {
+            title: 'Correct word: quotient',
+            body: '“Quotient” names a division result. The quotient of n and 4 keeps n first: n ÷ 4.',
+          },
+        },
+        {
+          id: 'organize-less-than',
+          type: 'organize-translate',
+          title: 'Put “less than” in order',
+          prompt: 'Build the verbal phrase that matches the expression.',
+          mathStatement: 'n − 6',
+          tokens: [
+            { id: 'number', label: 'a number' },
+            { id: 'six', label: 'six' },
+            { id: 'less-than', label: 'less than' },
+          ],
+          correctTokenSequence: ['six', 'less-than', 'number'],
+          hint: { body: 'Read n − 6 as six fewer than n.' },
+          explanation: {
+            title: 'Order reversed correctly',
+            body: '“Six less than a number” means begin with the number, then subtract six: n − 6.',
+          },
+        },
+        {
+          id: 'organize-subtracted-from',
+          type: 'organize-translate',
+          title: 'Translate “subtracted from”',
+          prompt: 'Arrange every token into a mathematically precise phrase.',
+          mathStatement: '12 − y',
+          tokens: [
+            { id: 'twelve', label: 'twelve' },
+            { id: 'a-number', label: 'a number' },
+            { id: 'subtracted-from', label: 'subtracted from' },
+          ],
+          correctTokenSequence: ['a-number', 'subtracted-from', 'twelve'],
+          hint: { body: 'The quantity after “from” is written first in the expression.' },
+          explanation: {
+            title: '“From” changes the order',
+            body: '“A number subtracted from twelve” starts with twelve and removes the number: 12 − y.',
+          },
+        },
+        {
+          id: 'organize-sum-product',
+          type: 'organize-translate',
+          title: 'Combine two operation signals',
+          prompt: 'Build the complete phrase for the expression.',
+          mathStatement: '3m + 7',
+          tokens: [
+            { id: 'seven', label: 'seven' },
+            { id: 'and', label: 'and' },
+            { id: 'three-times', label: 'three times a number' },
+            { id: 'sum-of', label: 'the sum of' },
+          ],
+          correctTokenSequence: ['sum-of', 'three-times', 'and', 'seven'],
+          hint: { body: 'Name the outer addition first, then describe both terms.' },
+          explanation: {
+            title: 'Two signals, one expression',
+            body: '“The sum of” joins 3m and 7. “Three times a number” describes the product 3m.',
+          },
+        },
+      ],
+    },
+    {
+      id: 'lesson-order-matters',
+      sectionId: 'section-translating-verbal-expressions',
+      unitId: 'unit-operation-words',
+      title: 'Order Matters',
+      shortDescription: 'Practice phrases whose word order changes the mathematical expression.',
+      concepts: ['Less than', 'Subtracted from', 'Division order'],
+      displayOrder: 2,
+      prerequisiteLessonId: 'lesson-operation-signals',
+      contentStatus: 'preview',
+      passingThreshold: 70,
+      contentVersion: 1,
+      instructionalContent: [],
+      activities: [],
+    },
+  ],
+};
+
+export const packagedContent = packagedContentSchema.parse(content);
