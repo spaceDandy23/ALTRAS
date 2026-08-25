@@ -40,9 +40,12 @@ export function LessonsPage() {
                   {hub.unit.title} · {hub.unit.description}
                 </p>
               </div>
-              <p className="lesson-hub__xp">
-                <strong>{totalXp}</strong> XP from best results
-              </p>
+              <div className="lesson-hub__tools">
+                <p className="lesson-hub__xp">
+                  <strong>{totalXp}</strong> XP from best results
+                </p>
+                <Link to="/lessons/almanac">Almanac</Link>
+              </div>
             </section>
             <ol className="lesson-path" aria-label="Lesson sequence">
               {hub.entries.map(({ lesson, progress }, index) => {

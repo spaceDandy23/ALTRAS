@@ -31,6 +31,7 @@
 - Best-result protection, improvement-only XP, and idempotent completion
 - Charcoal/near-black design tokens applied across Phase 1 and Phase 2 screens
 - Keyboard-operable activities, visible focus states, reduced-motion support, and concise corrective feedback
+- Protected Almanac linked only from the lesson hub, with a searchable, fully offline Math Word List
 
 ## Content and versioning decisions
 
@@ -50,6 +51,16 @@
 - The lesson contains two Find-the-Word activities and three Organize-and-Translate activities, for five activities total.
 - Initialization upserts the new metadata and items without modifying accounts, sessions, settings, attempts, or progress.
 - There is currently no Lesson 3. Additional lessons remain deferred until finalized educational content is provided.
+
+### Phase 2.3 Math Word List
+
+- The protected hierarchy is `/lessons` → `/lessons/almanac` → `/lessons/almanac/word-list`; each page returns to its parent.
+- Almanac shows the available Word list and a disabled Review entry marked `Coming next`. `/lessons/almanac/review` is reserved and safely redirects to Almanac until Review is implemented.
+- Typed, Zod-validated application data covers addition, subtraction, multiplication, and division symbols, keywords, examples, and order guidance.
+- Client-side search matches operation names, symbols, keywords, examples, and guidance without network requests or stored search history.
+- “Less than” and “subtracted from” are explicitly labeled order-sensitive; division and named-difference order are also explained.
+- The reference requires no Dexie table or migration and does not read or mutate lesson attempts, progress, XP, stars, settings, or sessions.
+- `PACKAGED_CONTENT_VERSION` remains 2 because lesson content did not change.
 
 ## Policies
 
@@ -89,7 +100,7 @@
 
 ## Deferred Canva ideas
 
-The following remain recorded but intentionally unimplemented: Glossary/List, review of mistakes, flashcards, additional quiz types, pre/post-tests, researcher results, CSV/Excel export, backup/import, achievements, badges, profile borders, friends, characters and mechanics, themes, progress-reactive backgrounds, final music/sound, adaptive practice, Easter eggs, cross-computer sync, and automatic question generation.
+The following remain recorded but intentionally unimplemented: review of mistakes, flashcards, additional quiz types, pre/post-tests, researcher results, CSV/Excel export, backup/import, achievements, badges, profile borders, friends, characters and mechanics, themes, progress-reactive backgrounds, final music/sound, adaptive practice, Easter eggs, cross-computer sync, and automatic question generation.
 
 ## Recommended Phase 3
 

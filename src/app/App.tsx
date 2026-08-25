@@ -10,6 +10,8 @@ import { LessonResultPage } from '@/features/lessons/LessonResultPage';
 import { MainMenuPage } from '@/features/menu/MainMenuPage';
 import { ProfilePage } from '@/features/profile/ProfilePage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
+import { AlmanacPage, AlmanacReviewPlaceholder } from '@/features/word-list/AlmanacPage';
+import { WordListPage } from '@/features/word-list/WordListPage';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import { AppShell } from './AppShell';
@@ -53,6 +55,9 @@ export function App() {
           <Route index element={<MainMenuPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="lessons" element={<LessonsPage />} />
+          <Route path="lessons/almanac" element={<AlmanacPage />} />
+          <Route path="lessons/almanac/word-list" element={<WordListPage />} />
+          <Route path="lessons/almanac/review" element={<AlmanacReviewPlaceholder />} />
           <Route path="lessons/:lessonId" element={<LessonOverviewPage />} />
           <Route path="lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
           <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />

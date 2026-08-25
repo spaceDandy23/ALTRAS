@@ -1295,6 +1295,26 @@ h3 {
   font-size: 1.15rem;
 }
 
+.lesson-hub__tools {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  gap: 0.45rem;
+}
+
+.lesson-hub__tools a {
+  color: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.lesson-hub__tools a:hover {
+  color: var(--yellow);
+}
+
 .lesson-path {
   position: relative;
   display: grid;
@@ -2151,6 +2171,324 @@ a .lesson-node:hover {
   padding-top: var(--space-3);
 }
 
+/* Almanac */
+.almanac-page {
+  max-width: var(--content-focus);
+  margin-inline: auto;
+}
+
+.almanac-heading {
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-4);
+}
+
+.almanac-heading h1 {
+  margin-bottom: 0.45rem;
+  font-size: clamp(2.2rem, 3.8vw, 3.7rem);
+  line-height: 1;
+}
+
+.almanac-heading p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.almanac-options {
+  border-top: 1px solid var(--line-strong);
+}
+
+.almanac-option {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  border-bottom: 1px solid var(--line-strong);
+  padding: var(--space-4) var(--space-3);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+a.almanac-option:hover {
+  border-color: var(--yellow);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.almanac-option > div > span {
+  color: var(--blue);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.almanac-option h2 {
+  margin: 0.35rem 0 0.45rem;
+  font-size: 1.65rem;
+}
+
+.almanac-option p {
+  max-width: 650px;
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.almanac-option > span {
+  color: var(--yellow);
+  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-size: 1.7rem;
+}
+
+.almanac-option--disabled {
+  color: var(--quiet);
+  cursor: not-allowed;
+}
+
+.almanac-option--disabled > div > span,
+.almanac-option--disabled > span {
+  color: var(--quiet);
+}
+
+.almanac-option--disabled h2,
+.almanac-option--disabled p {
+  color: var(--quiet);
+}
+
+/* Math word list */
+.word-list-page {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.word-list-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-4);
+}
+
+.word-list-heading h1 {
+  margin-bottom: 0.45rem;
+  font-size: clamp(2.2rem, 3.8vw, 3.7rem);
+  line-height: 1;
+}
+
+.word-list-heading p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.word-list-search {
+  display: grid;
+  width: min(360px, 40%);
+  flex: none;
+  gap: 0.45rem;
+  color: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.word-list-search input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  padding: 0 0.8rem;
+  color: var(--paper);
+  background: rgba(13, 15, 17, 0.72);
+}
+
+.word-list-search input::placeholder {
+  color: var(--quiet);
+}
+
+.word-list-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.word-list-group {
+  min-width: 0;
+  border-top: 2px solid var(--yellow);
+  padding-top: var(--space-3);
+}
+
+.word-list-group--subtraction {
+  border-top-color: var(--red);
+}
+
+.word-list-group--multiplication,
+.word-list-group--division {
+  border-top-color: var(--blue);
+}
+
+.word-list-group__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.word-list-group__heading h2 {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+.word-list-group__symbol {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  color: var(--yellow);
+  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.word-list-group--subtraction .word-list-group__symbol {
+  color: var(--red);
+}
+
+.word-list-group--multiplication .word-list-group__symbol,
+.word-list-group--division .word-list-group__symbol {
+  color: var(--blue);
+}
+
+.word-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.8rem;
+}
+
+.word-list-table caption {
+  margin-bottom: 0.45rem;
+  color: var(--quiet);
+  font-size: 0.7rem;
+  text-align: left;
+}
+
+.word-list-table th {
+  border-bottom: 1px solid var(--line-strong);
+  padding: 0.45rem 0.55rem;
+  color: var(--quiet);
+  font-size: 0.7rem;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.word-list-table th:first-child {
+  width: 43%;
+}
+
+.word-list-table td {
+  padding: 0.75rem 0.55rem;
+  vertical-align: top;
+}
+
+.word-list-terms,
+.word-list-examples {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.word-list-terms li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.word-list-terms strong {
+  color: #ffaaa4;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.word-list-examples li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.word-list-examples span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.word-list-examples strong {
+  color: var(--yellow);
+  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.word-list-guidance {
+  margin-top: 0.7rem;
+  border-left: 3px solid var(--blue);
+  padding: 0.65rem 0.8rem;
+  background: rgba(101, 182, 238, 0.06);
+}
+
+.word-list-guidance--warning {
+  border-left-color: var(--red);
+  background: rgba(239, 98, 88, 0.07);
+}
+
+.word-list-guidance > strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--blue);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.word-list-guidance--warning > strong {
+  color: #ffaaa4;
+}
+
+.word-list-guidance p {
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.word-list-guidance p:last-child {
+  margin-bottom: 0;
+}
+
+.word-list-empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  align-content: center;
+  border-block: 1px solid var(--line);
+  text-align: center;
+}
+
+.word-list-empty h2 {
+  margin-bottom: 0.45rem;
+}
+
+.word-list-empty p {
+  color: var(--muted);
+}
+
 .page-enter {
   animation: page-enter 260ms ease both;
 }
@@ -2246,6 +2584,23 @@ a .lesson-node:hover {
     padding: 0.85rem 0;
   }
 
+  .word-list-heading {
+    margin-bottom: var(--space-4);
+  }
+
+  .word-list-groups {
+    gap: var(--space-4);
+  }
+
+  .word-list-group__heading {
+    margin-bottom: 0.65rem;
+  }
+
+  .word-list-table td {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
   .lesson-overview__hero {
     margin-bottom: 1.1rem;
     padding-bottom: 1.1rem;
@@ -2281,6 +2636,16 @@ a .lesson-node:hover {
 
   .result-score strong {
     font-size: 3.2rem;
+  }
+}
+
+@media (max-width: 1150px) {
+  .word-list-heading {
+    align-items: start;
+  }
+
+  .word-list-groups {
+    grid-template-columns: 1fr;
   }
 }
 

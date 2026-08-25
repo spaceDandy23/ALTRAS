@@ -95,6 +95,12 @@ XP is deliberately simple: `best score + (best stars × 10)`, for a maximum of 1
 
 Packaged-content version 2 changed Lesson 2 from a preview to a playable lesson while retaining its stable lesson ID and prerequisite. Existing Lesson 1 attempts and progress remain separate from content installation and are preserved.
 
+## Math word list
+
+Authenticated students open **Almanac** from the lesson hub, then choose the fully offline **Word list** at `/lessons/almanac/word-list`. The Almanac keeps the intended `Lessons → Almanac → Review or Word list` hierarchy; Review is disabled and marked **Coming next**. The reference groups addition, subtraction, multiplication, and division vocabulary with examples and explicit guidance for order-sensitive phrases. Search is immediate, case-insensitive, and stored only in page memory.
+
+The reference is typed, Zod-validated application content. It does not use IndexedDB or change packaged lesson version 2, accounts, settings, attempts, progress, XP, stars, or unlocking.
+
 ## Current limitations
 
 - Data is isolated per browser and computer; different computers do not synchronize.

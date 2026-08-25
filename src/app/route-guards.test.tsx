@@ -61,4 +61,25 @@ describe('route guards', () => {
     expect(screen.getByText('Main menu destination')).toBeInTheDocument();
     expect(screen.queryByText('Login form')).not.toBeInTheDocument();
   });
+
+  it('protects the Word list route for signed-out visitors', () => {
+    render(
+      <MemoryRouter initialEntries={['/lessons/almanac/word-list']}>
+        <Routes>
+          <Route path="/login" element={<p>Word list login destination</p>} />
+          <Route
+            path="/lessons/almanac/word-list"
+            element={
+              <ProtectedRoute>
+                <p>Private Math word list</p>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Word list login destination')).toBeInTheDocument();
+    expect(screen.queryByText('Private Math word list')).not.toBeInTheDocument();
+  });
 });
