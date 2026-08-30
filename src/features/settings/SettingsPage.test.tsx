@@ -14,6 +14,8 @@ vi.mock('./settings.service', () => ({
 const initialSettings: UserSettings = {
   id: 'settings-1',
   userId: 'user-1',
+  theme: 'dark',
+  readabilityScale: 1,
   masterVolume: 80,
   soundEffectsVolume: 80,
   musicVolume: 60,
