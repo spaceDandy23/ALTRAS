@@ -30,6 +30,8 @@ export const profileSchema = z.object({
 export const settingsSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
+  theme: z.enum(['light', 'dark', 'system']).default('dark'),
+  readabilityScale: z.number().min(1).max(1.3).default(1),
   masterVolume: z.number().int().min(0).max(100),
   soundEffectsVolume: z.number().int().min(0).max(100),
   musicVolume: z.number().int().min(0).max(100),
