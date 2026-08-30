@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -8,7 +8,12 @@ import { useContentStore } from '@/stores/content.store';
 import type { LearningLesson } from './domain/content.schemas';
 import type { LessonAttempt } from '@/types/learning';
 import { getLesson } from './content/content.service';
-import { completeAttempt, getAttempt, submitActivityAnswer } from './attempts/attempt.service';
+import {
+  completeAttempt,
+  getAttempt,
+  recordAttemptActiveSeconds,
+  submitActivityAnswer,
+} from './attempts/attempt.service';
 import { FindWordActivityView } from './activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateActivityView';
 import type { ActivityAnswer } from './domain/evaluation';
@@ -24,6 +29,16 @@ export function ActiveLessonPage() {
   const [activityIndex, setActivityIndex] = useState(0);
   const [confirmExit, setConfirmExit] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const activeSegmentStartedAt = useRef<number | null>(null);
+
+  const flushActiveTime = useCallback(async () => {
+    if (!attempt || activeSegmentStartedAt.current === null) return;
+    const now = Date.now();
+    const seconds = Math.floor((now - activeSegmentStartedAt.current) / 1000);
+    if (seconds <= 0) return;
+    activeSegmentStartedAt.current += seconds * 1000;
+    await recordAttemptActiveSeconds(db, attempt.id, seconds);
+  }, [attempt]);
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
@@ -51,6 +66,31 @@ export function ActiveLessonPage() {
     const timeout = window.setTimeout(() => setSaveState('idle'), 2200);
     return () => window.clearTimeout(timeout);
   }, [saveState]);
+
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'active') return;
+    activeSegmentStartedAt.current = document.visibilityState === 'visible' ? Date.now() : null;
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        void flushActiveTime().catch(() => undefined);
+        activeSegmentStartedAt.current = null;
+      } else {
+        activeSegmentStartedAt.current = Date.now();
+      }
+    };
+    const interval = window.setInterval(
+      () => void flushActiveTime().catch(() => undefined),
+      30_000,
+    );
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(interval);
+      void flushActiveTime().catch(() => undefined);
+      activeSegmentStartedAt.current = null;
+    };
+  }, [attempt, flushActiveTime]);
 
   if (!user || !lesson || !attempt) {
     return (
@@ -84,6 +124,7 @@ export function ActiveLessonPage() {
   const continueLesson = async () => {
     if (!submitted) return;
     if (activityIndex === lesson.activities.length - 1) {
+      await flushActiveTime().catch(() => undefined);
       await completeAttempt(db, attempt.id);
       navigate(`/lessons/${lesson.id}/result/${attempt.id}`);
       return;
@@ -164,9 +205,12 @@ export function ActiveLessonPage() {
           title="Exit and resume later?"
           confirmLabel="Exit lesson"
           onCancel={() => setConfirmExit(false)}
-          onConfirm={() => navigate(`/lessons/${lesson.id}`)}
+          onConfirm={() => {
+            void flushActiveTime().catch(() => undefined);
+            navigate(`/lessons/${lesson.id}`);
+          }}
         >
-          Your submitted answers are saved on this device. The lesson overview will offer Resume or
+          Your submitted answers are saved to your account. The lesson overview will offer Resume or
           Restart when you return.
         </ConfirmDialog>
       </div>
