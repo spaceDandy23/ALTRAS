@@ -5,6 +5,8 @@ import type { SettingsUpdate } from './settings.service';
 
 const remoteSettingsSchema = z.object({
   user_id: z.string().uuid(),
+  theme: z.enum(['light', 'dark', 'system']),
+  readability_scale: z.coerce.number().min(1).max(1.3),
   master_volume: z.number().int(),
   sound_effects_volume: z.number().int(),
   music_volume: z.number().int(),
@@ -16,6 +18,8 @@ function toUserSettings(input: z.infer<typeof remoteSettingsSchema>): UserSettin
   return settingsSchema.parse({
     id: input.user_id,
     userId: input.user_id,
+    theme: input.theme,
+    readabilityScale: input.readability_scale,
     masterVolume: input.master_volume,
     soundEffectsVolume: input.sound_effects_volume,
     musicVolume: input.music_volume,
@@ -28,7 +32,7 @@ export async function getOnlineUserSettings(userId: string): Promise<UserSetting
   const { data, error } = await getSupabaseClient()
     .from('user_settings')
     .select(
-      'user_id, master_volume, sound_effects_volume, music_volume, animations_enabled, updated_at',
+      'user_id, theme, readability_scale, master_volume, sound_effects_volume, music_volume, animations_enabled, updated_at',
     )
     .eq('user_id', userId)
     .single();
@@ -42,6 +46,10 @@ export async function updateOnlineUserSettings(
   update: SettingsUpdate,
 ): Promise<UserSettings> {
   const remoteChanges = {
+    ...(update.theme === undefined ? {} : { theme: update.theme }),
+    ...(update.readabilityScale === undefined
+      ? {}
+      : { readability_scale: update.readabilityScale }),
     ...(update.masterVolume === undefined ? {} : { master_volume: update.masterVolume }),
     ...(update.soundEffectsVolume === undefined
       ? {}
@@ -57,7 +65,7 @@ export async function updateOnlineUserSettings(
     .update(remoteChanges)
     .eq('user_id', userId)
     .select(
-      'user_id, master_volume, sound_effects_volume, music_volume, animations_enabled, updated_at',
+      'user_id, theme, readability_scale, master_volume, sound_effects_volume, music_volume, animations_enabled, updated_at',
     )
     .single();
 
