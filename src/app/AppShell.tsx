@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { db } from '@/db/database';
+import {
+  applyVisualPreferences,
+  clearVisualPreferences,
+} from '@/features/settings/apply-preferences';
+import { getUserSettings } from '@/features/settings/settings.service';
 import { useAuthStore } from '@/stores/auth.store';
 
 export function AppShell() {
@@ -13,19 +17,32 @@ export function AppShell() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
-  const persistedSettings = useLiveQuery(
-    () => (user ? db.settings.where('userId').equals(user.id).first() : undefined),
-    [user?.id],
-  );
-
   useEffect(() => {
-    if (!persistedSettings) return;
-    document.documentElement.dataset.motion = persistedSettings.animationsEnabled ? 'on' : 'off';
-  }, [persistedSettings]);
+    if (!user) return;
+    let active = true;
+    let settings: Awaited<ReturnType<typeof getUserSettings>> | null = null;
+    const colorScheme =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-color-scheme: dark)')
+        : null;
+    const apply = () => settings && applyVisualPreferences(settings);
+
+    void getUserSettings(db, user.id).then((loaded) => {
+      if (!active) return;
+      settings = loaded;
+      apply();
+    });
+    colorScheme?.addEventListener('change', apply);
+
+    return () => {
+      active = false;
+      colorScheme?.removeEventListener('change', apply);
+    };
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
-    delete document.documentElement.dataset.motion;
+    clearVisualPreferences();
     navigate('/login', { replace: true });
   };
 
