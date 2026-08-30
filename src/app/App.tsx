@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { AssessmentPage } from '@/features/assessments/AssessmentPage';
 import { LessonsPage } from '@/features/lessons/LessonsPage';
 import { ActiveLessonPage } from '@/features/lessons/ActiveLessonPage';
 import { LessonOverviewPage } from '@/features/lessons/LessonOverviewPage';
@@ -53,6 +54,7 @@ export function App() {
           }
         >
           <Route index element={<MainMenuPage />} />
+          <Route path="assessments/:kind" element={<AssessmentPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="lessons" element={<LessonsPage />} />
           <Route path="lessons/almanac" element={<AlmanacPage />} />
