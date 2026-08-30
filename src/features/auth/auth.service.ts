@@ -87,6 +87,8 @@ export async function registerUser(
   const settings = settingsSchema.parse({
     id: crypto.randomUUID(),
     userId,
+    theme: 'dark',
+    readabilityScale: 1,
     masterVolume: 80,
     soundEffectsVolume: 80,
     musicVolume: 60,
