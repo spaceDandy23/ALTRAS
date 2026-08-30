@@ -10,8 +10,10 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
    ALTRAS converts participant usernames into internal, non-deliverable account identifiers, so it does
    not send account emails.
 3. Open the SQL editor and run `supabase/migrations/202608300001_online_foundation.sql`.
-4. Copy the project URL and publishable key from **Project Settings > API Keys**.
-5. Create `.env.local` from `.env.example` and add those two public values.
+4. Run `supabase/migrations/202608300002_transactional_lesson_attempts.sql` to add atomic
+   scoring, XP/unlocking updates, restart handling, and active completion-time tracking.
+5. Copy the project URL and publishable key from **Project Settings > API Keys**.
+6. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 
