@@ -6,6 +6,8 @@ import { getOnlineUserSettings, updateOnlineUserSettings } from './online-settin
 
 export const settingsUpdateSchema = settingsSchema
   .pick({
+    theme: true,
+    readabilityScale: true,
     masterVolume: true,
     soundEffectsVolume: true,
     musicVolume: true,
