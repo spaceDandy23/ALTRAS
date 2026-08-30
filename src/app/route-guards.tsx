@@ -26,7 +26,7 @@ export function AppLoading() {
       <div className="loading-mark" aria-hidden="true">
         x + ?
       </div>
-      <p>Opening your local classroom…</p>
+      <p>Opening your classroom…</p>
     </main>
   );
 }

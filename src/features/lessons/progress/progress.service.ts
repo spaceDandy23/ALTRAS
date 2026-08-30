@@ -2,6 +2,13 @@ import type { AltrasDatabase } from '@/db/database';
 import { getAllLessons } from '../content/content.service';
 import { lessonProgressSchema, type LessonProgress, type StoredLesson } from '@/types/learning';
 import type { LearningLesson, LearningSection, LearningUnit } from '../domain/content.schemas';
+import { isSupabaseConfigured } from '@/services/supabase.client';
+import {
+  ensureOnlineLessonProgress,
+  getOnlineLessonHubData,
+  getOnlineLessonProgress,
+  getOnlineTotalXp,
+} from './online-progress.service';
 
 export interface LessonHubEntry {
   lesson: LearningLesson;
@@ -34,6 +41,8 @@ export async function ensureUserLessonProgress(
   database: AltrasDatabase,
   userId: string,
 ): Promise<LessonProgress[]> {
+  if (isSupabaseConfigured) return ensureOnlineLessonProgress(database, userId);
+
   const lessons = await database.lessons.orderBy('[unitId+displayOrder]').toArray();
   const existing = await database.lessonProgress.where('userId').equals(userId).toArray();
   const byLessonId = new Map(existing.map((progress) => [progress.lessonId, progress]));
@@ -65,6 +74,8 @@ export async function getLessonProgress(
   userId: string,
   lessonId: string,
 ): Promise<LessonProgress> {
+  if (isSupabaseConfigured) return getOnlineLessonProgress(database, userId, lessonId);
+
   await ensureUserLessonProgress(database, userId);
   return lessonProgressSchema.parse(await database.lessonProgress.get(`${userId}:${lessonId}`));
 }
@@ -73,6 +84,8 @@ export async function getLessonHubData(
   database: AltrasDatabase,
   userId: string,
 ): Promise<LessonHubData> {
+  if (isSupabaseConfigured) return getOnlineLessonHubData(database, userId);
+
   await ensureUserLessonProgress(database, userId);
   const [section, unit, lessons, progressRecords] = await Promise.all([
     database.sections.orderBy('displayOrder').first(),
@@ -93,6 +106,7 @@ export async function getLessonHubData(
 }
 
 export async function getTotalXp(database: AltrasDatabase, userId: string): Promise<number> {
+  if (isSupabaseConfigured) return getOnlineTotalXp(userId);
   const progress = await database.lessonProgress.where('userId').equals(userId).toArray();
   return progress.reduce((total, record) => total + record.xpAwarded, 0);
 }

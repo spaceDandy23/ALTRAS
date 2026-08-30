@@ -44,7 +44,7 @@ export function LoginPage() {
     <AuthFrame>
       <div className="auth-card__heading">
         <h1>Sign in to ALTRAS</h1>
-        <p>Sign in to the account saved on this device.</p>
+        <p>Continue your lessons and progress from any supported device.</p>
       </div>
       <form className="auth-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         {errors.form && <div className="form-alert">{errors.form}</div>}
@@ -72,7 +72,7 @@ export function LoginPage() {
         </Button>
       </form>
       <p className="auth-switch">
-        New to ALTRAS? <Link to="/register">Create a local account</Link>
+        New to ALTRAS? <Link to="/register">Create an account</Link>
       </p>
     </AuthFrame>
   );

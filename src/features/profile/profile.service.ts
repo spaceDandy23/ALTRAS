@@ -7,6 +7,8 @@ import {
   type StudentProfile,
 } from '@/types/models';
 import { z } from 'zod';
+import { isSupabaseConfigured } from '@/services/supabase.client';
+import { getOnlineProfile, updateOnlineDisplayName } from './online-profile.service';
 
 const displayNameSchema = z.string().trim().min(2).max(40);
 
@@ -14,6 +16,7 @@ export async function getProfile(
   database: AltrasDatabase,
   userId: string,
 ): Promise<StudentProfile> {
+  if (isSupabaseConfigured) return getOnlineProfile(userId);
   return profileSchema.parse(await database.profiles.get({ userId }));
 }
 
@@ -23,6 +26,8 @@ export async function updateDisplayName(
   displayNameInput: string,
 ): Promise<{ profile: StudentProfile; user: PublicUser }> {
   const displayName = displayNameSchema.parse(displayNameInput);
+  if (isSupabaseConfigured) return updateOnlineDisplayName(userId, displayName);
+
   const updatedAt = Date.now();
   const profile = await getProfile(database, userId);
   const storedUser = userSchema.parse(await database.users.get(userId));
