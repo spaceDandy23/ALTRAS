@@ -1,4 +1,5 @@
 import type { AltrasDatabase } from '@/db/database';
+import { isSupabaseConfigured } from '@/services/supabase.client';
 import { getLesson } from '../content/content.service';
 import { evaluateActivity, type ActivityAnswer } from '../domain/evaluation';
 import {
@@ -14,13 +15,18 @@ import {
   submittedActivityAnswerSchema,
   type LessonAttempt,
 } from '@/types/learning';
+import { AttemptError } from './attempt.errors';
+import {
+  completeOnlineAttempt,
+  getOnlineActiveAttempt,
+  getOnlineAttempt,
+  recordOnlineActiveSeconds,
+  restartOnlineAttempt,
+  startOrResumeOnlineAttempt,
+  submitOnlineActivityAnswer,
+} from './online-attempt.service';
 
-export class AttemptError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AttemptError';
-  }
-}
+export { AttemptError } from './attempt.errors';
 
 function newAttempt(userId: string, lessonId: string, contentVersion: number): LessonAttempt {
   const now = Date.now();
@@ -47,6 +53,7 @@ export async function getActiveAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt | null> {
+  if (isSupabaseConfigured) return getOnlineActiveAttempt(userId, lessonId);
   const attempts = await database.lessonAttempts
     .where('[userId+lessonId]')
     .equals([userId, lessonId])
@@ -60,6 +67,7 @@ export async function startOrResumeAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
+  if (isSupabaseConfigured) return startOrResumeOnlineAttempt(database, userId, lessonId);
   const lesson = await getLesson(database, lessonId);
   if (lesson.contentStatus !== 'playable') throw new AttemptError('This lesson is a preview.');
   const progress = await getLessonProgress(database, userId, lessonId);
@@ -89,6 +97,7 @@ export async function restartAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
+  if (isSupabaseConfigured) return restartOnlineAttempt(database, userId, lessonId);
   const lesson = await getLesson(database, lessonId);
   const progress = await getLessonProgress(database, userId, lessonId);
   if (progress.status === 'locked') throw new AttemptError('Clear the prerequisite lesson first.');
@@ -122,6 +131,9 @@ export async function submitActivityAnswer(
   activityId: string,
   answer: ActivityAnswer,
 ): Promise<LessonAttempt> {
+  if (isSupabaseConfigured) {
+    return submitOnlineActivityAnswer(database, attemptId, activityId, answer);
+  }
   const initialAttempt = lessonAttemptSchema.parse(await database.lessonAttempts.get(attemptId));
   const lesson = await getLesson(database, initialAttempt.lessonId);
   const activity = lesson.activities.find((candidate) => candidate.id === activityId);
@@ -153,6 +165,7 @@ export async function completeAttempt(
   database: AltrasDatabase,
   attemptId: string,
 ): Promise<LessonAttempt> {
+  if (isSupabaseConfigured) return completeOnlineAttempt(database, attemptId);
   const initialAttempt = lessonAttemptSchema.parse(await database.lessonAttempts.get(attemptId));
   if (initialAttempt.status === 'completed') return initialAttempt;
   const lesson = await getLesson(database, initialAttempt.lessonId);
@@ -245,6 +258,7 @@ export async function getAttempt(
   userId: string,
   attemptId: string,
 ): Promise<LessonAttempt> {
+  if (isSupabaseConfigured) return getOnlineAttempt(userId, attemptId);
   const attempt = lessonAttemptSchema.parse(await database.lessonAttempts.get(attemptId));
   if (attempt.userId !== userId) throw new AttemptError('This attempt belongs to another account.');
   return attempt;
@@ -252,4 +266,12 @@ export async function getAttempt(
 
 export async function ensureLearningReady(database: AltrasDatabase, userId: string): Promise<void> {
   await ensureUserLessonProgress(database, userId);
+}
+
+export async function recordAttemptActiveSeconds(
+  _database: AltrasDatabase,
+  attemptId: string,
+  seconds: number,
+): Promise<void> {
+  if (isSupabaseConfigured) await recordOnlineActiveSeconds(attemptId, seconds);
 }
