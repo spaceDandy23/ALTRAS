@@ -4,6 +4,7 @@ import { Panel } from '@/components/ui/Panel';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { getUserSettings, updateUserSettings, type SettingsUpdate } from './settings.service';
+import { applyVisualPreferences } from './apply-preferences';
 import type { UserSettings } from '@/types/models';
 
 function VolumeControl({
@@ -86,10 +87,12 @@ export function SettingsPage() {
 
   const changeSetting = async (update: SettingsUpdate) => {
     const saveId = ++latestSaveRef.current;
-    setSettings((current) => (current ? { ...current, ...update } : current));
-    if (typeof update.animationsEnabled === 'boolean') {
-      document.documentElement.dataset.motion = update.animationsEnabled ? 'on' : 'off';
-    }
+    setSettings((current) => {
+      if (!current) return current;
+      const next = { ...current, ...update };
+      applyVisualPreferences(next);
+      return next;
+    });
     setSaveState('saving');
 
     const saveOperation = saveQueueRef.current.then(() => updateUserSettings(db, user.id, update));
@@ -115,13 +118,24 @@ export function SettingsPage() {
     setSettings((current) => (current ? { ...current, ...update } : current));
   };
 
+  const themeOptions = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'Device' },
+  ] as const;
+  const textSizeOptions = [
+    { value: 1, label: 'Standard' },
+    { value: 1.15, label: 'Large' },
+    { value: 1.3, label: 'Largest' },
+  ] as const;
+
   return (
     <div className="standard-page page-enter">
       <BackLink />
       <div className="page-heading page-heading--with-status">
         <div>
           <h1>Settings</h1>
-          <p>Preferences for {user.displayName} on this device.</p>
+          <p>Preferences for {user.displayName} across devices.</p>
         </div>
         <span className={`save-state save-state--${saveState}`} role="status">
           {saveState === 'saving' && 'Saving…'}
@@ -130,6 +144,47 @@ export function SettingsPage() {
         </span>
       </div>
       <div className="settings-grid">
+        <Panel className="settings-section settings-section--appearance" accent="blue">
+          <div className="settings-section__heading">
+            <span aria-hidden="true">◐</span>
+            <div>
+              <h2>Appearance</h2>
+            </div>
+          </div>
+          <fieldset className="choice-setting">
+            <legend>Color theme</legend>
+            <div className="segmented-control">
+              {themeOptions.map((option) => (
+                <button
+                  className={settings.theme === option.value ? 'is-selected' : undefined}
+                  type="button"
+                  aria-pressed={settings.theme === option.value}
+                  key={option.value}
+                  onClick={() => void changeSetting({ theme: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="choice-setting">
+            <legend>Text size</legend>
+            <div className="segmented-control">
+              {textSizeOptions.map((option) => (
+                <button
+                  className={settings.readabilityScale === option.value ? 'is-selected' : undefined}
+                  type="button"
+                  aria-pressed={settings.readabilityScale === option.value}
+                  key={option.value}
+                  onClick={() => void changeSetting({ readabilityScale: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <p className="settings-note">Theme and text size follow this account across devices.</p>
+        </Panel>
         <Panel className="settings-section" accent="yellow">
           <div className="settings-section__heading">
             <span aria-hidden="true">♫</span>
