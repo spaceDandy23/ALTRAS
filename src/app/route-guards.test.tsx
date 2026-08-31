@@ -40,6 +40,24 @@ describe('route guards', () => {
     expect(screen.queryByText('Private settings')).not.toBeInTheDocument();
   });
 
+  it('renders an accessible full transition state while authentication is loading', () => {
+    useAuthStore.setState({ status: 'loading', user: null });
+
+    render(
+      <MemoryRouter>
+        <ProtectedRoute>
+          <p>Private content</p>
+        </ProtectedRoute>
+      </MemoryRouter>,
+    );
+
+    const loading = screen.getByRole('status');
+    expect(loading).toHaveClass('loading-screen');
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading).toHaveTextContent('Opening your classroom…');
+    expect(screen.queryByText('Private content')).not.toBeInTheDocument();
+  });
+
   it('redirects an authenticated student away from login', () => {
     useAuthStore.setState({
       status: 'authenticated',

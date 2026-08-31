@@ -49,3 +49,10 @@ Direct researcher reads of participant profile, progress, attempt, and answer
 tables are removed by the migrations. Researcher accounts can use Settings, but
 student routes redirect them to the results dashboard and database triggers
 reject attempts, progress, assessment, XP, and star updates.
+
+The Phase 4 dashboard receives one secure anonymized result set because its
+summary, search, filters, and sorting all operate across the same compact research
+cohort. The browser renders 15 participants per page, and opening a detail dialog
+reuses the selected row's existing data without another request. If the study
+grows beyond a compact cohort, move pagination, filtering, and summary aggregation
+into a parameterized replacement RPC rather than exposing direct table access.

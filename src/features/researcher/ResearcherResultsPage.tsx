@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Modal } from '@/components/ui/Modal';
 import {
   calculateResearcherSummary,
   getResearcherResults,
@@ -33,6 +35,8 @@ const sortLabels: Record<SortKey, string> = {
   'lessons-completed': 'Lessons completed',
   'latest-activity': 'Latest activity',
 };
+
+const PARTICIPANTS_PER_PAGE = 15;
 
 function formatScore(score: number | null): string {
   return score === null ? '—' : String(score) + '%';
@@ -111,6 +115,7 @@ export function ResearcherResultsPage() {
   const [filter, setFilter] = useState<ParticipantFilter>('all');
   const [sort, setSort] = useState<SortKey>('participant');
   const [descending, setDescending] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
 
@@ -141,7 +146,7 @@ export function ResearcherResultsPage() {
   };
 
   const summary = useMemo(() => calculateResearcherSummary(participants), [participants]);
-  const visibleParticipants = useMemo(() => {
+  const matchingParticipants = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleUpperCase('en-US');
     return participants
       .filter(
@@ -159,11 +164,20 @@ export function ResearcherResultsPage() {
         return descending ? -comparison : comparison;
       });
   }, [descending, filter, participants, query, sort]);
+  const totalPages = Math.max(1, Math.ceil(matchingParticipants.length / PARTICIPANTS_PER_PAGE));
+  const activePage = Math.min(currentPage, totalPages);
+  const pageParticipants = matchingParticipants.slice(
+    (activePage - 1) * PARTICIPANTS_PER_PAGE,
+    activePage * PARTICIPANTS_PER_PAGE,
+  );
   const selectedParticipant = participants.find(
     (participant) => participant.participantCode === selectedCode,
   );
 
+  const closeDetails = useCallback(() => setSelectedCode(null), []);
+
   const changeSort = (nextSort: SortKey) => {
+    setCurrentPage(1);
     if (sort === nextSort) setDescending((value) => !value);
     else {
       setSort(nextSort);
@@ -171,7 +185,14 @@ export function ResearcherResultsPage() {
     }
   };
 
-  if (loading) return <p className="researcher-loading">Loading anonymized participant results…</p>;
+  if (loading) {
+    return (
+      <div className="researcher-loading" role="status" aria-live="polite" aria-busy="true">
+        <LoadingSpinner />
+        <p>Loading anonymized participant results…</p>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -226,13 +247,16 @@ export function ResearcherResultsPage() {
         <div className="researcher-directory__heading">
           <div>
             <h2 id="participant-results-title">Participant results</h2>
-            <p>{visibleParticipants.length} matching participant(s)</p>
+            <p>{matchingParticipants.length} matching participant(s)</p>
           </div>
           <label className="researcher-search">
             <span>Find participant code</span>
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="ALT-8F21C4"
               type="search"
             />
@@ -244,7 +268,10 @@ export function ResearcherResultsPage() {
             <span>Assessment filter</span>
             <select
               value={filter}
-              onChange={(event) => setFilter(event.target.value as ParticipantFilter)}
+              onChange={(event) => {
+                setFilter(event.target.value as ParticipantFilter);
+                setCurrentPage(1);
+              }}
             >
               {filters.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -263,7 +290,13 @@ export function ResearcherResultsPage() {
               ))}
             </select>
           </label>
-          <Button variant="quiet" onClick={() => setDescending((value) => !value)}>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              setDescending((value) => !value);
+              setCurrentPage(1);
+            }}
+          >
             {descending ? 'Descending' : 'Ascending'}
           </Button>
         </div>
@@ -273,141 +306,176 @@ export function ResearcherResultsPage() {
             <h2>No participant data yet</h2>
             <p>Results will appear here after participants register and begin activity.</p>
           </div>
-        ) : visibleParticipants.length === 0 ? (
+        ) : matchingParticipants.length === 0 ? (
           <div className="researcher-empty">
             <h2>No matching participants</h2>
             <p>Try a different participant code or assessment filter.</p>
           </div>
         ) : (
-          <div className="researcher-table-wrap" tabIndex={0}>
-            <table>
-              <thead>
-                <tr>
-                  <SortableHeader
-                    label="Participant"
-                    active={sort === 'participant'}
-                    onClick={() => changeSort('participant')}
-                  />
-                  <SortableHeader
-                    label="Pre-test"
-                    active={sort === 'pre-score'}
-                    onClick={() => changeSort('pre-score')}
-                  />
-                  <SortableHeader
-                    label="Post-test"
-                    active={sort === 'post-score'}
-                    onClick={() => changeSort('post-score')}
-                  />
-                  <SortableHeader
-                    label="Change"
-                    active={sort === 'score-change'}
-                    onClick={() => changeSort('score-change')}
-                  />
-                  <SortableHeader
-                    label="Lessons"
-                    active={sort === 'lessons-completed'}
-                    onClick={() => changeSort('lessons-completed')}
-                  />
-                  <SortableHeader
-                    label="Latest activity"
-                    active={sort === 'latest-activity'}
-                    onClick={() => changeSort('latest-activity')}
-                  />
-                  <th scope="col">
-                    <span className="visually-hidden">Open details</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleParticipants.map((participant) => (
-                  <tr key={participant.participantCode}>
-                    <td>
-                      <strong>{participant.participantCode}</strong>
-                    </td>
-                    <td>
-                      {assessmentLabel(participant.preTestStatus)} ·{' '}
-                      {formatScore(participant.preTestScore)}
-                    </td>
-                    <td>
-                      {assessmentLabel(participant.postTestStatus)} ·{' '}
-                      {formatScore(participant.postTestScore)}
-                    </td>
-                    <td>{formatChange(participant)}</td>
-                    <td>
-                      {participant.lessonsCompleted} / {participant.lessonsAvailable}
-                    </td>
-                    <td>{formatDate(participant.latestActivityAt)}</td>
-                    <td>
-                      <Button
-                        variant="quiet"
-                        onClick={() => setSelectedCode(participant.participantCode)}
-                      >
-                        Details
-                      </Button>
-                    </td>
+          <>
+            <div className="researcher-table-wrap" tabIndex={0}>
+              <table>
+                <thead>
+                  <tr>
+                    <SortableHeader
+                      label="Participant"
+                      active={sort === 'participant'}
+                      onClick={() => changeSort('participant')}
+                    />
+                    <SortableHeader
+                      label="Pre-test"
+                      active={sort === 'pre-score'}
+                      onClick={() => changeSort('pre-score')}
+                    />
+                    <SortableHeader
+                      label="Post-test"
+                      active={sort === 'post-score'}
+                      onClick={() => changeSort('post-score')}
+                    />
+                    <SortableHeader
+                      label="Change"
+                      active={sort === 'score-change'}
+                      onClick={() => changeSort('score-change')}
+                    />
+                    <SortableHeader
+                      label="Lessons"
+                      active={sort === 'lessons-completed'}
+                      onClick={() => changeSort('lessons-completed')}
+                    />
+                    <SortableHeader
+                      label="Latest activity"
+                      active={sort === 'latest-activity'}
+                      onClick={() => changeSort('latest-activity')}
+                    />
+                    <th scope="col">
+                      <span className="visually-hidden">Open details</span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pageParticipants.map((participant) => (
+                    <tr key={participant.participantCode}>
+                      <td>
+                        <strong>{participant.participantCode}</strong>
+                      </td>
+                      <td>
+                        {assessmentLabel(participant.preTestStatus)} ·{' '}
+                        {formatScore(participant.preTestScore)}
+                      </td>
+                      <td>
+                        {assessmentLabel(participant.postTestStatus)} ·{' '}
+                        {formatScore(participant.postTestScore)}
+                      </td>
+                      <td>{formatChange(participant)}</td>
+                      <td>
+                        {participant.lessonsCompleted} / {participant.lessonsAvailable}
+                      </td>
+                      <td>{formatDate(participant.latestActivityAt)}</td>
+                      <td>
+                        <Button
+                          variant="quiet"
+                          onClick={() => setSelectedCode(participant.participantCode)}
+                        >
+                          View details
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <nav className="researcher-pagination" aria-label="Participant result pages">
+              <Button
+                variant="quiet"
+                disabled={activePage === 1}
+                onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
+              >
+                Previous
+              </Button>
+              <p aria-live="polite">
+                <strong>
+                  Page {activePage} of {totalPages}
+                </strong>
+                <span>
+                  Showing {(activePage - 1) * PARTICIPANTS_PER_PAGE + 1}–
+                  {Math.min(activePage * PARTICIPANTS_PER_PAGE, matchingParticipants.length)} of{' '}
+                  {matchingParticipants.length}
+                </span>
+              </p>
+              <Button
+                variant="quiet"
+                disabled={activePage === totalPages}
+                onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}
+              >
+                Next
+              </Button>
+            </nav>
+          </>
         )}
       </section>
 
-      {selectedParticipant && (
-        <section className="researcher-detail panel" aria-labelledby="participant-detail-title">
-          <div className="researcher-detail__heading">
-            <div>
-              <p className="researcher-kicker">Read-only participant detail</p>
-              <h2 id="participant-detail-title">{selectedParticipant.participantCode}</h2>
+      <Modal
+        open={Boolean(selectedParticipant)}
+        onClose={closeDetails}
+        titleId="participant-detail-title"
+        className="researcher-detail-modal"
+      >
+        {selectedParticipant && (
+          <div className="researcher-detail">
+            <div className="researcher-detail__heading">
+              <div>
+                <p className="researcher-kicker">Read-only participant detail</p>
+                <h2 id="participant-detail-title">{selectedParticipant.participantCode}</h2>
+              </div>
+              <Button variant="quiet" onClick={closeDetails} data-modal-initial-focus>
+                Close details
+              </Button>
             </div>
-            <Button variant="quiet" onClick={() => setSelectedCode(null)}>
-              Close details
-            </Button>
+            <dl className="researcher-detail__summary">
+              <div>
+                <dt>Pre-test</dt>
+                <dd>
+                  {assessmentLabel(selectedParticipant.preTestStatus)} ·{' '}
+                  {formatScore(selectedParticipant.preTestScore)}
+                </dd>
+              </div>
+              <div>
+                <dt>Post-test</dt>
+                <dd>
+                  {assessmentLabel(selectedParticipant.postTestStatus)} ·{' '}
+                  {formatScore(selectedParticipant.postTestScore)}
+                </dd>
+              </div>
+              <div>
+                <dt>Score difference</dt>
+                <dd>{formatChange(selectedParticipant)}</dd>
+              </div>
+              <div>
+                <dt>Latest activity</dt>
+                <dd>{formatDate(selectedParticipant.latestActivityAt)}</dd>
+              </div>
+            </dl>
+            <h3>Lesson progress</h3>
+            {selectedParticipant.lessonResults.length === 0 ? (
+              <p>No lesson progress has been recorded.</p>
+            ) : (
+              <ul className="researcher-lesson-list">
+                {selectedParticipant.lessonResults.map((lesson) => (
+                  <li key={lesson.lessonId}>
+                    <strong>{lesson.lessonId}</strong>
+                    <span>{lesson.status.replace('-', ' ')}</span>
+                    <span>Best {lesson.bestScore}%</span>
+                    <span>Latest {formatScore(lesson.latestScore)}</span>
+                    <span>{lesson.attemptCount} attempt(s)</span>
+                    <span>Completed {formatDate(lesson.completedAt)}</span>
+                    <span>Active time {formatDuration(lesson.activeSeconds)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          <dl className="researcher-detail__summary">
-            <div>
-              <dt>Pre-test</dt>
-              <dd>
-                {assessmentLabel(selectedParticipant.preTestStatus)} ·{' '}
-                {formatScore(selectedParticipant.preTestScore)}
-              </dd>
-            </div>
-            <div>
-              <dt>Post-test</dt>
-              <dd>
-                {assessmentLabel(selectedParticipant.postTestStatus)} ·{' '}
-                {formatScore(selectedParticipant.postTestScore)}
-              </dd>
-            </div>
-            <div>
-              <dt>Score difference</dt>
-              <dd>{formatChange(selectedParticipant)}</dd>
-            </div>
-            <div>
-              <dt>Latest activity</dt>
-              <dd>{formatDate(selectedParticipant.latestActivityAt)}</dd>
-            </div>
-          </dl>
-          <h3>Lesson progress</h3>
-          {selectedParticipant.lessonResults.length === 0 ? (
-            <p>No lesson progress has been recorded.</p>
-          ) : (
-            <ul className="researcher-lesson-list">
-              {selectedParticipant.lessonResults.map((lesson) => (
-                <li key={lesson.lessonId}>
-                  <strong>{lesson.lessonId}</strong>
-                  <span>{lesson.status.replace('-', ' ')}</span>
-                  <span>Best {lesson.bestScore}%</span>
-                  <span>Latest {formatScore(lesson.latestScore)}</span>
-                  <span>{lesson.attemptCount} attempt(s)</span>
-                  <span>Completed {formatDate(lesson.completedAt)}</span>
-                  <span>Active time {formatDuration(lesson.activeSeconds)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+        )}
+      </Modal>
     </section>
   );
 }

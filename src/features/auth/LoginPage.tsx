@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { loginSchema } from './auth.schemas';
@@ -13,12 +14,14 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const login = useAuthStore((state) => state.login);
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     setErrors({});
     const result = loginSchema.safeParse({ username, password });
     if (!result.success) {
@@ -30,6 +33,7 @@ export function LoginPage() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await login({ username, password });
@@ -45,6 +49,7 @@ export function LoginPage() {
     } catch (error) {
       setErrors({ form: error instanceof Error ? error.message : 'Unable to log in.' });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -76,8 +81,17 @@ export function LoginPage() {
           autoComplete="current-password"
           required
         />
-        <Button type="submit" fullWidth disabled={submitting}>
-          {submitting ? 'Signing in…' : 'Sign in'}
+        <Button
+          type="submit"
+          fullWidth
+          disabled={submitting}
+          aria-busy={submitting}
+          className="auth-sign-in__submit"
+        >
+          <span className="auth-sign-in__submit-content" aria-live="polite">
+            {submitting && <LoadingSpinner />}
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </span>
         </Button>
       </form>
       <p className="auth-switch">

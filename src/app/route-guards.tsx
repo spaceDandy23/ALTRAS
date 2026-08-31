@@ -33,7 +33,7 @@ export function StudentRoute({ children }: { children: ReactNode }) {
   }, [checkAccess, user]);
 
   if (!user || checkedUserId !== user.id || status === 'idle' || status === 'loading') {
-    return <AppLoading />;
+    return <AppLoading message="Verifying account access…" />;
   }
 
   if (status === 'authorized') return <Navigate to="/researcher/results" replace />;
@@ -54,13 +54,13 @@ export function StudentRoute({ children }: { children: ReactNode }) {
   return children;
 }
 
-export function AppLoading() {
+export function AppLoading({ message = 'Opening your classroom…' }: { message?: string }) {
   return (
-    <main className="loading-screen">
+    <main className="loading-screen" role="status" aria-live="polite" aria-busy="true">
       <div className="loading-mark" aria-hidden="true">
         x + ?
       </div>
-      <p>Opening your classroom…</p>
+      <p>{message}</p>
     </main>
   );
 }

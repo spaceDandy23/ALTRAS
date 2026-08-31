@@ -228,6 +228,17 @@ h3 {
   box-shadow: none;
 }
 
+.loading-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: loading-spinner-rotate 700ms linear infinite;
+}
+
 .panel {
   position: relative;
   border: 1px solid var(--line);
@@ -487,6 +498,31 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.auth-sign-in__submit,
+.auth-sign-in__submit:hover:not(:disabled),
+.auth-sign-in__submit:active:not(:disabled) {
+  transform: none;
+}
+
+.auth-sign-in__submit:hover:not(:disabled) {
+  border-color: white;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.auth-sign-in__submit:active:not(:disabled) {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.auth-sign-in__submit-content {
+  display: inline-flex;
+  min-width: 7.5rem;
+  min-height: 1.35em;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  line-height: 1.35;
+}
+
 .form-alert {
   border: 1px solid var(--red);
   border-radius: 5px;
@@ -687,6 +723,13 @@ h3 {
   flex: 1;
   align-self: center;
   padding: 1.6rem clamp(2rem, 4vw, 4.5rem) 2rem;
+}
+
+.app-content > .loading-screen {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  align-self: stretch;
 }
 
 .standard-page,
@@ -1477,6 +1520,35 @@ h3 {
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  background: rgba(0, 0, 0, 0.76);
+  overscroll-behavior: contain;
+}
+
+.modal {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - clamp(2rem, 8vw, 5rem));
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--paper);
+  background: var(--panel-bg);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.65);
+  overscroll-behavior: contain;
+}
+
+.modal:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 4px;
 }
 
 .loading-screen,
@@ -2995,6 +3067,36 @@ a.almanac-option:hover {
   background: color-mix(in srgb, var(--blue) 8%, transparent);
 }
 
+.researcher-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.researcher-pagination p {
+  display: grid;
+  min-width: 170px;
+  gap: 0.2rem;
+  margin: 0;
+  color: var(--paper);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.researcher-pagination p span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.researcher-pagination .button:disabled {
+  border-color: var(--line);
+  color: var(--quiet);
+  background: transparent;
+  opacity: 0.72;
+}
+
 .researcher-empty {
   display: grid;
   min-height: 220px;
@@ -3013,6 +3115,15 @@ a.almanac-option:hover {
   display: grid;
   gap: var(--space-3);
   border-top: 3px solid var(--yellow);
+}
+
+.researcher-detail-modal {
+  width: min(1120px, 100%);
+  padding: 0;
+}
+
+.researcher-detail-modal .researcher-detail {
+  padding: var(--space-4);
 }
 
 .researcher-detail__summary {
@@ -3080,8 +3191,26 @@ a.almanac-option:hover {
 }
 
 .researcher-loading {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-2);
   margin: auto;
   color: var(--muted);
+  text-align: center;
+}
+
+.researcher-loading .loading-spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--blue);
+}
+
+.researcher-loading p {
+  margin: 0;
 }
 
 .visually-hidden {
@@ -3113,6 +3242,12 @@ a.almanac-option:hover {
     border-color: var(--blue);
     color: var(--blue);
     transform: rotate(2deg) scale(1.03);
+  }
+}
+
+@keyframes loading-spinner-rotate {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -3737,6 +3872,30 @@ a.almanac-option:hover {
 
   .researcher-controls .button {
     width: 100%;
+  }
+
+  .researcher-pagination {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .researcher-pagination p {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: center;
+  }
+
+  .researcher-pagination .button {
+    width: 100%;
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    padding: 0.75rem;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 1.5rem);
   }
 
   .researcher-detail__summary div {
