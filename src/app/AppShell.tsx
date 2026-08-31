@@ -11,12 +11,15 @@ import {
 } from '@/features/settings/apply-preferences';
 import { getUserSettings } from '@/features/settings/settings.service';
 import { useAuthStore } from '@/stores/auth.store';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 
 export function AppShell() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const menuRef = useRef<HTMLDetailsElement>(null);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const researcherStatus = useResearcherAccessStore((state) => state.status);
+  const checkResearcherAccess = useResearcherAccessStore((state) => state.checkAccess);
   const navigate = useNavigate();
   useEffect(() => {
     if (!user) return;
@@ -43,6 +46,10 @@ export function AppShell() {
       colorScheme?.removeEventListener('change', applySystemTheme);
     };
   }, [user]);
+
+  useEffect(() => {
+    if (user) void checkResearcherAccess(user.id);
+  }, [checkResearcherAccess, user]);
 
   const handleLogout = async () => {
     await logout();
@@ -81,6 +88,11 @@ export function AppShell() {
               <Link to="/settings" onClick={closeUserMenu}>
                 Settings
               </Link>
+              {researcherStatus === 'authorized' && (
+                <Link to="/researcher/results" onClick={closeUserMenu}>
+                  Researcher results
+                </Link>
+              )}
               <button
                 className="logout-button"
                 onClick={() => {

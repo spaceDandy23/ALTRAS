@@ -10,6 +10,8 @@ import { LessonPreviewPage } from '@/features/lessons/LessonPreviewPage';
 import { LessonResultPage } from '@/features/lessons/LessonResultPage';
 import { MainMenuPage } from '@/features/menu/MainMenuPage';
 import { ProfilePage } from '@/features/profile/ProfilePage';
+import { ResearcherResultsPage } from '@/features/researcher/ResearcherResultsPage';
+import { ResearcherRoute } from '@/features/researcher/ResearcherRoute';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { AlmanacPage, AlmanacReviewPlaceholder } from '@/features/word-list/AlmanacPage';
 import { WordListPage } from '@/features/word-list/WordListPage';
@@ -56,6 +58,14 @@ export function App() {
           <Route index element={<MainMenuPage />} />
           <Route path="assessments/:kind" element={<AssessmentPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route
+            path="researcher/results"
+            element={
+              <ResearcherRoute>
+                <ResearcherResultsPage />
+              </ResearcherRoute>
+            }
+          />
           <Route path="lessons" element={<LessonsPage />} />
           <Route path="lessons/almanac" element={<AlmanacPage />} />
           <Route path="lessons/almanac/word-list" element={<WordListPage />} />

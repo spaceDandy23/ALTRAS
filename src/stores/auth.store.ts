@@ -8,6 +8,7 @@ import {
   restoreOnlineSession,
 } from '@/features/auth/online-auth.service';
 import { isSupabaseConfigured } from '@/services/supabase.client';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import type { LoginInput, RegistrationInput } from '@/features/auth/auth.schemas';
 import type { PublicUser } from '@/types/models';
 
@@ -50,6 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (isSupabaseConfigured) await logoutOnlineUser();
     else await logoutUser(db);
     set({ user: null, status: 'guest' });
+    useResearcherAccessStore.getState().clear();
   },
   replaceUser: (user) => set({ user }),
 }));
