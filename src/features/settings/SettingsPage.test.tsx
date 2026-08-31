@@ -87,4 +87,40 @@ describe('settings save status', () => {
     await waitFor(() => expect(saveStatus).toHaveTextContent('✓ Saved'));
     expect(slider).toHaveValue('70');
   });
+
+  it('does not reset a newer text-size choice when another setting finishes saving', async () => {
+    vi.mocked(getUserSettings).mockResolvedValue(initialSettings);
+    vi.mocked(updateUserSettings).mockImplementation(async (_database, _userId, update) => {
+      if (update.readabilityScale !== undefined) {
+        return { ...initialSettings, readabilityScale: update.readabilityScale, updatedAt: 2 };
+      }
+      return { ...initialSettings, theme: update.theme ?? initialSettings.theme, updatedAt: 3 };
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: 'user-1',
+        normalizedUsername: 'appearance_student',
+        displayName: 'Appearance Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+
+    const large = await screen.findByRole('button', { name: 'Large' });
+    const device = screen.getByRole('button', { name: 'Device' });
+
+    fireEvent.click(large);
+    fireEvent.click(device);
+
+    await waitFor(() => expect(updateUserSettings).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(device).toHaveAttribute('aria-pressed', 'true'));
+    expect(large).toHaveAttribute('aria-pressed', 'true');
+  });
 });

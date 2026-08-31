@@ -104,7 +104,12 @@ export function SettingsPage() {
     try {
       const saved = await saveOperation;
       if (saveId !== latestSaveRef.current) return;
-      setSettings(saved);
+      setSettings((current) => {
+        if (!current) return saved;
+        const reconciled = { ...current, ...update, updatedAt: saved.updatedAt };
+        applyVisualPreferences(reconciled);
+        return reconciled;
+      });
       setSaveState('saved');
     } catch {
       if (saveId !== latestSaveRef.current) return;
