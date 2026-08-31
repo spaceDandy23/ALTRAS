@@ -123,4 +123,34 @@ describe('settings save status', () => {
     await waitFor(() => expect(device).toHaveAttribute('aria-pressed', 'true'));
     expect(large).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('reapplies loaded settings so controls and rendered appearance agree', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    document.documentElement.style.setProperty('--readability-scale', '1.3');
+    vi.mocked(getUserSettings).mockResolvedValue({
+      ...initialSettings,
+      theme: 'light',
+      readabilityScale: 1,
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: 'user-1',
+        normalizedUsername: 'synced_student',
+        displayName: 'Synced Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('button', { name: 'Standard' });
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'));
+    expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
+  });
 });

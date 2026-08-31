@@ -1,4 +1,5 @@
 import { Button } from './Button';
+import { createPortal } from 'react-dom';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -18,7 +19,7 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="dialog-backdrop" role="presentation" onMouseDown={onCancel}>
       <section
         className="dialog"
@@ -41,6 +42,7 @@ export function ConfirmDialog({
           </Button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

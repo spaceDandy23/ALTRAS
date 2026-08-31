@@ -45,4 +45,24 @@ describe('per-user settings', () => {
       animationsEnabled: true,
     });
   });
+
+  it('serializes rapid updates and lets a reload wait for the newest settings', async () => {
+    const user = await registerUser(database, {
+      username: 'rapid_student',
+      displayName: 'Rapid',
+      password: 'Number789',
+      confirmPassword: 'Number789',
+    });
+
+    const themeSave = updateUserSettings(database, user.id, { theme: 'light' });
+    const textSave = updateUserSettings(database, user.id, { readabilityScale: 1.3 });
+    const motionSave = updateUserSettings(database, user.id, { animationsEnabled: false });
+
+    await expect(getUserSettings(database, user.id)).resolves.toMatchObject({
+      theme: 'light',
+      readabilityScale: 1.3,
+      animationsEnabled: false,
+    });
+    await Promise.all([themeSave, textSave, motionSave]);
+  });
 });

@@ -63,12 +63,14 @@ export function SettingsPage() {
   const user = useAuthStore((state) => state.user);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const latestSaveRef = useRef(0);
 
   useEffect(() => {
     if (!user) return;
-    void getUserSettings(db, user.id).then(setSettings);
+    void getUserSettings(db, user.id).then((loaded) => {
+      setSettings(loaded);
+      applyVisualPreferences(loaded);
+    });
   }, [user]);
 
   useEffect(() => {
@@ -95,11 +97,7 @@ export function SettingsPage() {
     });
     setSaveState('saving');
 
-    const saveOperation = saveQueueRef.current.then(() => updateUserSettings(db, user.id, update));
-    saveQueueRef.current = saveOperation.then(
-      () => undefined,
-      () => undefined,
-    );
+    const saveOperation = updateUserSettings(db, user.id, update);
 
     try {
       const saved = await saveOperation;

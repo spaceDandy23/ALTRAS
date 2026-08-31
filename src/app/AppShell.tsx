@@ -7,6 +7,7 @@ import { db } from '@/db/database';
 import {
   applyVisualPreferences,
   clearVisualPreferences,
+  resolveTheme,
 } from '@/features/settings/apply-preferences';
 import { getUserSettings } from '@/features/settings/settings.service';
 import { useAuthStore } from '@/stores/auth.store';
@@ -20,23 +21,26 @@ export function AppShell() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    let settings: Awaited<ReturnType<typeof getUserSettings>> | null = null;
     const colorScheme =
       typeof window.matchMedia === 'function'
         ? window.matchMedia('(prefers-color-scheme: dark)')
         : null;
-    const apply = () => settings && applyVisualPreferences(settings);
+    const applySystemTheme = () => {
+      const preference = document.documentElement.dataset.themePreference;
+      if (preference === 'light' || preference === 'dark' || preference === 'system') {
+        document.documentElement.dataset.theme = resolveTheme(preference);
+      }
+    };
 
     void getUserSettings(db, user.id).then((loaded) => {
       if (!active) return;
-      settings = loaded;
-      apply();
+      applyVisualPreferences(loaded);
     });
-    colorScheme?.addEventListener('change', apply);
+    colorScheme?.addEventListener('change', applySystemTheme);
 
     return () => {
       active = false;
-      colorScheme?.removeEventListener('change', apply);
+      colorScheme?.removeEventListener('change', applySystemTheme);
     };
   }, [user]);
 

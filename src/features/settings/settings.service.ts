@@ -4,20 +4,20 @@ import { z } from 'zod';
 import { isSupabaseConfigured } from '@/services/supabase.client';
 import { getOnlineUserSettings, updateOnlineUserSettings } from './online-settings.service';
 
-export const settingsUpdateSchema = settingsSchema
-  .pick({
-    theme: true,
-    readabilityScale: true,
-    masterVolume: true,
-    soundEffectsVolume: true,
-    musicVolume: true,
-    animationsEnabled: true,
-  })
-  .partial();
+export const settingsUpdateSchema = z.object({
+  theme: z.enum(['light', 'dark', 'system']).optional(),
+  readabilityScale: z.number().min(1).max(1.3).optional(),
+  masterVolume: z.number().int().min(0).max(100).optional(),
+  soundEffectsVolume: z.number().int().min(0).max(100).optional(),
+  musicVolume: z.number().int().min(0).max(100).optional(),
+  animationsEnabled: z.boolean().optional(),
+});
 
 export type SettingsUpdate = z.input<typeof settingsUpdateSchema>;
 
-export async function getUserSettings(
+const userSaveQueues = new Map<string, Promise<void>>();
+
+async function loadUserSettings(
   database: AltrasDatabase,
   userId: string,
 ): Promise<UserSettings> {
@@ -27,16 +27,37 @@ export async function getUserSettings(
   return settingsSchema.parse(stored);
 }
 
-export async function updateUserSettings(
+export async function getUserSettings(
+  database: AltrasDatabase,
+  userId: string,
+): Promise<UserSettings> {
+  const pendingSave = userSaveQueues.get(userId);
+  if (pendingSave) await pendingSave;
+  return loadUserSettings(database, userId);
+}
+
+export function updateUserSettings(
   database: AltrasDatabase,
   userId: string,
   update: SettingsUpdate,
 ): Promise<UserSettings> {
   const changes = settingsUpdateSchema.parse(update);
-  if (isSupabaseConfigured) return updateOnlineUserSettings(userId, changes);
+  const previousSave = userSaveQueues.get(userId) ?? Promise.resolve();
+  const saveOperation = previousSave.then(async () => {
+    if (isSupabaseConfigured) return updateOnlineUserSettings(userId, changes);
 
-  const current = await getUserSettings(database, userId);
-  const next = settingsSchema.parse({ ...current, ...changes, updatedAt: Date.now() });
-  await database.settings.put(next);
-  return next;
+    const current = await loadUserSettings(database, userId);
+    const next = settingsSchema.parse({ ...current, ...changes, updatedAt: Date.now() });
+    await database.settings.put(next);
+    return next;
+  });
+  const queueTail = saveOperation.then(
+    () => undefined,
+    () => undefined,
+  );
+  userSaveQueues.set(userId, queueTail);
+  void queueTail.finally(() => {
+    if (userSaveQueues.get(userId) === queueTail) userSaveQueues.delete(userId);
+  });
+  return saveOperation;
 }
