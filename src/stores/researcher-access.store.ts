@@ -31,3 +31,9 @@ export const useResearcherAccessStore = create<ResearcherAccessState>((set, get)
   },
   clear: () => set({ status: 'idle', userId: null }),
 }));
+
+export function assertParticipantLearningAccess(): void {
+  if (useResearcherAccessStore.getState().status === 'authorized') {
+    throw new Error('Researcher accounts cannot create participant learning records.');
+  }
+}

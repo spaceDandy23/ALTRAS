@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AltrasDatabase } from '@/db/database';
 import { getSupabaseClient } from '@/services/supabase.client';
+import { assertParticipantLearningAccess } from '@/stores/researcher-access.store';
 import { lessonProgressSchema, type LessonProgress, type StoredLesson } from '@/types/learning';
 import { getAllLessons } from '../content/content.service';
 import type { LessonHubData } from './progress.service';
@@ -87,6 +88,7 @@ export async function ensureOnlineLessonProgress(
   database: AltrasDatabase,
   userId: string,
 ): Promise<LessonProgress[]> {
+  assertParticipantLearningAccess();
   const lessons = await database.lessons.orderBy('[unitId+displayOrder]').toArray();
   const existing = await readProgress(userId);
   const byLessonId = new Map(existing.map((progress) => [progress.lessonId, progress]));

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getSupabaseClient, isSupabaseConfigured } from '@/services/supabase.client';
+import { assertParticipantLearningAccess } from '@/stores/researcher-access.store';
 import {
   assessmentAttemptSchema,
   assessmentKindSchema,
@@ -121,6 +122,7 @@ export async function startAssessment(
   userId: string,
   kind: AssessmentKind,
 ): Promise<AssessmentAttempt> {
+  assertParticipantLearningAccess();
   const client = requireOnlineServices();
   const { error } = await client.rpc('start_assessment', { p_assessment: kind });
   if (error) throw new AssessmentError('Unable to start this assessment.');
@@ -136,6 +138,7 @@ export async function submitAssessmentAnswer(
   questionId: string,
   choiceId: string,
 ): Promise<AssessmentAttempt> {
+  assertParticipantLearningAccess();
   const { error } = await requireOnlineServices().rpc('submit_assessment_answer', {
     p_attempt_id: attemptId,
     p_question_id: questionId,
@@ -152,6 +155,7 @@ export async function completeAssessment(
   kind: AssessmentKind,
   attemptId: string,
 ): Promise<AssessmentAttempt> {
+  assertParticipantLearningAccess();
   const { error } = await requireOnlineServices().rpc('complete_assessment', {
     p_attempt_id: attemptId,
   });

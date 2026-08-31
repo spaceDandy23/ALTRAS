@@ -3,8 +3,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { useAuthStore } from '@/stores/auth.store';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { loginSchema } from './auth.schemas';
 import { AuthFrame } from './AuthFrame';
+import { resolvePostLoginDestination } from './post-login-route';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -32,7 +34,14 @@ export function LoginPage() {
     try {
       await login({ username, password });
       const state = location.state as { from?: string } | null;
-      navigate(state?.from ?? '/', { replace: true });
+      const authenticatedUser = useAuthStore.getState().user;
+      if (authenticatedUser) {
+        await useResearcherAccessStore.getState().checkAccess(authenticatedUser.id);
+      }
+      navigate(
+        resolvePostLoginDestination(useResearcherAccessStore.getState().status, state?.from),
+        { replace: true },
+      );
     } catch (error) {
       setErrors({ form: error instanceof Error ? error.message : 'Unable to log in.' });
     } finally {

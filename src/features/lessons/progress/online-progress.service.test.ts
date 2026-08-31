@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { toLessonProgress } from './online-progress.service';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { AltrasDatabase } from '@/db/database';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { ensureOnlineLessonProgress, toLessonProgress } from './online-progress.service';
 
 describe('online lesson progress mapping', () => {
+  afterEach(() => useResearcherAccessStore.getState().clear());
+
   it('maps database columns and timestamps to the lesson domain model', () => {
     expect(
       toLessonProgress({
@@ -26,5 +30,16 @@ describe('online lesson progress mapping', () => {
       xpAwarded: 130,
       firstStartedAt: Date.parse('2026-08-30T12:00:00.000Z'),
     });
+  });
+
+  it('blocks researchers before creating participant progress records', async () => {
+    useResearcherAccessStore.setState({
+      status: 'authorized',
+      userId: '6ec599dd-3494-4e5d-b917-342905bcb1fa',
+    });
+
+    await expect(
+      ensureOnlineLessonProgress({} as AltrasDatabase, '6ec599dd-3494-4e5d-b917-342905bcb1fa'),
+    ).rejects.toThrow('Researcher accounts cannot create participant learning records.');
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { AssessmentPage } from '@/features/assessments/AssessmentPage';
@@ -19,7 +19,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import { AppShell } from './AppShell';
 import { NotFoundPage } from './NotFoundPage';
-import { GuestOnlyRoute, ProtectedRoute } from './route-guards';
+import { GuestOnlyRoute, ProtectedRoute, StudentRoute } from './route-guards';
 
 export function App() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -55,9 +55,25 @@ export function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<MainMenuPage />} />
-          <Route path="assessments/:kind" element={<AssessmentPage />} />
-          <Route path="profile" element={<ProfilePage />} />
+          <Route
+            element={
+              <StudentRoute>
+                <Outlet />
+              </StudentRoute>
+            }
+          >
+            <Route index element={<MainMenuPage />} />
+            <Route path="assessments/:kind" element={<AssessmentPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="lessons" element={<LessonsPage />} />
+            <Route path="lessons/almanac" element={<AlmanacPage />} />
+            <Route path="lessons/almanac/word-list" element={<WordListPage />} />
+            <Route path="lessons/almanac/review" element={<AlmanacReviewPlaceholder />} />
+            <Route path="lessons/:lessonId" element={<LessonOverviewPage />} />
+            <Route path="lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+            <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+            <Route path="lessons/:lessonId/preview" element={<LessonPreviewPage />} />
+          </Route>
           <Route
             path="researcher/results"
             element={
@@ -66,14 +82,6 @@ export function App() {
               </ResearcherRoute>
             }
           />
-          <Route path="lessons" element={<LessonsPage />} />
-          <Route path="lessons/almanac" element={<AlmanacPage />} />
-          <Route path="lessons/almanac/word-list" element={<WordListPage />} />
-          <Route path="lessons/almanac/review" element={<AlmanacReviewPlaceholder />} />
-          <Route path="lessons/:lessonId" element={<LessonOverviewPage />} />
-          <Route path="lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
-          <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
-          <Route path="lessons/:lessonId/preview" element={<LessonPreviewPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />

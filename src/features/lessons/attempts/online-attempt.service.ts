@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AltrasDatabase } from '@/db/database';
 import { getSupabaseClient } from '@/services/supabase.client';
+import { assertParticipantLearningAccess } from '@/stores/researcher-access.store';
 import {
   lessonAttemptSchema,
   submittedActivityAnswerSchema,
@@ -144,6 +145,7 @@ export async function startOrResumeOnlineAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
+  assertParticipantLearningAccess();
   const lesson = await getLesson(database, lessonId);
   if (lesson.contentStatus !== 'playable') throw new AttemptError('This lesson is a preview.');
   const progress = await getOnlineLessonProgress(database, userId, lessonId);
@@ -159,6 +161,7 @@ export async function restartOnlineAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
+  assertParticipantLearningAccess();
   const progress = await getOnlineLessonProgress(database, userId, lessonId);
   if (progress.status === 'locked') throw new AttemptError('Clear the prerequisite lesson first.');
   const active = await getOnlineActiveAttempt(userId, lessonId);
@@ -177,6 +180,7 @@ export async function submitOnlineActivityAnswer(
   activityId: string,
   answer: ActivityAnswer,
 ): Promise<LessonAttempt> {
+  assertParticipantLearningAccess();
   const attempt = await readAttempt(attemptId);
   if (attempt.status !== 'active') throw new AttemptError('This attempt is already closed.');
   if (attempt.answers.some((item) => item.activityId === activityId)) return attempt;
@@ -201,6 +205,7 @@ export async function completeOnlineAttempt(
   database: AltrasDatabase,
   attemptId: string,
 ): Promise<LessonAttempt> {
+  assertParticipantLearningAccess();
   const attempt = await readAttempt(attemptId);
   if (attempt.status === 'completed') return attempt;
   const lesson = await getLesson(database, attempt.lessonId);
@@ -226,6 +231,7 @@ export async function getOnlineAttempt(userId: string, attemptId: string): Promi
 }
 
 export async function recordOnlineActiveSeconds(attemptId: string, seconds: number): Promise<void> {
+  assertParticipantLearningAccess();
   if (seconds <= 0) return;
   const { error } = await getSupabaseClient().rpc('add_attempt_active_seconds', {
     p_attempt_id: attemptId,

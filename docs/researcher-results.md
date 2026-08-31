@@ -4,8 +4,16 @@ Phase 4 exposes anonymized, view-only participant results at /researcher/results
 It uses the signed-in user's Supabase JWT and database Row Level Security; the
 browser never receives a Supabase service-role or secret key.
 
-Apply supabase/migrations/202608310001_researcher_results.sql in the Supabase
-SQL Editor (or through the Supabase CLI) after the existing online migrations.
+Apply these migrations in order in the Supabase SQL Editor (or through the
+Supabase CLI) after the existing online migrations:
+
+1. `supabase/migrations/202608310001_researcher_results.sql`
+2. `supabase/migrations/202608310002_researcher_student_separation.sql`
+
+The follow-up migration fixes anonymous participant-code generation for the
+RPC's locked-down `search_path`, excludes researcher accounts from participant
+results, and blocks researchers from participant learning writes at the database
+level.
 
 ## Grant access
 
@@ -38,4 +46,6 @@ researcher_users inside the database and returns only anonymous participant
 codes, scored assessment summaries, and lesson progress. It does not return
 email addresses, display names, authentication UUIDs, answers, or answer keys.
 Direct researcher reads of participant profile, progress, attempt, and answer
-tables are removed by the migration.
+tables are removed by the migrations. Researcher accounts can use Settings, but
+student routes redirect them to the results dashboard and database triggers
+reject attempts, progress, assessment, XP, and star updates.

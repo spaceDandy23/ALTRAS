@@ -82,17 +82,19 @@ export function AppShell() {
               </span>
             </summary>
             <nav className="user-menu__popover" aria-label="Account">
-              <Link to="/profile" onClick={closeUserMenu}>
-                Profile
-              </Link>
-              <Link to="/settings" onClick={closeUserMenu}>
-                Settings
-              </Link>
+              {researcherStatus !== 'authorized' && (
+                <Link to="/profile" onClick={closeUserMenu}>
+                  Profile
+                </Link>
+              )}
               {researcherStatus === 'authorized' && (
                 <Link to="/researcher/results" onClick={closeUserMenu}>
                   Researcher results
                 </Link>
               )}
+              <Link to="/settings" onClick={closeUserMenu}>
+                Settings
+              </Link>
               <button
                 className="logout-button"
                 onClick={() => {

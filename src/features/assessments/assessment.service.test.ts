@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { toAssessmentAttempt } from './assessment.service';
+import { afterEach, describe, expect, it } from 'vitest';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { startAssessment, toAssessmentAttempt } from './assessment.service';
 
 describe('online assessment attempt mapping', () => {
+  afterEach(() => useResearcherAccessStore.getState().clear());
+
   it('maps a submitted result and its saved answers', () => {
     const attempt = toAssessmentAttempt({
       id: '3dd244a8-011c-4684-b759-e43ff1daec24',
@@ -34,5 +37,13 @@ describe('online assessment attempt mapping', () => {
       questionId: 'pre-placeholder-1',
       selectedChoiceId: 'a',
     });
+  });
+
+  it('blocks researchers before creating assessment attempts', async () => {
+    useResearcherAccessStore.setState({ status: 'authorized', userId: crypto.randomUUID() });
+
+    await expect(startAssessment(crypto.randomUUID(), 'pre-test')).rejects.toThrow(
+      'Researcher accounts cannot create participant learning records.',
+    );
   });
 });

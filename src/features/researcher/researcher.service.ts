@@ -71,6 +71,16 @@ export class ResearcherAccessError extends Error {
   }
 }
 
+const missingBackendCodes = new Set(['PGRST202', '42883', '42P01', '42703', '42702', '42804']);
+
+export function researcherResultsErrorMessage(code?: string): string {
+  if (code === '42501') return 'Researcher access required.';
+  if (code && missingBackendCodes.has(code)) {
+    return 'The researcher results backend is not ready. Apply the latest Supabase migrations.';
+  }
+  return 'Unable to load researcher results.';
+}
+
 function timestamp(value: string | null): number | null {
   return value ? Date.parse(value) : null;
 }
@@ -150,9 +160,13 @@ export async function getResearcherResults(): Promise<ResearcherParticipantResul
 
   const { data, error } = await getSupabaseClient().rpc('get_researcher_results');
   if (error) {
+    throw new ResearcherAccessError(researcherResultsErrorMessage(error.code));
+  }
+  const parsed = z.array(remoteParticipantResultSchema).safeParse(data);
+  if (!parsed.success) {
     throw new ResearcherAccessError(
-      error.code === '42501' ? 'Researcher access required.' : 'Unable to load researcher results.',
+      'The researcher results response does not match this ALTRAS version. Apply the latest Supabase migrations.',
     );
   }
-  return z.array(remoteParticipantResultSchema).parse(data).map(toResearcherParticipantResult);
+  return parsed.data.map(toResearcherParticipantResult);
 }

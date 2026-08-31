@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { toLessonAttempt } from './online-attempt.service';
+import { afterEach, describe, expect, it } from 'vitest';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { recordOnlineActiveSeconds, toLessonAttempt } from './online-attempt.service';
 
 describe('online lesson attempt mapping', () => {
+  afterEach(() => useResearcherAccessStore.getState().clear());
+
   it('maps database attempts and answers into the lesson domain model', () => {
     const attempt = toLessonAttempt({
       id: '3dd244a8-011c-4684-b759-e43ff1daec24',
@@ -42,5 +45,13 @@ describe('online lesson attempt mapping', () => {
       answer: 'choice-one',
       isCorrect: true,
     });
+  });
+
+  it('blocks researchers before writing participant attempt activity', async () => {
+    useResearcherAccessStore.setState({ status: 'authorized', userId: crypto.randomUUID() });
+
+    await expect(recordOnlineActiveSeconds(crypto.randomUUID(), 10)).rejects.toThrow(
+      'Researcher accounts cannot create participant learning records.',
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateResearcherSummary,
+  researcherResultsErrorMessage,
   toResearcherParticipantResult,
   type ResearcherParticipantResult,
 } from './researcher.service';
@@ -95,5 +96,13 @@ describe('researcher results mapping and summary', () => {
     expect(JSON.stringify(result)).not.toContain('student@example.test');
     expect(JSON.stringify(result)).not.toContain('Student Name');
     expect(JSON.stringify(result)).not.toContain('selected_choice_id');
+  });
+
+  it('explains a missing or outdated researcher backend without exposing database details', () => {
+    expect(researcherResultsErrorMessage('PGRST202')).toBe(
+      'The researcher results backend is not ready. Apply the latest Supabase migrations.',
+    );
+    expect(researcherResultsErrorMessage('42501')).toBe('Researcher access required.');
+    expect(researcherResultsErrorMessage('XX000')).toBe('Unable to load researcher results.');
   });
 });
