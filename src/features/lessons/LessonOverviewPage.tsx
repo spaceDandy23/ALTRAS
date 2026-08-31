@@ -86,7 +86,9 @@ export function LessonOverviewPage() {
                 )}
               </div>
               <div className="lesson-overview__equation" aria-hidden="true">
-                words <span>→</span> math
+                <span className="lesson-overview__equation-label">words</span>
+                <span className="lesson-overview__equation-arrow">→</span>
+                <span className="lesson-overview__equation-label">math</span>
               </div>
             </section>
             {progress.status !== 'locked' && (
