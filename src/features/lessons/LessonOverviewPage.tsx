@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -13,12 +13,14 @@ import { getLesson } from './content/content.service';
 import { getLessonProgress } from './progress/progress.service';
 import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { ContentState } from './components/ContentState';
+import { useLessonTransition } from './navigation/useLessonTransition';
 
 export function LessonOverviewPage() {
   const { lessonId = '' } = useParams();
   const user = useAuthStore((state) => state.user);
   const contentStatus = useContentStore((state) => state.status);
-  const navigate = useNavigate();
+  const { loadingMessage, transitionError, transitionBusy, startTransition } =
+    useLessonTransition();
   const [lesson, setLesson] = useState<LearningLesson | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
   const [active, setActive] = useState<LessonAttempt | null>(null);
@@ -38,15 +40,36 @@ export function LessonOverviewPage() {
   }, [contentStatus, lessonId, user]);
 
   if (!user) return null;
-  const begin = async () => {
-    if (progress?.status === 'locked') return;
-    const attempt = await startOrResumeAttempt(db, user.id, lessonId);
-    navigate(`/lessons/${lessonId}/play/${attempt.id}`);
+  const begin = () => {
+    if (progress?.status === 'locked' || transitionBusy) return;
+    void startTransition({
+      loadingMessage: active ? 'Restoring your attempt…' : 'Preparing your lesson…',
+      run: async () => {
+        const attempt = active ?? (await startOrResumeAttempt(db, user.id, lessonId));
+        return `/lessons/${lessonId}/play/${attempt.id}`;
+      },
+      fallbackError: 'Unable to open this lesson.',
+    });
   };
-  const restart = async () => {
-    const attempt = await restartAttempt(db, user.id, lessonId);
-    navigate(`/lessons/${lessonId}/play/${attempt.id}`);
+  const restart = () => {
+    setConfirmRestart(false);
+    void startTransition({
+      loadingMessage: 'Restarting your lesson…',
+      run: async () => {
+        const attempt = await restartAttempt(db, user.id, lessonId);
+        return `/lessons/${lessonId}/play/${attempt.id}`;
+      },
+      fallbackError: 'Unable to restart this lesson.',
+    });
   };
+
+  if (loadingMessage) {
+    return (
+      <ContentState>
+        <LoadingState className="loading-screen" message={loadingMessage} />
+      </ContentState>
+    );
+  }
 
   return (
     <ContentState>
@@ -71,7 +94,7 @@ export function LessonOverviewPage() {
                   </p>
                 ) : (
                   <div className="lesson-overview__actions lesson-summary">
-                    <Button onClick={() => void begin()}>
+                    <Button onClick={begin} disabled={transitionBusy} aria-busy={transitionBusy}>
                       {active
                         ? 'Resume lesson'
                         : progress.attemptCount > 0
@@ -79,11 +102,20 @@ export function LessonOverviewPage() {
                           : 'Start lesson'}
                     </Button>
                     {active && (
-                      <Button variant="quiet" onClick={() => setConfirmRestart(true)}>
+                      <Button
+                        variant="quiet"
+                        disabled={transitionBusy}
+                        onClick={() => setConfirmRestart(true)}
+                      >
                         Restart lesson
                       </Button>
                     )}
                   </div>
+                )}
+                {transitionError && (
+                  <p className="form-error" role="alert">
+                    {transitionError}
+                  </p>
                 )}
               </div>
               <div className="lesson-overview__equation" aria-hidden="true">
@@ -136,7 +168,7 @@ export function LessonOverviewPage() {
           title="Restart this lesson?"
           confirmLabel="Restart lesson"
           onCancel={() => setConfirmRestart(false)}
-          onConfirm={() => void restart()}
+          onConfirm={restart}
         >
           Your current attempt will remain in local history, but its completed answers will not
           carry into the new attempt.

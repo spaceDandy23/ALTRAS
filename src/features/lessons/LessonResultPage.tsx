@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { db } from '@/db/database';
@@ -16,12 +16,14 @@ import {
 } from './progress/progress.service';
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
+import { useLessonTransition } from './navigation/useLessonTransition';
 
 export function LessonResultPage() {
   const { lessonId = '', attemptId = '' } = useParams();
   const user = useAuthStore((state) => state.user);
   const contentStatus = useContentStore((state) => state.status);
-  const navigate = useNavigate();
+  const { loadingMessage, transitionError, transitionBusy, startTransition } =
+    useLessonTransition();
   const [lesson, setLesson] = useState<LearningLesson | null>(null);
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
@@ -57,9 +59,22 @@ export function LessonResultPage() {
       </ContentState>
     );
   }
-  const retry = async () => {
-    const next = await startOrResumeAttempt(db, user.id, lesson.id);
-    navigate(`/lessons/${lesson.id}/play/${next.id}`);
+  if (loadingMessage) {
+    return (
+      <ContentState>
+        <LoadingState className="loading-screen" message={loadingMessage} />
+      </ContentState>
+    );
+  }
+  const retry = () => {
+    void startTransition({
+      loadingMessage: 'Preparing your lesson…',
+      run: async () => {
+        const next = await startOrResumeAttempt(db, user.id, lesson.id);
+        return `/lessons/${lesson.id}/play/${next.id}`;
+      },
+      fallbackError: 'Unable to open this lesson.',
+    });
   };
   const correct = attempt.answers.filter((answer) => answer.isCorrect).length;
   const nextDestination = nextEntry
@@ -105,7 +120,7 @@ export function LessonResultPage() {
                 View next lesson
               </Link>
             ) : (
-              <Button onClick={() => void retry()}>
+              <Button onClick={retry} disabled={transitionBusy} aria-busy={transitionBusy}>
                 {attempt.cleared ? 'Review lesson' : 'Retry lesson'}
               </Button>
             )}
@@ -113,6 +128,11 @@ export function LessonResultPage() {
               Lessons
             </Link>
           </div>
+          {transitionError && (
+            <p className="form-error" role="alert">
+              {transitionError}
+            </p>
+          )}
         </main>
       </div>
     </ContentState>

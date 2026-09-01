@@ -19,12 +19,15 @@ import { FindWordActivityView } from './activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateActivityView';
 import type { ActivityAnswer } from './domain/evaluation';
 import { ContentState } from './components/ContentState';
+import { useLessonTransition } from './navigation/useLessonTransition';
 
 export function ActiveLessonPage() {
   const { lessonId = '', attemptId = '' } = useParams();
   const user = useAuthStore((state) => state.user);
   const contentStatus = useContentStore((state) => state.status);
   const navigate = useNavigate();
+  const { loadingMessage, transitionError, transitionBusy, startTransition } =
+    useLessonTransition();
   const [lesson, setLesson] = useState<LearningLesson | null>(null);
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [activityIndex, setActivityIndex] = useState(0);
@@ -104,6 +107,14 @@ export function ActiveLessonPage() {
     );
   }
 
+  if (loadingMessage) {
+    return (
+      <ContentState>
+        <LoadingState className="loading-screen" message={loadingMessage} />
+      </ContentState>
+    );
+  }
+
   const activity = lesson.activities[activityIndex];
   const submitted = attempt.answers.find((answer) => answer.activityId === activity.id);
   const progressPercent = Math.round(
@@ -121,12 +132,18 @@ export function ActiveLessonPage() {
     }
   };
 
-  const continueLesson = async () => {
-    if (!submitted) return;
+  const continueLesson = () => {
+    if (!submitted || transitionBusy) return;
     if (activityIndex === lesson.activities.length - 1) {
-      await flushActiveTime().catch(() => undefined);
-      await completeAttempt(db, attempt.id);
-      navigate(`/lessons/${lesson.id}/result/${attempt.id}`);
+      void startTransition({
+        loadingMessage: 'Preparing your results…',
+        run: async () => {
+          await flushActiveTime().catch(() => undefined);
+          await completeAttempt(db, attempt.id);
+          return `/lessons/${lesson.id}/result/${attempt.id}`;
+        },
+        fallbackError: 'Unable to prepare your lesson result.',
+      });
       return;
     }
     setActivityIndex((index) => index + 1);
@@ -194,9 +211,18 @@ export function ActiveLessonPage() {
                 <h2>{activity.explanation.title}</h2>
                 <p>{activity.explanation.body}</p>
               </div>
-              <Button onClick={() => void continueLesson()}>
+              <Button
+                onClick={continueLesson}
+                disabled={transitionBusy}
+                aria-busy={transitionBusy}
+              >
                 {activityIndex === lesson.activities.length - 1 ? 'See results' : 'Continue'}
               </Button>
+              {transitionError && (
+                <p className="form-error" role="alert">
+                  {transitionError}
+                </p>
+              )}
             </aside>
           )}
         </main>
