@@ -204,6 +204,7 @@ h3 {
 }
 
 .button--secondary {
+  padding-top: 100px;
   border-color: #bce2fb;
   color: #091820;
   background: var(--blue);

@@ -47,6 +47,17 @@ function time(value: string | null): number | null {
   return value ? Date.parse(value) : null;
 }
 
+function toSubmittedActivityAnswer(input: unknown) {
+  const answer = remoteAnswerSchema.parse(input);
+  return submittedActivityAnswerSchema.parse({
+    activityId: answer.activity_id,
+    activityType: answer.activity_type,
+    answer: answer.submitted_answer,
+    isCorrect: answer.is_correct,
+    submittedAt: Date.parse(answer.submitted_at),
+  });
+}
+
 export function toLessonAttempt(input: unknown): LessonAttempt {
   const record = remoteAttemptSchema.parse(input);
   return lessonAttemptSchema.parse({
@@ -60,15 +71,7 @@ export function toLessonAttempt(input: unknown): LessonAttempt {
     completedAt: time(record.completed_at),
     abandonedAt: time(record.abandoned_at),
     answers: record.attempt_answers
-      .map((answer) =>
-        submittedActivityAnswerSchema.parse({
-          activityId: answer.activity_id,
-          activityType: answer.activity_type,
-          answer: answer.submitted_answer,
-          isCorrect: answer.is_correct,
-          submittedAt: Date.parse(answer.submitted_at),
-        }),
-      )
+      .map(toSubmittedActivityAnswer)
       .sort((left, right) => left.submittedAt - right.submittedAt),
     finalScore: record.final_score,
     starCount: record.star_count,
@@ -179,16 +182,20 @@ export async function submitOnlineActivityAnswer(
   attemptId: string,
   activityId: string,
   answer: ActivityAnswer,
+  currentAttempt?: LessonAttempt,
 ): Promise<LessonAttempt> {
   assertParticipantLearningAccess();
-  const attempt = await readAttempt(attemptId);
+  if (currentAttempt && currentAttempt.id !== attemptId) {
+    throw new AttemptError('The active attempt does not match this answer.');
+  }
+  const attempt = currentAttempt ?? (await readAttempt(attemptId));
   if (attempt.status !== 'active') throw new AttemptError('This attempt is already closed.');
   if (attempt.answers.some((item) => item.activityId === activityId)) return attempt;
   const lesson = await getLesson(database, attempt.lessonId);
   const activity = lesson.activities.find((item) => item.id === activityId);
   if (!activity) throw new AttemptError('This activity is not part of the lesson.');
 
-  const { error } = await getSupabaseClient()
+  const { data, error } = await getSupabaseClient()
     .from('attempt_answers')
     .insert({
       attempt_id: attemptId,
@@ -196,9 +203,18 @@ export async function submitOnlineActivityAnswer(
       activity_type: activity.type,
       submitted_answer: answer,
       is_correct: evaluateActivity(activity, answer),
-    });
-  if (error && error.code !== '23505') throw new AttemptError('Unable to save this answer online.');
-  return readAttempt(attemptId);
+    })
+    .select('activity_id, activity_type, submitted_answer, is_correct, submitted_at')
+    .single();
+  if (error?.code === '23505') return readAttempt(attemptId);
+  if (error) throw new AttemptError('Unable to save this answer online.');
+
+  const submitted = toSubmittedActivityAnswer(data);
+  return lessonAttemptSchema.parse({
+    ...attempt,
+    answers: [...attempt.answers, submitted],
+    lastUpdatedAt: Math.max(attempt.lastUpdatedAt, submitted.submittedAt),
+  });
 }
 
 export async function completeOnlineAttempt(

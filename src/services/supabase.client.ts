@@ -28,3 +28,19 @@ export function getSupabaseClient(): SupabaseClient {
 
   return client;
 }
+
+export function validateProductionConfiguration(): void {
+  // Test mode may use local authentication fallback if Supabase is not configured
+  if (isTestEnvironment) return;
+
+  // Production deployments require Supabase configuration
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error(
+      'ALTRAS production deployments require Supabase configuration.\n' +
+      'Missing environment variables:\n' +
+      (supabaseUrl ? '' : '  • VITE_SUPABASE_URL\n') +
+      (supabasePublishableKey ? '' : '  • VITE_SUPABASE_PUBLISHABLE_KEY\n') +
+      'See docs/online-setup.md for setup instructions.',
+    );
+  }
+}

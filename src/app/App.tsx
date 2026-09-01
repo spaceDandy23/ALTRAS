@@ -15,6 +15,7 @@ import { ResearcherRoute } from '@/features/researcher/ResearcherRoute';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { AlmanacPage, AlmanacReviewPlaceholder } from '@/features/word-list/AlmanacPage';
 import { WordListPage } from '@/features/word-list/WordListPage';
+import { validateProductionConfiguration } from '@/services/supabase.client';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import { AppShell } from './AppShell';
@@ -25,6 +26,7 @@ export function App() {
   const initialize = useAuthStore((state) => state.initialize);
   const initializeContent = useContentStore((state) => state.initialize);
   useEffect(() => {
+    validateProductionConfiguration();
     void initialize();
     void initializeContent();
   }, [initialize, initializeContent]);

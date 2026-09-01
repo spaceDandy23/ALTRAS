@@ -130,9 +130,10 @@ export async function submitActivityAnswer(
   attemptId: string,
   activityId: string,
   answer: ActivityAnswer,
+  currentAttempt?: LessonAttempt,
 ): Promise<LessonAttempt> {
   if (isSupabaseConfigured) {
-    return submitOnlineActivityAnswer(database, attemptId, activityId, answer);
+    return submitOnlineActivityAnswer(database, attemptId, activityId, answer, currentAttempt);
   }
   const initialAttempt = lessonAttemptSchema.parse(await database.lessonAttempts.get(attemptId));
   const lesson = await getLesson(database, initialAttempt.lessonId);

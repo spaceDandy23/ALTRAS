@@ -183,7 +183,7 @@ export function AssessmentPage() {
 
     setSaving(true);
     setError('');
-    const save = submitAssessmentAnswer(user.id, kind, attempt.id, question.id, choiceId);
+    const save = submitAssessmentAnswer(attempt.id, question.id, choiceId, attempt);
     answerSaveRef.current = save;
     void save
       .then((savedAttempt) => setAttempt(savedAttempt))

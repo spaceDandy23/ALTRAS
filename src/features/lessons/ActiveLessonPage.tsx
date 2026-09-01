@@ -123,7 +123,7 @@ export function ActiveLessonPage() {
   const submit = async (answer: ActivityAnswer) => {
     setSaveState('saving');
     try {
-      const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer);
+      const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer, attempt);
       setAttempt(updated);
       setSaveState('saved');
     } catch {

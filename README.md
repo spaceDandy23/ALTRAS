@@ -1,8 +1,8 @@
 # ALTRAS
 
-ALTRAS is an offline-first educational desktop web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Phase 2 provides a complete local learning loop with validated bundled lessons, two playable activity types, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
+ALTRAS is an online-first educational web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Students authenticate with Supabase and access validated lessons, activities, assessments, and progress tracking. Phase 2 provides a complete learning loop with bundled lessons, two playable activity types, pre/post-tests, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
 
-> ALTRAS accounts are local device accounts. They are not online identities, and no server verifies or synchronizes them.
+> Assessments, authentication, and progress are stored online with Supabase. The app works best with a stable internet connection.
 
 ## Requirements and setup
 
@@ -29,14 +29,13 @@ npm run build
 
 Preview the production build with `npm run preview`.
 
-## Offline installation
+## Installation
 
 1. Run `npm run build`, then `npm run preview`.
-2. Open ALTRAS once and wait for the brief **Offline ready** confirmation in the header. It disappears after a few seconds.
-3. Use the browser's **Install app** action.
-4. Close and reopen the installed app with the network disabled.
+2. Use the browser's **Install app** action to add ALTRAS as a PWA.
+3. The installed app caches static assets and lesson content for faster loading and offline browsing of cached pages.
 
-ALTRAS has no remote fonts, APIs, CDNs, content requests, or server runtime. The bundled app shell and lesson content remain available offline.
+For full functionality including assessments, progress syncing, and authentication, an internet connection is required.
 
 ## Learning content model
 
@@ -103,8 +102,9 @@ The reference is typed, Zod-validated application content. It does not use Index
 
 ## Current limitations
 
-- Data is isolated per browser and computer; different computers do not synchronize.
-- Clearing browser/site data removes local accounts and learning records.
+- Assessments, authentication, and progress sync require an active internet connection.
+- Data is stored on Supabase; different computers with the same account will synchronize online data.
+- Browser/site data clearing will remove cached content and offline-available lessons.
 - Backup/import and research export are not available yet.
 - Only two lessons and two activity formats are currently available.
 - There is no Lesson 3. Additional lessons are deferred until finalized, reviewed content is provided.

@@ -132,11 +132,10 @@ export async function startAssessment(
 }
 
 export async function submitAssessmentAnswer(
-  userId: string,
-  kind: AssessmentKind,
   attemptId: string,
   questionId: string,
   choiceId: string,
+  currentAttempt: AssessmentAttempt,
 ): Promise<AssessmentAttempt> {
   assertParticipantLearningAccess();
   const { error } = await requireOnlineServices().rpc('submit_assessment_answer', {
@@ -145,9 +144,26 @@ export async function submitAssessmentAnswer(
     p_choice_id: choiceId,
   });
   if (error) throw new AssessmentError('Unable to save this answer. Please try again.');
-  const attempt = await getAssessmentAttempt(userId, kind);
-  if (!attempt) throw new AssessmentError('Unable to restore the saved assessment.');
-  return attempt;
+
+  // The server has confirmed the insert, so avoid a second round trip just to
+  // reconstruct state the client already has.
+  const now = Date.now();
+  const newAnswer = { questionId, selectedChoiceId: choiceId, answeredAt: now };
+  const existingAnswerIndex = currentAttempt.answers.findIndex(
+    (answer) => answer.questionId === questionId,
+  );
+
+  return {
+    ...currentAttempt,
+    answers:
+      existingAnswerIndex >= 0
+        ? [
+            ...currentAttempt.answers.slice(0, existingAnswerIndex),
+            newAnswer,
+            ...currentAttempt.answers.slice(existingAnswerIndex + 1),
+          ]
+        : [...currentAttempt.answers, newAnswer],
+  };
 }
 
 export async function completeAssessment(

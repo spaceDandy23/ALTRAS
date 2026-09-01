@@ -3,18 +3,20 @@
 ## Confirmed assumptions
 
 - ALTRAS targets landscape desktop and laptop browsers, with 1366×768 and 1920×1080 as primary review sizes.
-- It remains fully usable without a server or internet connection after its application shell is cached.
-- Multiple students have isolated local accounts and lesson records; one student is signed in at a time.
-- Authentication is a local shared-computer privacy boundary, not server-backed identity verification.
+- ALTRAS is online-first: Supabase provides authentication, assessment data, and persisted progress.
+- Multiple students have isolated accounts on the same device; one student signs in at a time.
+- Authentication is server-backed (Supabase) for participants and researchers; local auth is used only in offline-fallback mode.
+- Assessments, progress, and settings require an internet connection for full functionality.
 - The Canva concepts guide the charcoal chalkboard atmosphere and learning interactions, not the literal layout or full feature scope.
 - Stable packaged-content IDs are contracts. Compatible IDs preserve progress; semantic breaking changes require new IDs or explicit migrations.
 
 ## Phase 1 foundation retained
 
 - React, TypeScript, Vite, React Router, Tailwind CSS, custom CSS, and installable PWA
-- Versioned Dexie/IndexedDB database and Zod validation
-- PBKDF2-SHA-256 local authentication, protected routes, and session restoration
-- Main menu, student profile, per-user settings, offline indicator, and reusable UI components
+- Versioned Dexie/IndexedDB database and Zod validation for local caching
+- PBKDF2-SHA-256 local authentication fallback, with Supabase online auth for main flow
+- Protected routes, session restoration, and Supabase sync
+- Main menu, student profile, per-user settings, and reusable UI components
 - Vitest, Testing Library, ESLint, and Prettier tooling
 
 ## Phase 2 implemented scope
@@ -89,14 +91,29 @@
 - Restart requires confirmation and marks existing active attempts `abandoned` rather than deleting them.
 - Completion is transactional and idempotent, preventing duplicate attempt counts, XP, or unlocks after refresh or repeated navigation.
 
-## Offline-storage limitations
+## Data storage and sync
 
-- Data is isolated per browser and computer.
-- Clearing browser/site data can remove accounts, progress, and attempts.
-- Different computers do not synchronize automatically.
-- Device loss or storage corruption cannot be recovered in Phase 2.
-- Backup/export will be added before research testing.
-- Distribution may remain a PWA or use the same frontend inside a Windows wrapper if installation policies make that necessary.
+**Authoritative online data (Supabase):**
+- User accounts and authentication
+- Assessment attempts and scores
+- Lesson progress and XP
+- User settings and profile changes
+
+**Local caches:**
+- Lesson content (packaged and cached)
+- App shell and static assets
+- Attempt history and progress snapshots
+
+**Limitations without internet:**
+- Cannot authenticate or sync progress
+- Cannot submit or retrieve assessments
+- Cannot modify profile or settings
+- Cached lessons can still be browsed for review
+- Device loss or storage corruption cannot be recovered in Phase 2
+
+**Before research testing:**
+- Backup/export and validated recovery procedures must be added
+- Distribution may remain a PWA or use the same frontend inside a Windows wrapper if installation policies make that necessary
 
 ## Deferred Canva ideas
 
