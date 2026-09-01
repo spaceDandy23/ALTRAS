@@ -1099,6 +1099,10 @@ h3 {
   margin: 1.5rem 0;
 }
 
+.assessment-result__return {
+  margin-top: 1.25rem;
+}
+
 .assessment-result__details div {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

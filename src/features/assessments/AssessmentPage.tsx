@@ -117,7 +117,7 @@ export function AssessmentPage() {
         <p className="assessment-note">
           Correct answers are hidden while the research is in progress.
         </p>
-        <Link className="button button--primary" to="/">
+        <Link className="button button--primary assessment-result__return" to="/">
           Return home
         </Link>
       </section>
