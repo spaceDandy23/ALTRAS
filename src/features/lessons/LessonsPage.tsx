@@ -28,11 +28,11 @@ export function LessonsPage() {
 
   return (
     <ContentState>
-      <div className="standard-page lesson-hub page-enter">
-        <BackLink label="Back to home" />
-        {!hub ? (
-          <LoadingState message="Loading your lesson path…" />
-        ) : (
+      {!hub ? (
+        <LoadingState variant="page" message="Loading your lesson path…" />
+      ) : (
+        <div className="standard-page lesson-hub page-enter">
+          <BackLink label="Back to home" />
           <>
             <section className="lesson-hub__header">
               <div>
@@ -111,8 +111,8 @@ export function LessonsPage() {
               })}
             </ol>
           </>
-        )}
-      </div>
+        </div>
+      )}
     </ContentState>
   );
 }

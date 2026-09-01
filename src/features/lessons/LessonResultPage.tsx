@@ -56,16 +56,14 @@ export function LessonResultPage() {
   if (!user || !lesson || !attempt || !progress || attempt.status !== 'completed') {
     return (
       <ContentState>
-        <div className="result-page">
-          <LoadingState message="Loading your result…" />
-        </div>
+        <LoadingState variant="page" message="Loading your result…" />
       </ContentState>
     );
   }
   if (loadingMessage) {
     return (
       <ContentState>
-        <LoadingState className="loading-screen" message={loadingMessage} />
+        <LoadingState variant="page" message={loadingMessage} />
       </ContentState>
     );
   }

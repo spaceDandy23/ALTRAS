@@ -101,10 +101,7 @@ export function ActiveLessonPage() {
   if (!user || !lesson || !attempt) {
     return (
       <ContentState>
-        <LoadingState
-          className="lesson-player lesson-player--loading"
-          message="Restoring your attempt…"
-        />
+        <LoadingState variant="page" message="Restoring your attempt…" />
       </ContentState>
     );
   }
@@ -112,7 +109,7 @@ export function ActiveLessonPage() {
   if (loadingMessage) {
     return (
       <ContentState>
-        <LoadingState className="loading-screen" message={loadingMessage} />
+        <LoadingState variant="page" message={loadingMessage} />
       </ContentState>
     );
   }

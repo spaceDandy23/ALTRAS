@@ -81,11 +81,7 @@ export function SettingsPage() {
   }, [saveState]);
 
   if (!user || !settings) {
-    return (
-      <div className="standard-page">
-        <LoadingState message="Loading settings…" />
-      </div>
-    );
+    return <LoadingState variant="page" message="Loading settings…" />;
   }
 
   const changeSetting = async (update: SettingsUpdate) => {

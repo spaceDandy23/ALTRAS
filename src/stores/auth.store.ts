@@ -9,6 +9,8 @@ import {
 } from '@/features/auth/online-auth.service';
 import { isSupabaseConfigured } from '@/services/supabase.client';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { hydrateVisualPreferencesForUser } from '@/features/settings/visual-preferences.bootstrap';
+import { deactivateVisualPreferences } from '@/features/settings/visual-preferences.cache';
 import type { LoginInput, RegistrationInput } from '@/features/auth/auth.schemas';
 import type { PublicUser } from '@/types/models';
 
@@ -32,24 +34,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ status: 'loading' });
     try {
       const user = isSupabaseConfigured ? await restoreOnlineSession() : await restoreSession(db);
-      set({ user, status: user ? 'authenticated' : 'guest' });
+      if (!user) {
+        deactivateVisualPreferences();
+        set({ user: null, status: 'guest' });
+        return;
+      }
+      await hydrateVisualPreferencesForUser(user.id);
+      set({ user, status: 'authenticated' });
     } catch {
+      deactivateVisualPreferences();
       set({ user: null, status: 'guest' });
     }
   },
   login: async (input) => {
     const user = isSupabaseConfigured ? await loginOnlineUser(input) : await loginUser(db, input);
+    await hydrateVisualPreferencesForUser(user.id);
     set({ user, status: 'authenticated' });
   },
   register: async (input) => {
     const user = isSupabaseConfigured
       ? await registerOnlineUser(input)
       : await registerUser(db, input);
+    await hydrateVisualPreferencesForUser(user.id);
     set({ user, status: 'authenticated' });
   },
   logout: async () => {
     if (isSupabaseConfigured) await logoutOnlineUser();
     else await logoutUser(db);
+    deactivateVisualPreferences();
     set({ user: null, status: 'guest' });
     useResearcherAccessStore.getState().clear();
   },

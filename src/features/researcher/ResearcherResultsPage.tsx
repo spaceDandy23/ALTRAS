@@ -186,12 +186,7 @@ export function ResearcherResultsPage() {
   };
 
   if (loading) {
-    return (
-      <LoadingState
-        className="researcher-loading"
-        message="Loading anonymized participant results…"
-      />
-    );
+    return <LoadingState variant="page" message="Loading anonymized participant results…" />;
   }
 
   if (error) {

@@ -725,7 +725,7 @@ h3 {
   padding: 1.6rem clamp(2rem, 4vw, 4.5rem) 2rem;
 }
 
-.app-content > .loading-screen {
+.app-content > .loading-state--page {
   width: 100%;
   min-height: 0;
   flex: 1;
@@ -744,10 +744,6 @@ h3 {
 .menu-page {
   display: grid;
   place-items: center;
-}
-
-.home-loading {
-  color: var(--muted);
 }
 
 .home-start.menu-grid {
@@ -931,11 +927,6 @@ h3 {
 }
 
 /* Assessments */
-.assessment-loading {
-  margin: auto;
-  color: var(--muted);
-}
-
 .assessment-shell {
   width: min(680px, 100%);
   margin: auto;
@@ -1555,20 +1546,29 @@ h3 {
 .not-found {
   display: grid;
   width: 100%;
-  min-height: 340px;
   place-items: center;
   align-content: center;
   padding: var(--space-5);
   text-align: center;
 }
 
-.loading-screen {
-  min-height: 100vh;
+.not-found {
+  min-height: 340px;
+}
+
+.loading-state--screen {
+  min-height: 100svh;
 }
 
 .loading-state--contained {
   min-height: 0;
   padding: 0;
+}
+
+.loading-state--page {
+  min-height: 0;
+  flex: 1;
+  align-self: stretch;
 }
 
 .loading-mark,
@@ -2027,10 +2027,6 @@ a .lesson-node:hover {
 }
 
 /* Activity player */
-.lesson-player--loading {
-  min-height: 420px;
-}
-
 .lesson-player__header {
   display: grid;
   align-items: center;
@@ -3186,12 +3182,6 @@ a.almanac-option:hover {
   margin-top: var(--space-3);
 }
 
-.researcher-loading {
-  min-height: 0;
-  flex: 1;
-  margin: auto;
-}
-
 /* Reusable learning companion */
 .character-assistant {
   display: grid;
@@ -3204,7 +3194,7 @@ a.almanac-option:hover {
 
 .character-portrait {
   display: grid;
-  width: 72px;
+  width: clamp(78px, 6vw, 84px);
   aspect-ratio: 3 / 4;
   place-items: end center;
   overflow: hidden;
@@ -3263,7 +3253,7 @@ a.almanac-option:hover {
 }
 
 .character-assistant--compact .character-portrait {
-  width: 62px;
+  width: clamp(68px, 5vw, 72px);
 }
 
 .character-assistant--overview {
@@ -3271,11 +3261,11 @@ a.almanac-option:hover {
 }
 
 .character-assistant--overview .character-portrait {
-  width: clamp(76px, 7vw, 96px);
+  width: clamp(90px, 8vw, 112px);
 }
 
 .character-assistant--activity .character-portrait {
-  width: 64px;
+  width: clamp(72px, 6vw, 76px);
 }
 
 .character-assistant--result {
@@ -3283,11 +3273,11 @@ a.almanac-option:hover {
 }
 
 .character-assistant--result .character-portrait {
-  width: 74px;
+  width: clamp(84px, 7vw, 88px);
 }
 
 .character-assistant--inline .character-portrait {
-  width: 54px;
+  width: clamp(60px, 5vw, 64px);
 }
 
 .home-companion {
@@ -3317,6 +3307,11 @@ a.almanac-option:hover {
 .assessment-companion,
 .almanac-companion {
   margin: 1rem 0;
+}
+
+.assessment-question__companion {
+  max-width: 620px;
+  margin: 0.75rem 0 1rem;
 }
 
 .almanac-companion {
@@ -3874,7 +3869,7 @@ a.almanac-option:hover {
   }
 
   .character-assistant .character-portrait {
-    width: 52px;
+    width: clamp(60px, 19vw, 64px);
   }
 
   .character-dialogue {

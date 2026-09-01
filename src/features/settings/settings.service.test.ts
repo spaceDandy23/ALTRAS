@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AltrasDatabase } from '@/db/database';
 import { registerUser } from '@/features/auth/auth.service';
 import { getUserSettings, updateUserSettings } from './settings.service';
+import { readCachedVisualPreferences } from './visual-preferences.cache';
 
 describe('per-user settings', () => {
   let database: AltrasDatabase;
@@ -12,6 +13,7 @@ describe('per-user settings', () => {
 
   afterEach(async () => {
     await database.delete();
+    localStorage.clear();
   });
 
   it('persists independent settings for each local student', async () => {
@@ -44,6 +46,8 @@ describe('per-user settings', () => {
       musicVolume: 60,
       animationsEnabled: true,
     });
+    expect(readCachedVisualPreferences(first.id)).toMatchObject({ animationsEnabled: false });
+    expect(readCachedVisualPreferences(second.id)).toMatchObject({ animationsEnabled: true });
   });
 
   it('serializes rapid updates and lets a reload wait for the newest settings', async () => {
@@ -64,5 +68,10 @@ describe('per-user settings', () => {
       animationsEnabled: false,
     });
     await Promise.all([themeSave, textSave, motionSave]);
+    expect(readCachedVisualPreferences(user.id)).toEqual({
+      theme: 'light',
+      readabilityScale: 1.3,
+      animationsEnabled: false,
+    });
   });
 });

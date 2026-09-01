@@ -67,10 +67,10 @@ export function MainMenuPage() {
 
   return (
     <ContentState>
-      <div className="menu-page page-enter">
-        {!hub || !nextEntry ? (
-          <LoadingState className="home-loading" message="Preparing your lesson…" />
-        ) : (
+      {!hub || !nextEntry ? (
+        <LoadingState variant="page" message="Preparing your lesson…" />
+      ) : (
+        <div className="menu-page page-enter">
           <section className="home-start menu-grid" aria-labelledby="home-title">
             <p className="home-welcome">Welcome back, {user?.displayName}.</p>
             <CharacterAssistant
@@ -142,8 +142,8 @@ export function MainMenuPage() {
               </Link>
             </div>
           </section>
-        )}
-      </div>
+        </div>
+      )}
     </ContentState>
   );
 }

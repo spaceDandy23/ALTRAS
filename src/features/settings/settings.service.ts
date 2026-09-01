@@ -3,6 +3,7 @@ import { settingsSchema, type UserSettings } from '@/types/models';
 import { z } from 'zod';
 import { isSupabaseConfigured } from '@/services/supabase.client';
 import { getOnlineUserSettings, updateOnlineUserSettings } from './online-settings.service';
+import { cacheVisualPreferences } from './visual-preferences.cache';
 
 export const settingsUpdateSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).optional(),
@@ -17,10 +18,7 @@ export type SettingsUpdate = z.input<typeof settingsUpdateSchema>;
 
 const userSaveQueues = new Map<string, Promise<void>>();
 
-async function loadUserSettings(
-  database: AltrasDatabase,
-  userId: string,
-): Promise<UserSettings> {
+async function loadUserSettings(database: AltrasDatabase, userId: string): Promise<UserSettings> {
   if (isSupabaseConfigured) return getOnlineUserSettings(userId);
   const stored = await database.settings.get({ userId });
   if (!stored) throw new Error('Settings could not be found for this local account.');
@@ -33,7 +31,9 @@ export async function getUserSettings(
 ): Promise<UserSettings> {
   const pendingSave = userSaveQueues.get(userId);
   if (pendingSave) await pendingSave;
-  return loadUserSettings(database, userId);
+  const loaded = await loadUserSettings(database, userId);
+  cacheVisualPreferences(userId, loaded);
+  return loaded;
 }
 
 export function updateUserSettings(
@@ -44,11 +44,16 @@ export function updateUserSettings(
   const changes = settingsUpdateSchema.parse(update);
   const previousSave = userSaveQueues.get(userId) ?? Promise.resolve();
   const saveOperation = previousSave.then(async () => {
-    if (isSupabaseConfigured) return updateOnlineUserSettings(userId, changes);
+    if (isSupabaseConfigured) {
+      const saved = await updateOnlineUserSettings(userId, changes);
+      cacheVisualPreferences(userId, saved);
+      return saved;
+    }
 
     const current = await loadUserSettings(database, userId);
     const next = settingsSchema.parse({ ...current, ...changes, updatedAt: Date.now() });
     await database.settings.put(next);
+    cacheVisualPreferences(userId, next);
     return next;
   });
   const queueTail = saveOperation.then(

@@ -68,18 +68,18 @@ export function LessonOverviewPage() {
   if (loadingMessage) {
     return (
       <ContentState>
-        <LoadingState className="loading-screen" message={loadingMessage} />
+        <LoadingState variant="page" message={loadingMessage} />
       </ContentState>
     );
   }
 
   return (
     <ContentState>
-      <div className="standard-page lesson-overview page-enter">
-        <BackLink to="/lessons" label="Back to lessons" />
-        {!lesson || !progress ? (
-          <LoadingState message="Opening lesson…" />
-        ) : (
+      {!lesson || !progress ? (
+        <LoadingState variant="page" message="Opening lesson…" />
+      ) : (
+        <div className="standard-page lesson-overview page-enter">
+          <BackLink to="/lessons" label="Back to lessons" />
           <>
             <section className="lesson-overview__hero">
               <div>
@@ -172,18 +172,18 @@ export function LessonOverviewPage() {
               </section>
             )}
           </>
-        )}
-        <ConfirmDialog
-          open={confirmRestart}
-          title="Restart this lesson?"
-          confirmLabel="Restart lesson"
-          onCancel={() => setConfirmRestart(false)}
-          onConfirm={restart}
-        >
-          Your current attempt will remain in local history, but its completed answers will not
-          carry into the new attempt.
-        </ConfirmDialog>
-      </div>
+          <ConfirmDialog
+            open={confirmRestart}
+            title="Restart this lesson?"
+            confirmLabel="Restart lesson"
+            onCancel={() => setConfirmRestart(false)}
+            onConfirm={restart}
+          >
+            Your current attempt will remain in local history, but its completed answers will not
+            carry into the new attempt.
+          </ConfirmDialog>
+        </div>
+      )}
     </ContentState>
   );
 }

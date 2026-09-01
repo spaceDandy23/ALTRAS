@@ -4,10 +4,12 @@ import { LoadingState } from './LoadingState';
 
 describe('LoadingState', () => {
   it('renders the shared chalk animation with accessible status text', () => {
-    render(<LoadingState className="lesson-loading-state" message="Opening lesson…" />);
+    render(
+      <LoadingState variant="page" className="lesson-loading-state" message="Opening lesson…" />,
+    );
 
     const loading = screen.getByRole('status');
-    expect(loading).toHaveClass('loading-state', 'lesson-loading-state');
+    expect(loading).toHaveClass('loading-state', 'loading-state--page', 'lesson-loading-state');
     expect(loading).toHaveAttribute('aria-live', 'polite');
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(loading).toHaveTextContent('Opening lesson…');

@@ -25,6 +25,7 @@ export const characterDialogueEvents = [
   'lesson-passed',
   'lesson-not-passed',
   'assessment-introduction',
+  'assessment-question',
   'assessment-completion',
   'resource-introduction',
 ] as const;

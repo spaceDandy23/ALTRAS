@@ -26,4 +26,12 @@ describe('character motion preferences', () => {
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.character-portrait__motion,[\s\S]*?animation: none !important;/,
     );
   });
+
+  it('uses responsive portrait sizing for desktop and 320px layouts', () => {
+    expect(stylesheet).toMatch(/\.character-portrait \{[\s\S]*?width: clamp\(78px, 6vw, 84px\)/);
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 800px\)[\s\S]*?\.character-assistant \.character-portrait \{[\s\S]*?width: clamp\(60px, 19vw, 64px\)/,
+    );
+    expect(stylesheet).toMatch(/\.character-portrait \{[\s\S]*?aspect-ratio: 3 \/ 4/);
+  });
 });

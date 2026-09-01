@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -31,8 +31,12 @@ export function AssessmentPage() {
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<'continue' | 'submit' | null>(null);
   const [error, setError] = useState('');
   const [questionIndex, setQuestionIndex] = useState(0);
+  const answerSaveRef = useRef<Promise<AssessmentAttempt> | null>(null);
+  const actionPendingRef = useRef(false);
 
   useEffect(() => {
     if (!user || !kind) return;
@@ -71,12 +75,7 @@ export function AssessmentPage() {
   }
 
   if (loading) {
-    return (
-      <LoadingState
-        className="assessment-loading"
-        message={`Preparing the ${title.toLowerCase()}…`}
-      />
-    );
+    return <LoadingState variant="page" message={`Preparing the ${title.toLowerCase()}…`} />;
   }
 
   if (error && questions.length === 0) {
@@ -176,34 +175,70 @@ export function AssessmentPage() {
 
   const question = questions[questionIndex];
   const submitted = attempt.answers.find((answer) => answer.questionId === question?.id);
+  const displayedChoiceId = submitted?.selectedChoiceId ?? selectedChoiceId;
 
-  const choose = async (choiceId: string) => {
-    if (!user || !question || submitted) return;
+  const saveChoice = (choiceId: string): Promise<AssessmentAttempt> => {
+    if (!user || !question) return Promise.reject(new Error('Unable to save this answer.'));
+    if (answerSaveRef.current) return answerSaveRef.current;
+
     setSaving(true);
     setError('');
-    try {
-      setAttempt(await submitAssessmentAnswer(user.id, kind, attempt.id, question.id, choiceId));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save this answer.');
-    } finally {
-      setSaving(false);
-    }
+    const save = submitAssessmentAnswer(user.id, kind, attempt.id, question.id, choiceId);
+    answerSaveRef.current = save;
+    void save
+      .then((savedAttempt) => setAttempt(savedAttempt))
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : 'Unable to save this answer.');
+      })
+      .finally(() => {
+        if (answerSaveRef.current === save) answerSaveRef.current = null;
+        setSaving(false);
+      });
+    return save;
+  };
+
+  const choose = (choiceId: string) => {
+    if (!user || !question || submitted || saving || actionPendingRef.current) return;
+    setSelectedChoiceId(choiceId);
+    void saveChoice(choiceId).catch(() => undefined);
   };
 
   const continueTest = async () => {
-    if (!user || !submitted) return;
-    if (questionIndex < questions.length - 1) {
-      setQuestionIndex((index) => index + 1);
-      return;
-    }
-    setSaving(true);
+    if (!user || !question || !displayedChoiceId || actionPendingRef.current) return;
+    actionPendingRef.current = true;
+    const isFinalQuestion = questionIndex === questions.length - 1;
+    setPendingAction(isFinalQuestion ? 'submit' : 'continue');
     setError('');
     try {
-      setAttempt(await completeAssessment(user.id, kind, attempt.id));
+      const savedAttempt =
+        submitted && submitted.selectedChoiceId === displayedChoiceId
+          ? attempt
+          : await (answerSaveRef.current ?? saveChoice(displayedChoiceId));
+      const persistedAnswer = savedAttempt.answers.find(
+        (answer) =>
+          answer.questionId === question.id && answer.selectedChoiceId === displayedChoiceId,
+      );
+      if (!persistedAnswer)
+        throw new Error('Unable to confirm the saved answer. Please try again.');
+
+      setAttempt(savedAttempt);
+      if (!isFinalQuestion) {
+        setSelectedChoiceId(null);
+        setQuestionIndex((index) => index + 1);
+        return;
+      }
+      setAttempt(await completeAssessment(user.id, kind, savedAttempt.id));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to submit the test.');
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : isFinalQuestion
+            ? 'Unable to submit the test.'
+            : 'Unable to save this answer.',
+      );
     } finally {
-      setSaving(false);
+      actionPendingRef.current = false;
+      setPendingAction(null);
     }
   };
 
@@ -229,13 +264,21 @@ export function AssessmentPage() {
           <span className="placeholder-badge">Development placeholder</span>
         )}
         <h1 id="assessment-question">{question.prompt}</h1>
+        <CharacterAssistant
+          state="explaining"
+          dialogue={resolveCharacterDialogue('assessment-question')}
+          presentation="inline"
+          reactionKey={`${kind}-question-guidance`}
+          announcement="off"
+          className="assessment-question__companion"
+        />
         <div className="assessment-choices">
           {question.choices.map((choice) => (
             <button
               key={choice.id}
-              className={submitted?.selectedChoiceId === choice.id ? 'is-selected' : ''}
-              disabled={saving || Boolean(submitted)}
-              onClick={() => void choose(choice.id)}
+              className={displayedChoiceId === choice.id ? 'is-selected' : ''}
+              disabled={saving || Boolean(submitted) || Boolean(pendingAction)}
+              onClick={() => choose(choice.id)}
             >
               <span aria-hidden="true">{choice.id.toUpperCase()}</span>
               {choice.label}
@@ -244,9 +287,29 @@ export function AssessmentPage() {
         </div>
         {error && <p className="form-error">{error}</p>}
         <div className="assessment-question__footer">
-          <span role="status">{saving ? 'Saving…' : submitted ? 'Answer saved' : ''}</span>
-          <Button onClick={() => void continueTest()} disabled={!submitted || saving}>
-            {questionIndex === questions.length - 1 ? 'Submit test' : 'Next question'}
+          <span role="status" aria-live="polite">
+            {pendingAction === 'continue'
+              ? 'Saving answer and continuing…'
+              : pendingAction === 'submit'
+                ? 'Saving answer and submitting…'
+                : saving
+                  ? 'Saving answer…'
+                  : submitted
+                    ? 'Answer saved'
+                    : ''}
+          </span>
+          <Button
+            onClick={() => void continueTest()}
+            disabled={!displayedChoiceId || Boolean(pendingAction)}
+            aria-busy={Boolean(pendingAction)}
+          >
+            {pendingAction === 'continue'
+              ? 'Saving and continuing…'
+              : pendingAction === 'submit'
+                ? 'Saving and submitting…'
+                : questionIndex === questions.length - 1
+                  ? 'Submit test'
+                  : 'Next question'}
           </Button>
         </div>
       </div>

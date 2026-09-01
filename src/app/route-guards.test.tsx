@@ -52,7 +52,7 @@ describe('route guards', () => {
     );
 
     const loading = screen.getByRole('status');
-    expect(loading).toHaveClass('loading-screen');
+    expect(loading).toHaveClass('loading-state--screen');
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(loading).toHaveTextContent('Opening your classroom…');
     expect(screen.queryByText('Private content')).not.toBeInTheDocument();

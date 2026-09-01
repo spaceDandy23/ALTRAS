@@ -114,6 +114,7 @@ const manifest = {
         'This attempt is saved. Review the feedback and try again when you are ready.',
       'assessment-introduction':
         'Take your time and choose the answer that best matches what you know.',
+      'assessment-question': 'Choose the answer that best matches the phrase.',
       'assessment-completion': 'Your assessment is complete and your score has been saved.',
       'resource-introduction':
         'Use this reference whenever an operation word or phrase feels unfamiliar.',

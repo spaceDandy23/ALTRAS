@@ -1,13 +1,15 @@
 export function LoadingState({
   message,
   className = '',
+  variant = 'contained',
 }: {
   message: string;
   className?: string;
+  variant?: 'screen' | 'page' | 'contained';
 }) {
   return (
     <div
-      className={`loading-state ${className}`.trim()}
+      className={`loading-state loading-state--${variant} ${className}`.trim()}
       role="status"
       aria-live="polite"
       aria-busy="true"

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { AppLoading } from '@/app/route-guards';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 
@@ -15,7 +15,7 @@ export function ResearcherRoute({ children }: { children: ReactNode }) {
   }, [checkAccess, user]);
 
   if (!user || status === 'idle' || status === 'loading') {
-    return <AppLoading message="Verifying researcher access…" />;
+    return <LoadingState variant="page" message="Verifying researcher access…" />;
   }
 
   if (status === 'denied') {

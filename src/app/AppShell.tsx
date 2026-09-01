@@ -3,13 +3,7 @@ import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { db } from '@/db/database';
-import {
-  applyVisualPreferences,
-  clearVisualPreferences,
-  resolveTheme,
-} from '@/features/settings/apply-preferences';
-import { getUserSettings } from '@/features/settings/settings.service';
+import { resolveTheme } from '@/features/settings/apply-preferences';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 
@@ -22,8 +16,6 @@ export function AppShell() {
   const checkResearcherAccess = useResearcherAccessStore((state) => state.checkAccess);
   const navigate = useNavigate();
   useEffect(() => {
-    if (!user) return;
-    let active = true;
     const colorScheme =
       typeof window.matchMedia === 'function'
         ? window.matchMedia('(prefers-color-scheme: dark)')
@@ -35,17 +27,12 @@ export function AppShell() {
       }
     };
 
-    void getUserSettings(db, user.id).then((loaded) => {
-      if (!active) return;
-      applyVisualPreferences(loaded);
-    });
     colorScheme?.addEventListener('change', applySystemTheme);
 
     return () => {
-      active = false;
       colorScheme?.removeEventListener('change', applySystemTheme);
     };
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     if (user) void checkResearcherAccess(user.id);
@@ -53,7 +40,6 @@ export function AppShell() {
 
   const handleLogout = async () => {
     await logout();
-    clearVisualPreferences();
     navigate('/login', { replace: true });
   };
 

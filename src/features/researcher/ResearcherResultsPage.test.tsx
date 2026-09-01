@@ -57,7 +57,7 @@ describe('researcher results dashboard', () => {
     render(<ResearcherResultsPage />);
 
     const loading = screen.getByRole('status');
-    expect(loading).toHaveClass('researcher-loading');
+    expect(loading).toHaveClass('loading-state--page');
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
     expect(loading).toHaveTextContent('Loading anonymized participant results…');
