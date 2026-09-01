@@ -7,10 +7,12 @@ export function FindWordActivityView({
   activity,
   submitted,
   onSubmit,
+  onHintVisibilityChange,
 }: {
   activity: FindWordActivity;
   submitted?: SubmittedActivityAnswer;
   onSubmit: (answer: string) => Promise<void>;
+  onHintVisibilityChange?: (visible: boolean) => void;
 }) {
   const [selected, setSelected] = useState('');
   const [hintVisible, setHintVisible] = useState(false);
@@ -29,6 +31,14 @@ export function FindWordActivityView({
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleHint = () => {
+    setHintVisible((visible) => {
+      const next = !visible;
+      onHintVisibilityChange?.(next);
+      return next;
+    });
   };
 
   return (
@@ -83,7 +93,7 @@ export function FindWordActivityView({
       {!submitted && (
         <div className="activity-actions">
           {activity.hint && (
-            <Button variant="quiet" onClick={() => setHintVisible((visible) => !visible)}>
+            <Button variant="quiet" onClick={toggleHint}>
               {hintVisible ? 'Hide hint' : 'Show hint'}
             </Button>
           )}

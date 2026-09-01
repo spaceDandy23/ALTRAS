@@ -4,6 +4,8 @@ import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
+import { resolveLessonCharacterDialogue } from '@/features/characters/character.dialogue';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -88,6 +90,14 @@ export function LessonOverviewPage() {
                   <span>{lesson.passingThreshold}% to pass</span>
                   {progress.attemptCount > 0 && <span>Best score {progress.bestScore}%</span>}
                 </div>
+                <CharacterAssistant
+                  characterId={lesson.characterId}
+                  state="explaining"
+                  dialogue={resolveLessonCharacterDialogue(lesson, 'lesson-introduction')}
+                  presentation="overview"
+                  reactionKey={lesson.id}
+                  className="lesson-overview__companion"
+                />
                 {progress.status === 'locked' ? (
                   <p className="lesson-overview__actions lesson-summary">
                     Clear Words That Signal Operations to unlock this lesson.

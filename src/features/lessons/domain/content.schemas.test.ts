@@ -58,4 +58,37 @@ describe('learning content schema', () => {
 
     expect(packagedContentSchema.safeParse(invalid).success).toBe(false);
   });
+
+  it('accepts optional reusable character dialogue without requiring it in existing lessons', () => {
+    const withGuidance = structuredClone(packagedContent);
+    withGuidance.lessons[0].characterId = 'altras-guide';
+    withGuidance.lessons[0].characterDialogue = {
+      introduction: 'Lesson introduction override.',
+      completion: 'Lesson completion override.',
+    };
+    withGuidance.lessons[0].activities[0].characterDialogue = {
+      introduction: 'Activity introduction override.',
+      hint: 'Hint override.',
+      correct: 'Correct override.',
+      incorrect: 'Incorrect override.',
+      encouragement: 'Encouragement override.',
+    };
+
+    const parsed = packagedContentSchema.parse(withGuidance);
+    expect(parsed.lessons[0]).toMatchObject({
+      characterId: 'altras-guide',
+      characterDialogue: { introduction: 'Lesson introduction override.' },
+    });
+    expect(parsed.lessons[0].activities[0].characterDialogue).toMatchObject({
+      hint: 'Hint override.',
+      correct: 'Correct override.',
+    });
+    expect(packagedContentSchema.safeParse(packagedContent).success).toBe(true);
+  });
+
+  it('rejects blank character dialogue overrides', () => {
+    const invalid = structuredClone(packagedContent);
+    invalid.lessons[0].characterDialogue = { introduction: '   ' };
+    expect(packagedContentSchema.safeParse(invalid).success).toBe(false);
+  });
 });

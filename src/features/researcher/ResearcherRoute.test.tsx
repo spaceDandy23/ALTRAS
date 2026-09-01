@@ -42,6 +42,7 @@ describe('researcher route protection', () => {
 
     expect(screen.getByText('Sign in destination')).toBeInTheDocument();
     expect(screen.queryByText('Protected participant data')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
   });
 
   it('shows a denied state and never mounts protected data for students', () => {
@@ -57,6 +58,7 @@ describe('researcher route protection', () => {
 
     expect(screen.getByText('Researcher access required')).toBeInTheDocument();
     expect(screen.queryByText('Protected participant data')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
   });
 
   it('mounts results only after researcher authorization succeeds', () => {
@@ -71,5 +73,6 @@ describe('researcher route protection', () => {
     );
 
     expect(screen.getByText('Protected participant data')).toBeInTheDocument();
+    expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
   });
 });

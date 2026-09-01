@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
+import { resolveLessonCharacterDialogue } from '@/features/characters/character.dialogue';
+import { resolveLessonResultReaction } from '@/features/characters/lesson-result-reaction';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -77,6 +80,7 @@ export function LessonResultPage() {
     });
   };
   const correct = attempt.answers.filter((answer) => answer.isCorrect).length;
+  const characterReaction = resolveLessonResultReaction(attempt.cleared === true);
   const nextDestination = nextEntry
     ? nextEntry.lesson.contentStatus === 'preview'
       ? `/lessons/${nextEntry.lesson.id}/preview`
@@ -114,6 +118,15 @@ export function LessonResultPage() {
               {progress.attemptCount} {progress.attemptCount === 1 ? 'attempt' : 'attempts'}
             </span>
           </div>
+          <CharacterAssistant
+            characterId={lesson.characterId}
+            state={characterReaction.state}
+            dialogue={resolveLessonCharacterDialogue(lesson, characterReaction.dialogueEvent)}
+            presentation="result"
+            reactionKey={`${attempt.id}:${attempt.cleared ? 'passed' : 'not-passed'}`}
+            className="result-companion"
+            announcement="off"
+          />
           <div className="result-actions">
             {attempt.cleared && nextEntry ? (
               <Link className="button button--primary" to={nextDestination}>

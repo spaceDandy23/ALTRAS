@@ -59,6 +59,7 @@ describe('researcher results dashboard', () => {
     const loading = screen.getByRole('status');
     expect(loading).toHaveClass('researcher-loading');
     expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
     expect(loading).toHaveTextContent('Loading anonymized participant results…');
   });
 
@@ -67,6 +68,7 @@ describe('researcher results dashboard', () => {
     render(<ResearcherResultsPage />);
 
     expect(await screen.findByText('No participant data yet')).toBeInTheDocument();
+    expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
     expect(screen.getAllByText('—')).toHaveLength(3);
   });
 
@@ -145,5 +147,6 @@ describe('researcher results dashboard', () => {
 
     await waitFor(() => expect(screen.getByText('Results are unavailable')).toBeInTheDocument());
     expect(screen.queryByText('ALT-8F21C4A1')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
   });
 });

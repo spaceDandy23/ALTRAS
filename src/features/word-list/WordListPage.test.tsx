@@ -115,6 +115,10 @@ describe('Math word list', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Almanac' })).toBeVisible();
+    expect(screen.getByLabelText('Mina, learning companion')).toHaveAttribute(
+      'data-character-state',
+      'explaining',
+    );
     expect(screen.getByText('Coming next')).toBeVisible();
     expect(screen.getByText('Review').closest('[aria-disabled="true"]')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Review/ })).not.toBeInTheDocument();

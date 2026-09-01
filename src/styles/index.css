@@ -3192,6 +3192,191 @@ a.almanac-option:hover {
   margin: auto;
 }
 
+/* Reusable learning companion */
+.character-assistant {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.character-portrait {
+  display: grid;
+  width: 72px;
+  aspect-ratio: 3 / 4;
+  place-items: end center;
+  overflow: hidden;
+}
+
+.character-portrait__motion,
+.character-portrait__motion > img {
+  width: 100%;
+  height: 100%;
+}
+
+.character-portrait__motion {
+  transform-origin: 50% 100%;
+}
+
+.character-portrait__motion > img {
+  display: block;
+  object-fit: contain;
+  user-select: none;
+}
+
+.character-dialogue {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--blue);
+  border-radius: 7px;
+  padding: 0.7rem 0.85rem;
+  color: var(--paper);
+  background: var(--surface);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.16);
+}
+
+.character-dialogue__tail {
+  position: absolute;
+  top: 50%;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  border-bottom: 1px solid var(--line-strong);
+  border-left: 1px solid var(--line-strong);
+  background: var(--surface);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.character-dialogue p {
+  position: relative;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.character-assistant--compact {
+  max-width: 560px;
+}
+
+.character-assistant--compact .character-portrait {
+  width: 62px;
+}
+
+.character-assistant--overview {
+  max-width: 660px;
+}
+
+.character-assistant--overview .character-portrait {
+  width: clamp(76px, 7vw, 96px);
+}
+
+.character-assistant--activity .character-portrait {
+  width: 64px;
+}
+
+.character-assistant--result {
+  max-width: 540px;
+}
+
+.character-assistant--result .character-portrait {
+  width: 74px;
+}
+
+.character-assistant--inline .character-portrait {
+  width: 54px;
+}
+
+.home-companion {
+  width: calc(100% - 4.8rem);
+  margin: 0 0 1.1rem 4.8rem;
+}
+
+.lesson-overview__companion {
+  margin-top: 1rem;
+}
+
+.lesson-player__activity-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+}
+
+.lesson-player__companion {
+  margin-bottom: 0.7rem;
+}
+
+.result-companion {
+  margin: 0.35rem 0 1rem;
+  text-align: left;
+}
+
+.assessment-companion,
+.almanac-companion {
+  margin: 1rem 0;
+}
+
+.almanac-companion {
+  max-width: 620px;
+  margin-top: calc(var(--space-5) * -0.35);
+  margin-bottom: var(--space-4);
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='idle']
+  .character-portrait__motion {
+  animation: character-idle 3.2s ease-in-out 2;
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='greeting']
+  .character-portrait__motion {
+  animation: character-greeting 420ms ease-out both;
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='explaining']
+  .character-portrait__motion {
+  animation: character-emphasis 420ms ease-out both;
+}
+
+:root[data-motion='on']
+  .character-assistant:is([data-character-state='thinking'], [data-character-state='hint'])
+  .character-portrait__motion {
+  animation: character-thinking 700ms ease-in-out 2;
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='correct']
+  .character-portrait__motion {
+  animation: character-positive 520ms ease-out both;
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='incorrect']
+  .character-portrait__motion {
+  animation: character-incorrect 360ms ease-in-out both;
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='encouraging']
+  .character-portrait__motion {
+  animation: character-emphasis 420ms ease-out both;
+}
+
+:root[data-motion='on']
+  .character-assistant[data-character-state='celebrating']
+  .character-portrait__motion {
+  animation: character-celebrate 640ms ease-out 2;
+}
+
+:root[data-motion='on'] .character-dialogue p {
+  animation: character-dialogue-change 180ms ease-out both;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -3230,6 +3415,70 @@ a.almanac-option:hover {
   }
 }
 
+@keyframes character-idle {
+  50% {
+    transform: translateY(-3px) scale(1.01);
+  }
+}
+
+@keyframes character-greeting {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+
+@keyframes character-emphasis {
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes character-thinking {
+  50% {
+    transform: rotate(-3deg) translateY(-2px);
+  }
+}
+
+@keyframes character-positive {
+  40% {
+    transform: translateY(-7px) scale(1.03);
+  }
+  70% {
+    transform: translateY(1px);
+  }
+}
+
+@keyframes character-incorrect {
+  25%,
+  75% {
+    transform: translateX(-3px) rotate(-1deg);
+  }
+  50% {
+    transform: translateX(3px) rotate(1deg);
+  }
+}
+
+@keyframes character-celebrate {
+  45% {
+    transform: translateY(-8px) rotate(-2deg) scale(1.04);
+  }
+}
+
+@keyframes character-dialogue-change {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+:root[data-motion='off'] .character-portrait__motion,
+:root[data-motion='off'] .character-dialogue p {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
 [data-motion='off'] *,
 [data-motion='off'] *::before,
 [data-motion='off'] *::after {
@@ -3247,6 +3496,13 @@ a.almanac-option:hover {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  .character-portrait__motion,
+  .character-dialogue p {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
   }
 }
 
@@ -3611,6 +3867,33 @@ a.almanac-option:hover {
 
   .home-start::before {
     left: 24px;
+  }
+
+  .character-assistant {
+    gap: 0.55rem;
+  }
+
+  .character-assistant .character-portrait {
+    width: 52px;
+  }
+
+  .character-dialogue {
+    padding: 0.6rem 0.7rem;
+  }
+
+  .character-dialogue p {
+    font-size: 0.74rem;
+  }
+
+  .home-companion {
+    width: calc(100% - 3.6rem);
+    margin-left: 3.6rem;
+  }
+
+  .lesson-overview__companion,
+  .assessment-companion,
+  .almanac-companion {
+    max-width: none;
   }
 
   .home-welcome,

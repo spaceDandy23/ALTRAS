@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
+import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
 import { db } from '@/db/database';
 import { ContentState } from '@/features/lessons/components/ContentState';
 import { StarRating } from '@/features/lessons/components/StarRating';
@@ -71,6 +73,16 @@ export function MainMenuPage() {
         ) : (
           <section className="home-start menu-grid" aria-labelledby="home-title">
             <p className="home-welcome">Welcome back, {user?.displayName}.</p>
+            <CharacterAssistant
+              characterId={nextEntry.lesson.characterId}
+              state="greeting"
+              dialogue={resolveCharacterDialogue('main-menu-greeting', {
+                characterId: nextEntry.lesson.characterId,
+              })}
+              presentation="compact"
+              reactionKey="main-menu"
+              className="home-companion"
+            />
             <div className="home-start__lesson">
               <div className="home-start__marker" aria-hidden="true">
                 {nextEntry.progress.status === 'cleared' ? '✓' : nextEntry.lesson.displayOrder}

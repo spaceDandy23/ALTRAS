@@ -19,12 +19,26 @@ export const activityTokenSchema = z.object({
   label: z.string().min(1),
 });
 
+export const activityCharacterDialogueSchema = z.object({
+  introduction: z.string().trim().min(1).optional(),
+  hint: z.string().trim().min(1).optional(),
+  correct: z.string().trim().min(1).optional(),
+  incorrect: z.string().trim().min(1).optional(),
+  encouragement: z.string().trim().min(1).optional(),
+});
+
+export const lessonCharacterDialogueSchema = z.object({
+  introduction: z.string().trim().min(1).optional(),
+  completion: z.string().trim().min(1).optional(),
+});
+
 const activityBaseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   prompt: z.string().min(1),
   hint: hintSchema.optional(),
   explanation: explanationSchema,
+  characterDialogue: activityCharacterDialogueSchema.optional(),
 });
 
 export const findWordActivitySchema = activityBaseSchema
@@ -114,21 +128,26 @@ export const unitSchema = z.object({
   contentVersion: z.number().int().positive(),
 });
 
-export const lessonSchema = z
-  .object({
-    id: z.string().min(1),
-    sectionId: z.string().min(1),
-    unitId: z.string().min(1),
-    title: z.string().min(1),
-    shortDescription: z.string().min(1),
-    concepts: z.array(z.string().min(1)).min(1),
-    displayOrder: z.number().int().nonnegative(),
-    prerequisiteLessonId: z.string().min(1).optional(),
-    contentStatus: z.enum(['playable', 'preview']),
+export const lessonMetadataSchema = z.object({
+  id: z.string().min(1),
+  sectionId: z.string().min(1),
+  unitId: z.string().min(1),
+  title: z.string().min(1),
+  shortDescription: z.string().min(1),
+  concepts: z.array(z.string().min(1)).min(1),
+  displayOrder: z.number().int().nonnegative(),
+  prerequisiteLessonId: z.string().min(1).optional(),
+  contentStatus: z.enum(['playable', 'preview']),
+  passingThreshold: z.number().int().min(0).max(100),
+  contentVersion: z.number().int().positive(),
+  characterId: z.string().trim().min(1).optional(),
+  characterDialogue: lessonCharacterDialogueSchema.optional(),
+});
+
+export const lessonSchema = lessonMetadataSchema
+  .extend({
     instructionalContent: z.array(instructionalContentBlockSchema),
     activities: z.array(activitySchema),
-    passingThreshold: z.number().int().min(0).max(100),
-    contentVersion: z.number().int().positive(),
   })
   .superRefine((lesson, context) => {
     if (lesson.contentStatus === 'playable' && lesson.activities.length === 0) {
@@ -181,5 +200,6 @@ export type LessonActivity = z.infer<typeof activitySchema>;
 export type InstructionalContentBlock = z.infer<typeof instructionalContentBlockSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
+export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
 export type LearningLesson = z.infer<typeof lessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

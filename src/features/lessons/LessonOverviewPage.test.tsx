@@ -92,4 +92,49 @@ describe('lesson overview transitions', () => {
     expect(await screen.findByText('Lesson player destination')).toBeVisible();
     expect(startOrResumeAttempt).not.toHaveBeenCalled();
   });
+
+  it('shows reusable lesson-introduction guidance without page-owned asset paths', async () => {
+    const lesson = packagedContent.lessons[0];
+    const userId = '20000000-0000-4000-8000-000000000003';
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getLessonProgress).mockResolvedValue({
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'available',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 0,
+      xpAwarded: 0,
+      firstStartedAt: null,
+      lastAttemptedAt: null,
+      clearedAt: null,
+    });
+    vi.mocked(getActiveAttempt).mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'guidance_test',
+        displayName: 'Guidance Test',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText('Mina, learning companion')).toHaveAttribute(
+      'data-character-state',
+      'explaining',
+    );
+    expect(container.querySelector('img')?.getAttribute('src')).toMatch(/^\/assets\/characters\//);
+  });
 });

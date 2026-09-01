@@ -46,6 +46,34 @@ describe('packaged content initialization', () => {
     await expect(database.lessons.count()).resolves.toBe(0);
   });
 
+  it('round-trips lesson and activity character overrides through local content storage', async () => {
+    const customized = structuredClone(packagedContent);
+    customized.lessons[0].characterId = 'altras-guide';
+    customized.lessons[0].characterDialogue = {
+      introduction: 'Stored introduction.',
+      completion: 'Stored completion.',
+    };
+    customized.lessons[0].activities[0].characterDialogue = {
+      hint: 'Stored hint.',
+      correct: 'Stored correct reaction.',
+    };
+
+    await initializePackagedContent(database, customized);
+    const lesson = await getLesson(database, customized.lessons[0].id);
+
+    expect(lesson).toMatchObject({
+      characterId: 'altras-guide',
+      characterDialogue: {
+        introduction: 'Stored introduction.',
+        completion: 'Stored completion.',
+      },
+    });
+    expect(lesson.activities[0].characterDialogue).toEqual({
+      hint: 'Stored hint.',
+      correct: 'Stored correct reaction.',
+    });
+  });
+
   it('upgrades an unlocked Lesson 2 without changing Lesson 1 attempts or progress', async () => {
     await initializePackagedContent(database);
     const userId = crypto.randomUUID();

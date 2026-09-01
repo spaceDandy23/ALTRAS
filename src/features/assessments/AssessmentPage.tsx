@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
+import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
 import { useAuthStore } from '@/stores/auth.store';
 import { assessmentKindSchema, type AssessmentAttempt } from '@/types/assessment';
 import {
@@ -96,6 +98,13 @@ export function AssessmentPage() {
         <p className="assessment-kicker">{title} complete</p>
         <h1>{attempt.score}%</h1>
         <p>Your official score has been saved to your account.</p>
+        <CharacterAssistant
+          state="neutral"
+          dialogue={resolveCharacterDialogue('assessment-completion')}
+          presentation="inline"
+          reactionKey={`${kind}-complete`}
+          className="assessment-companion"
+        />
         <dl className="assessment-result__details">
           <div>
             <dt>Questions</dt>
@@ -139,6 +148,14 @@ export function AssessmentPage() {
           This test has {questions.length} questions. Your answers are saved online, and the test
           can only be submitted once.
         </p>
+        <CharacterAssistant
+          state="neutral"
+          dialogue={resolveCharacterDialogue('assessment-introduction')}
+          presentation="inline"
+          reactionKey={`${kind}-introduction`}
+          announcement="off"
+          className="assessment-companion"
+        />
         {hasPlaceholders && (
           <p className="assessment-placeholder-notice" role="note">
             Development preview: these sample questions will be replaced before research testing.

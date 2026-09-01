@@ -32,21 +32,7 @@ export async function initializePackagedContent(
   }
 
   const validated = parsed.data;
-  const lessons = validated.lessons.map((lesson) =>
-    storedLessonSchema.parse({
-      id: lesson.id,
-      sectionId: lesson.sectionId,
-      unitId: lesson.unitId,
-      title: lesson.title,
-      shortDescription: lesson.shortDescription,
-      concepts: lesson.concepts,
-      displayOrder: lesson.displayOrder,
-      prerequisiteLessonId: lesson.prerequisiteLessonId,
-      contentStatus: lesson.contentStatus,
-      passingThreshold: lesson.passingThreshold,
-      contentVersion: lesson.contentVersion,
-    }),
-  );
+  const lessons = validated.lessons.map((lesson) => storedLessonSchema.parse(lesson));
   const items: StoredLessonItem[] = validated.lessons.flatMap((lesson) => [
     ...lesson.instructionalContent.map((block, index) =>
       storedLessonItemSchema.parse({

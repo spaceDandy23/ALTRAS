@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ActivityCharacterAssistant } from '@/features/characters/components/ActivityCharacterAssistant';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -33,6 +34,7 @@ export function ActiveLessonPage() {
   const [activityIndex, setActivityIndex] = useState(0);
   const [confirmExit, setConfirmExit] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [hintActivityId, setHintActivityId] = useState<string | null>(null);
   const activeSegmentStartedAt = useRef<number | null>(null);
 
   const flushActiveTime = useCallback(async () => {
@@ -181,21 +183,35 @@ export function ActiveLessonPage() {
           <span style={{ width: `${progressPercent}%` }} />
         </div>
         <main className="lesson-player__stage">
-          {activity.type === 'find-word' ? (
-            <FindWordActivityView
-              key={activity.id}
+          <div className="lesson-player__activity-column">
+            <ActivityCharacterAssistant
               activity={activity}
               submitted={submitted}
-              onSubmit={submit}
+              hintVisible={hintActivityId === activity.id}
+              characterId={lesson.characterId}
             />
-          ) : (
-            <OrganizeTranslateActivityView
-              key={activity.id}
-              activity={activity}
-              submitted={submitted}
-              onSubmit={submit}
-            />
-          )}
+            {activity.type === 'find-word' ? (
+              <FindWordActivityView
+                key={activity.id}
+                activity={activity}
+                submitted={submitted}
+                onSubmit={submit}
+                onHintVisibilityChange={(visible) =>
+                  setHintActivityId(visible ? activity.id : null)
+                }
+              />
+            ) : (
+              <OrganizeTranslateActivityView
+                key={activity.id}
+                activity={activity}
+                submitted={submitted}
+                onSubmit={submit}
+                onHintVisibilityChange={(visible) =>
+                  setHintActivityId(visible ? activity.id : null)
+                }
+              />
+            )}
+          </div>
           {submitted && (
             <aside
               className={`answer-feedback answer-feedback--${submitted.isCorrect ? 'correct' : 'incorrect'}`}
@@ -211,11 +227,7 @@ export function ActiveLessonPage() {
                 <h2>{activity.explanation.title}</h2>
                 <p>{activity.explanation.body}</p>
               </div>
-              <Button
-                onClick={continueLesson}
-                disabled={transitionBusy}
-                aria-busy={transitionBusy}
-              >
+              <Button onClick={continueLesson} disabled={transitionBusy} aria-busy={transitionBusy}>
                 {activityIndex === lesson.activities.length - 1 ? 'See results' : 'Continue'}
               </Button>
               {transitionError && (
