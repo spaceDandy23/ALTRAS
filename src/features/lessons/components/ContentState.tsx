@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Panel } from '@/components/ui/Panel';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useContentStore } from '@/stores/content.store';
 
 export function ContentState({ children }: { children: ReactNode }) {
@@ -10,8 +11,7 @@ export function ContentState({ children }: { children: ReactNode }) {
   if (status === 'idle' || status === 'loading') {
     return (
       <Panel className="lesson-loading">
-        <span aria-hidden="true">x + ?</span>
-        <p>Preparing local lessons…</p>
+        <LoadingState className="loading-state--contained" message="Preparing local lessons…" />
       </Panel>
     );
   }

@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 
@@ -55,12 +56,5 @@ export function StudentRoute({ children }: { children: ReactNode }) {
 }
 
 export function AppLoading({ message = 'Opening your classroom…' }: { message?: string }) {
-  return (
-    <main className="loading-screen" role="status" aria-live="polite" aria-busy="true">
-      <div className="loading-mark" aria-hidden="true">
-        x + ?
-      </div>
-      <p>{message}</p>
-    </main>
-  );
+  return <LoadingState className="loading-screen" message={message} />;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
 import { assessmentKindSchema, type AssessmentAttempt } from '@/types/assessment';
 import {
@@ -68,7 +69,12 @@ export function AssessmentPage() {
   }
 
   if (loading) {
-    return <p className="assessment-loading">Preparing the {title.toLowerCase()}…</p>;
+    return (
+      <LoadingState
+        className="assessment-loading"
+        message={`Preparing the ${title.toLowerCase()}…`}
+      />
+    );
   }
 
   if (error && questions.length === 0) {

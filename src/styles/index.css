@@ -1551,14 +1551,24 @@ h3 {
   outline-offset: 4px;
 }
 
-.loading-screen,
+.loading-state,
 .not-found {
   display: grid;
-  min-height: 100vh;
+  width: 100%;
+  min-height: 340px;
   place-items: center;
   align-content: center;
   padding: var(--space-5);
   text-align: center;
+}
+
+.loading-screen {
+  min-height: 100vh;
+}
+
+.loading-state--contained {
+  min-height: 0;
+  padding: 0;
 }
 
 .loading-mark,
@@ -1576,8 +1586,9 @@ h3 {
   animation: chalk-pulse 1.5s ease-in-out infinite;
 }
 
-.loading-screen p,
+.loading-state p,
 .not-found > p:not(.eyebrow) {
+  margin: 0;
   color: var(--muted);
 }
 
@@ -1624,18 +1635,6 @@ h3 {
   max-width: 620px;
   color: var(--muted);
   line-height: 1.55;
-}
-
-.lesson-loading > span {
-  display: grid;
-  width: 76px;
-  height: 76px;
-  place-items: center;
-  margin-bottom: var(--space-3);
-  border: 2px solid var(--yellow);
-  border-radius: 50%;
-  color: var(--yellow);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
 }
 
 /* Lesson sequence */
@@ -2029,10 +2028,7 @@ a .lesson-node:hover {
 
 /* Activity player */
 .lesson-player--loading {
-  display: grid;
   min-height: 420px;
-  place-items: center;
-  color: var(--muted);
 }
 
 .lesson-player__header {
@@ -3191,26 +3187,9 @@ a.almanac-option:hover {
 }
 
 .researcher-loading {
-  display: grid;
-  width: 100%;
   min-height: 0;
   flex: 1;
-  place-items: center;
-  align-content: center;
-  gap: var(--space-2);
   margin: auto;
-  color: var(--muted);
-  text-align: center;
-}
-
-.researcher-loading .loading-spinner {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--blue);
-}
-
-.researcher-loading p {
-  margin: 0;
 }
 
 .visually-hidden {

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -52,7 +53,7 @@ export function LessonOverviewPage() {
       <div className="standard-page lesson-overview page-enter">
         <BackLink to="/lessons" label="Back to lessons" />
         {!lesson || !progress ? (
-          <p>Opening lesson…</p>
+          <LoadingState message="Opening lesson…" />
         ) : (
           <>
             <section className="lesson-overview__hero">

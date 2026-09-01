@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BackLink } from '@/components/ui/BackLink';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Panel } from '@/components/ui/Panel';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
@@ -82,7 +83,7 @@ export function SettingsPage() {
   if (!user || !settings) {
     return (
       <div className="standard-page">
-        <p>Loading settings…</p>
+        <LoadingState message="Loading settings…" />
       </div>
     );
   }

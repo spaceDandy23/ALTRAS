@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { db } from '@/db/database';
 import { ContentState } from '@/features/lessons/components/ContentState';
 import { StarRating } from '@/features/lessons/components/StarRating';
@@ -66,7 +67,7 @@ export function MainMenuPage() {
     <ContentState>
       <div className="menu-page page-enter">
         {!hub || !nextEntry ? (
-          <p className="home-loading">Preparing your lesson…</p>
+          <LoadingState className="home-loading" message="Preparing your lesson…" />
         ) : (
           <section className="home-start menu-grid" aria-labelledby="home-title">
             <p className="home-welcome">Welcome back, {user?.displayName}.</p>

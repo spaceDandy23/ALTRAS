@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -95,11 +96,10 @@ export function ActiveLessonPage() {
   if (!user || !lesson || !attempt) {
     return (
       <ContentState>
-        {
-          <div className="lesson-player lesson-player--loading">
-            <p>Restoring your attempt…</p>
-          </div>
-        }
+        <LoadingState
+          className="lesson-player lesson-player--loading"
+          message="Restoring your attempt…"
+        />
       </ContentState>
     );
   }

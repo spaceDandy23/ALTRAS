@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -50,11 +51,9 @@ export function LessonResultPage() {
   if (!user || !lesson || !attempt || !progress || attempt.status !== 'completed') {
     return (
       <ContentState>
-        {
-          <div className="result-page">
-            <p>Loading your result…</p>
-          </div>
-        }
+        <div className="result-page">
+          <LoadingState message="Loading your result…" />
+        </div>
       </ContentState>
     );
   }

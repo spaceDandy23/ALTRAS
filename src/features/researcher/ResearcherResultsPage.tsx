@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Modal } from '@/components/ui/Modal';
 import {
   calculateResearcherSummary,
@@ -187,10 +187,10 @@ export function ResearcherResultsPage() {
 
   if (loading) {
     return (
-      <div className="researcher-loading" role="status" aria-live="polite" aria-busy="true">
-        <LoadingSpinner />
-        <p>Loading anonymized participant results…</p>
-      </div>
+      <LoadingState
+        className="researcher-loading"
+        message="Loading anonymized participant results…"
+      />
     );
   }
 
