@@ -1,5 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
+import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
+import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
 
 export function AlmanacPage() {
   return (
@@ -9,6 +11,14 @@ export function AlmanacPage() {
         <h1>Almanac</h1>
         <p>Reference tools for translating verbal expressions.</p>
       </header>
+      <CharacterAssistant
+        state="explaining"
+        dialogue={resolveCharacterDialogue('resource-introduction')}
+        presentation="inline"
+        reactionKey="almanac-introduction"
+        announcement="off"
+        className="almanac-companion"
+      />
       <div className="almanac-options" aria-label="Almanac tools">
         <article className="almanac-option almanac-option--disabled" aria-disabled="true">
           <div>

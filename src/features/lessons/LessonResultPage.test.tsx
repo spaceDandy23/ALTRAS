@@ -9,6 +9,7 @@ import { getAttempt } from './attempts/attempt.service';
 import { getLesson } from './content/content.service';
 import { packagedContent } from './content/packaged-content';
 import { getLessonHubData, getLessonProgress } from './progress/progress.service';
+import { resolveLessonResultReaction } from '@/features/characters/lesson-result-reaction';
 
 vi.mock('./attempts/attempt.service', () => ({
   getAttempt: vi.fn(),
@@ -103,5 +104,20 @@ describe('final lesson result actions', () => {
     expect(screen.queryByRole('link', { name: 'View next lesson' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review lesson' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Lessons' })).toHaveAttribute('href', '/lessons');
+    expect(screen.getByLabelText('Mina, learning companion')).toHaveAttribute(
+      'data-character-state',
+      'celebrating',
+    );
+  });
+
+  it('maps passed and failed results to distinct non-scoring character reactions', () => {
+    expect(resolveLessonResultReaction(true)).toEqual({
+      state: 'celebrating',
+      dialogueEvent: 'lesson-passed',
+    });
+    expect(resolveLessonResultReaction(false)).toEqual({
+      state: 'encouraging',
+      dialogueEvent: 'lesson-not-passed',
+    });
   });
 });

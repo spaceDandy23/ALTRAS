@@ -1,6 +1,13 @@
 import { create } from 'zustand';
-import { db } from '@/db/database';
-import { loginUser, logoutUser, registerUser, restoreSession } from '@/features/auth/auth.service';
+import {
+  loginOnlineUser,
+  logoutOnlineUser,
+  registerOnlineUser,
+  restoreOnlineSession,
+} from '@/features/auth/online-auth.service';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { hydrateVisualPreferencesForUser } from '@/features/settings/visual-preferences.bootstrap';
+import { deactivateVisualPreferences } from '@/features/settings/visual-preferences.cache';
 import type { LoginInput, RegistrationInput } from '@/features/auth/auth.schemas';
 import type { PublicUser } from '@/types/models';
 
@@ -23,23 +30,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (get().status !== 'idle') return;
     set({ status: 'loading' });
     try {
-      const user = await restoreSession(db);
-      set({ user, status: user ? 'authenticated' : 'guest' });
+      const user = await restoreOnlineSession();
+      if (!user) {
+        deactivateVisualPreferences();
+        set({ user: null, status: 'guest' });
+        return;
+      }
+      await hydrateVisualPreferencesForUser(user.id);
+      set({ user, status: 'authenticated' });
     } catch {
+      deactivateVisualPreferences();
       set({ user: null, status: 'guest' });
     }
   },
   login: async (input) => {
-    const user = await loginUser(db, input);
+    const user = await loginOnlineUser(input);
+    await hydrateVisualPreferencesForUser(user.id);
     set({ user, status: 'authenticated' });
   },
   register: async (input) => {
-    const user = await registerUser(db, input);
+    const user = await registerOnlineUser(input);
+    await hydrateVisualPreferencesForUser(user.id);
     set({ user, status: 'authenticated' });
   },
   logout: async () => {
-    await logoutUser(db);
+    await logoutOnlineUser();
+    deactivateVisualPreferences();
     set({ user: null, status: 'guest' });
+    useResearcherAccessStore.getState().clear();
   },
   replaceUser: (user) => set({ user }),
 }));

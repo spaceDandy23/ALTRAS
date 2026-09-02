@@ -1,14 +1,14 @@
 # ALTRAS
 
-ALTRAS is an offline-first educational desktop web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Phase 2 provides a complete local learning loop with validated bundled lessons, two playable activity types, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
+ALTRAS is an online-first educational web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Students authenticate with Supabase and access validated lessons, activities, assessments, and progress tracking. Phase 2 provides a complete learning loop with bundled lessons, two playable activity types, pre/post-tests, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
 
-> ALTRAS accounts are local device accounts. They are not online identities, and no server verifies or synchronizes them.
+> Assessments, authentication, and progress are stored online with Supabase. The app works best with a stable internet connection.
 
 ## Requirements and setup
 
 - Node.js 22.12 or newer (Node.js 24 is supported)
 - npm 11 or newer
-- A current Chromium, Firefox, or Safari browser with IndexedDB, Web Crypto, and service-worker support
+- A current Chromium, Firefox, or Safari browser with IndexedDB and service-worker support
 
 ```bash
 npm install
@@ -29,14 +29,13 @@ npm run build
 
 Preview the production build with `npm run preview`.
 
-## Offline installation
+## Installation
 
 1. Run `npm run build`, then `npm run preview`.
-2. Open ALTRAS once and wait for the brief **Offline ready** confirmation in the header. It disappears after a few seconds.
-3. Use the browser's **Install app** action.
-4. Close and reopen the installed app with the network disabled.
+2. Use the browser's **Install app** action to add ALTRAS as a PWA.
+3. The installed app caches static assets and lesson content for faster loading and offline browsing of cached pages.
 
-ALTRAS has no remote fonts, APIs, CDNs, content requests, or server runtime. The bundled app shell and lesson content remain available offline.
+For full functionality including assessments, progress syncing, and authentication, an internet connection is required.
 
 ## Learning content model
 
@@ -62,22 +61,20 @@ Lessons use stable string IDs, a content version, prerequisite ID, passing thres
 5. Increase `PACKAGED_CONTENT_VERSION` for every packaged release.
 6. Run the tests and production build. Invalid content fails before any content rows are written.
 
-Initialization uses `bulkPut`, so repeated runs are idempotent. Student progress and attempts live in separate tables and are never removed during content updates. Stable compatible IDs preserve progress. A future breaking change should introduce a new lesson/activity ID or an explicit migration rather than silently changing the meaning of an existing ID.
+Initialization uses `bulkPut`, so repeated runs are idempotent. Student progress and attempts live in Supabase and are unaffected by browser content-cache refreshes. Stable compatible IDs preserve progress. A future breaking change should introduce a new lesson/activity ID or an explicit Supabase migration rather than silently changing the meaning of an existing ID.
 
-## IndexedDB and migration
+## Browser storage
 
-Dexie schema v2 retains the Phase 1 `users`, `profiles`, `settings`, and `sessions` tables and adds:
+Dexie remains only as a cache for validated, bundled educational content:
 
 - `sections`, `units`, `lessons`, and `lessonItems`
-- `contentVersions`, separate from the Dexie schema version
-- `lessonProgress`, isolated by user and lesson
-- `lessonAttempts`, including submitted answers and completion results
+- `contentVersions`, which records the packaged educational release
 
-A tested v1→v2 upgrade preserves representative accounts, profiles, settings, and sessions. Clearing browser/site data can still permanently remove all records.
+Authentication, profiles, settings, progress, attempts, assessments, and researcher results are never stored authoritatively in Dexie. Supabase is the source of truth. A small user-ID-keyed `localStorage` cache applies theme, readability, and motion preferences before authenticated settings load, then reconciles with Supabase.
 
 ## Attempts, scoring, and unlocking
 
-- Meaningful answer changes are written to IndexedDB immediately.
+- Submitted answers are written to Supabase and the UI advances only after persistence succeeds.
 - At most one active attempt is maintained per user and lesson by the attempt service.
 - Returning students can resume or confirm a restart. Restarting marks the old attempt abandoned; it never deletes history.
 - An activity records only its first explicit submitted answer. Completed attempts are idempotent.
@@ -97,14 +94,15 @@ Packaged-content version 2 changed Lesson 2 from a preview to a playable lesson 
 
 ## Math word list
 
-Authenticated students open **Almanac** from the lesson hub, then choose the fully offline **Word list** at `/lessons/almanac/word-list`. The Almanac keeps the intended `Lessons → Almanac → Review or Word list` hierarchy; Review is disabled and marked **Coming next**. The reference groups addition, subtraction, multiplication, and division vocabulary with examples and explicit guidance for order-sensitive phrases. Search is immediate, case-insensitive, and stored only in page memory.
+Authenticated students open **Almanac** from the lesson hub, then choose the locally bundled **Word list** at `/lessons/almanac/word-list`. The Almanac keeps the intended `Lessons → Almanac → Review or Word list` hierarchy; Review is disabled and marked **Coming next**. The reference groups addition, subtraction, multiplication, and division vocabulary with examples and explicit guidance for order-sensitive phrases. Search is immediate, case-insensitive, and stored only in page memory.
 
 The reference is typed, Zod-validated application content. It does not use IndexedDB or change packaged lesson version 2, accounts, settings, attempts, progress, XP, stars, or unlocking.
 
 ## Current limitations
 
-- Data is isolated per browser and computer; different computers do not synchronize.
-- Clearing browser/site data removes local accounts and learning records.
+- Assessments, authentication, and progress sync require an active internet connection.
+- Data is stored on Supabase; different computers with the same account will synchronize online data.
+- Browser/site data clearing removes cached app assets, lesson content, and visual preferences, but not authoritative Supabase records.
 - Backup/import and research export are not available yet.
 - Only two lessons and two activity formats are currently available.
 - There is no Lesson 3. Additional lessons are deferred until finalized, reviewed content is provided.

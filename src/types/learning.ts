@@ -2,25 +2,14 @@ import { z } from 'zod';
 import {
   activitySchema,
   instructionalContentBlockSchema,
+  lessonMetadataSchema,
   sectionSchema,
   unitSchema,
 } from '@/features/lessons/domain/content.schemas';
 
 export const storedSectionSchema = sectionSchema;
 export const storedUnitSchema = unitSchema;
-export const storedLessonSchema = z.object({
-  id: z.string().min(1),
-  sectionId: z.string().min(1),
-  unitId: z.string().min(1),
-  title: z.string().min(1),
-  shortDescription: z.string().min(1),
-  concepts: z.array(z.string().min(1)).min(1),
-  displayOrder: z.number().int().nonnegative(),
-  prerequisiteLessonId: z.string().min(1).optional(),
-  contentStatus: z.enum(['playable', 'preview']),
-  passingThreshold: z.number().int().min(0).max(100),
-  contentVersion: z.number().int().positive(),
-});
+export const storedLessonSchema = lessonMetadataSchema;
 
 export const storedLessonItemSchema = z.discriminatedUnion('kind', [
   z.object({

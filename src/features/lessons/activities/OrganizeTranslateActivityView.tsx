@@ -7,10 +7,12 @@ export function OrganizeTranslateActivityView({
   activity,
   submitted,
   onSubmit,
+  onHintVisibilityChange,
 }: {
   activity: OrganizeTranslateActivity;
   submitted?: SubmittedActivityAnswer;
   onSubmit: (answer: string[]) => Promise<void>;
+  onHintVisibilityChange?: (visible: boolean) => void;
 }) {
   const submittedSequence = Array.isArray(submitted?.answer) ? submitted.answer : null;
   const [sequence, setSequence] = useState<string[]>(submittedSequence ?? []);
@@ -26,6 +28,14 @@ export function OrganizeTranslateActivityView({
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleHint = () => {
+    setHintVisible((visible) => {
+      const next = !visible;
+      onHintVisibilityChange?.(next);
+      return next;
+    });
   };
 
   return (
@@ -91,7 +101,7 @@ export function OrganizeTranslateActivityView({
           </div>
           <div className="activity-actions">
             {activity.hint && (
-              <Button variant="quiet" onClick={() => setHintVisible((visible) => !visible)}>
+              <Button variant="quiet" onClick={toggleHint}>
                 {hintVisible ? 'Hide hint' : 'Show hint'}
               </Button>
             )}

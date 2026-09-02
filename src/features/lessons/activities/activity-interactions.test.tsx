@@ -13,7 +13,19 @@ describe('accessible lesson activity interactions', () => {
     );
     if (!activity || activity.type !== 'find-word') throw new Error('Missing fixture.');
     const onSubmit = vi.fn(async () => undefined);
-    render(<FindWordActivityView activity={activity} onSubmit={onSubmit} />);
+    const onHintVisibilityChange = vi.fn();
+    render(
+      <FindWordActivityView
+        activity={activity}
+        onSubmit={onSubmit}
+        onHintVisibilityChange={onHintVisibilityChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Show hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Hide hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(false);
 
     const correct = screen.getByRole('radio', { name: 'sum' });
     correct.focus();
@@ -31,7 +43,19 @@ describe('accessible lesson activity interactions', () => {
     );
     if (!activity || activity.type !== 'organize-translate') throw new Error('Missing fixture.');
     const onSubmit = vi.fn(async () => undefined);
-    render(<OrganizeTranslateActivityView activity={activity} onSubmit={onSubmit} />);
+    const onHintVisibilityChange = vi.fn();
+    render(
+      <OrganizeTranslateActivityView
+        activity={activity}
+        onSubmit={onSubmit}
+        onHintVisibilityChange={onHintVisibilityChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Show hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Hide hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(false);
 
     const firstToken = screen.getByRole('button', { name: 'a number' });
     firstToken.focus();

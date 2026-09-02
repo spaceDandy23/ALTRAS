@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { BackLink } from '@/components/ui/BackLink';
+import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Panel } from '@/components/ui/Panel';
-import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { getUserSettings, updateUserSettings, type SettingsUpdate } from './settings.service';
+import { applyVisualPreferences } from './apply-preferences';
 import type { UserSettings } from '@/types/models';
 
 function VolumeControl({
@@ -61,14 +63,32 @@ function VolumeControl({
 export function SettingsPage() {
   const user = useAuthStore((state) => state.user);
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [settingsUserId, setSettingsUserId] = useState<string | null>(null);
+  const [loadFailure, setLoadFailure] = useState<{ userId: string; message: string } | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const latestSaveRef = useRef(0);
 
   useEffect(() => {
     if (!user) return;
-    void getUserSettings(db, user.id).then(setSettings);
-  }, [user]);
+    let active = true;
+    void getUserSettings(user.id)
+      .then((loaded) => {
+        if (!active) return;
+        setSettings(loaded);
+        setSettingsUserId(user.id);
+        setLoadFailure(null);
+        applyVisualPreferences(loaded);
+      })
+      .catch(() => {
+        if (active) {
+          setLoadFailure({ userId: user.id, message: 'Unable to load your online settings.' });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadRevision, user]);
 
   useEffect(() => {
     if (saveState !== 'saved') return;
@@ -76,32 +96,49 @@ export function SettingsPage() {
     return () => window.clearTimeout(timeout);
   }, [saveState]);
 
-  if (!user || !settings) {
+  if (!user) {
+    return <LoadingState variant="page" message="Loading settings…" />;
+  }
+
+  const loadError = loadFailure?.userId === user.id ? loadFailure.message : '';
+  if (loadError) {
     return (
-      <div className="standard-page">
-        <p>Loading settings…</p>
+      <div className="standard-page page-enter">
+        <BackLink />
+        <Panel className="empty-state">
+          <h1>Settings are unavailable</h1>
+          <p>{loadError} Check your connection and try again.</p>
+          <Button onClick={() => setLoadRevision((revision) => revision + 1)}>Try again</Button>
+        </Panel>
       </div>
     );
   }
 
+  if (!settings || settingsUserId !== user.id) {
+    return <LoadingState variant="page" message="Loading settings…" />;
+  }
+
   const changeSetting = async (update: SettingsUpdate) => {
     const saveId = ++latestSaveRef.current;
-    setSettings((current) => (current ? { ...current, ...update } : current));
-    if (typeof update.animationsEnabled === 'boolean') {
-      document.documentElement.dataset.motion = update.animationsEnabled ? 'on' : 'off';
-    }
+    setSettings((current) => {
+      if (!current) return current;
+      const next = { ...current, ...update };
+      applyVisualPreferences(next);
+      return next;
+    });
     setSaveState('saving');
 
-    const saveOperation = saveQueueRef.current.then(() => updateUserSettings(db, user.id, update));
-    saveQueueRef.current = saveOperation.then(
-      () => undefined,
-      () => undefined,
-    );
+    const saveOperation = updateUserSettings(user.id, update);
 
     try {
       const saved = await saveOperation;
       if (saveId !== latestSaveRef.current) return;
-      setSettings(saved);
+      setSettings((current) => {
+        if (!current) return saved;
+        const reconciled = { ...current, ...update, updatedAt: saved.updatedAt };
+        applyVisualPreferences(reconciled);
+        return reconciled;
+      });
       setSaveState('saved');
     } catch {
       if (saveId !== latestSaveRef.current) return;
@@ -115,13 +152,24 @@ export function SettingsPage() {
     setSettings((current) => (current ? { ...current, ...update } : current));
   };
 
+  const themeOptions = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'Device' },
+  ] as const;
+  const textSizeOptions = [
+    { value: 1, label: 'Standard' },
+    { value: 1.15, label: 'Large' },
+    { value: 1.3, label: 'Largest' },
+  ] as const;
+
   return (
     <div className="standard-page page-enter">
       <BackLink />
       <div className="page-heading page-heading--with-status">
         <div>
           <h1>Settings</h1>
-          <p>Preferences for {user.displayName} on this device.</p>
+          <p>Preferences for {user.displayName} across devices.</p>
         </div>
         <span className={`save-state save-state--${saveState}`} role="status">
           {saveState === 'saving' && 'Saving…'}
@@ -130,6 +178,47 @@ export function SettingsPage() {
         </span>
       </div>
       <div className="settings-grid">
+        <Panel className="settings-section settings-section--appearance" accent="blue">
+          <div className="settings-section__heading">
+            <span aria-hidden="true">◐</span>
+            <div>
+              <h2>Appearance</h2>
+            </div>
+          </div>
+          <fieldset className="choice-setting">
+            <legend>Color theme</legend>
+            <div className="segmented-control">
+              {themeOptions.map((option) => (
+                <button
+                  className={settings.theme === option.value ? 'is-selected' : undefined}
+                  type="button"
+                  aria-pressed={settings.theme === option.value}
+                  key={option.value}
+                  onClick={() => void changeSetting({ theme: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="choice-setting">
+            <legend>Text size</legend>
+            <div className="segmented-control">
+              {textSizeOptions.map((option) => (
+                <button
+                  className={settings.readabilityScale === option.value ? 'is-selected' : undefined}
+                  type="button"
+                  aria-pressed={settings.readabilityScale === option.value}
+                  key={option.value}
+                  onClick={() => void changeSetting({ readabilityScale: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <p className="settings-note">Theme and text size follow this account across devices.</p>
+        </Panel>
         <Panel className="settings-section" accent="yellow">
           <div className="settings-section__heading">
             <span aria-hidden="true">♫</span>

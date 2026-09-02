@@ -51,7 +51,7 @@ export function RegisterPage() {
     <AuthFrame>
       <div className="auth-card__heading auth-card__heading--compact">
         <h1>Create an account</h1>
-        <p>Each student gets separate progress and settings on this computer.</p>
+        <p>Your student profile and settings will follow you across supported devices.</p>
       </div>
       <form
         className="auth-form auth-form--grid"
@@ -102,7 +102,7 @@ export function RegisterPage() {
         </Button>
       </form>
       <p className="auth-switch">
-        Already have a local account? <Link to="/login">Sign in</Link>
+        Already have an account? <Link to="/login">Sign in</Link>
       </p>
     </AuthFrame>
   );

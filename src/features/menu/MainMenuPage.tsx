@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
+import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
 import { db } from '@/db/database';
 import { ContentState } from '@/features/lessons/components/ContentState';
 import { StarRating } from '@/features/lessons/components/StarRating';
@@ -64,12 +67,22 @@ export function MainMenuPage() {
 
   return (
     <ContentState>
-      <div className="menu-page page-enter">
-        {!hub || !nextEntry ? (
-          <p className="home-loading">Preparing your lesson…</p>
-        ) : (
+      {!hub || !nextEntry ? (
+        <LoadingState variant="page" message="Preparing your lesson…" />
+      ) : (
+        <div className="menu-page page-enter">
           <section className="home-start menu-grid" aria-labelledby="home-title">
             <p className="home-welcome">Welcome back, {user?.displayName}.</p>
+            <CharacterAssistant
+              characterId={nextEntry.lesson.characterId}
+              state="greeting"
+              dialogue={resolveCharacterDialogue('main-menu-greeting', {
+                characterId: nextEntry.lesson.characterId,
+              })}
+              presentation="compact"
+              reactionKey="main-menu"
+              className="home-companion"
+            />
             <div className="home-start__lesson">
               <div className="home-start__marker" aria-hidden="true">
                 {nextEntry.progress.status === 'cleared' ? '✓' : nextEntry.lesson.displayOrder}
@@ -116,9 +129,21 @@ export function MainMenuPage() {
               <span>{totalXp} XP</span>
               <StarRating count={earnedStarCount} />
             </div>
+            <div className="home-assessments" aria-label="Assessments">
+              <Link to="/assessments/pre-test">
+                <span>Before the lessons</span>
+                <strong>Take the pre-test</strong>
+                <small>One saved attempt</small>
+              </Link>
+              <Link to="/assessments/post-test">
+                <span>After the lessons</span>
+                <strong>Take the post-test</strong>
+                <small>One saved attempt</small>
+              </Link>
+            </div>
           </section>
-        )}
-      </div>
+        </div>
+      )}
     </ContentState>
   );
 }

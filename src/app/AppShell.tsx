@@ -1,31 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
+import { AlgebraicBackdrop } from '@/components/decorative/AlgebraicBackdrop';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { db } from '@/db/database';
+import { resolveTheme } from '@/features/settings/apply-preferences';
 import { useAuthStore } from '@/stores/auth.store';
+import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 
 export function AppShell() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const menuRef = useRef<HTMLDetailsElement>(null);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const researcherStatus = useResearcherAccessStore((state) => state.status);
+  const checkResearcherAccess = useResearcherAccessStore((state) => state.checkAccess);
   const navigate = useNavigate();
-  const persistedSettings = useLiveQuery(
-    () => (user ? db.settings.where('userId').equals(user.id).first() : undefined),
-    [user?.id],
-  );
+  useEffect(() => {
+    const colorScheme =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-color-scheme: dark)')
+        : null;
+    const applySystemTheme = () => {
+      const preference = document.documentElement.dataset.themePreference;
+      if (preference === 'light' || preference === 'dark' || preference === 'system') {
+        document.documentElement.dataset.theme = resolveTheme(preference);
+      }
+    };
+
+    colorScheme?.addEventListener('change', applySystemTheme);
+
+    return () => {
+      colorScheme?.removeEventListener('change', applySystemTheme);
+    };
+  }, []);
 
   useEffect(() => {
-    if (!persistedSettings) return;
-    document.documentElement.dataset.motion = persistedSettings.animationsEnabled ? 'on' : 'off';
-  }, [persistedSettings]);
+    if (user) void checkResearcherAccess(user.id);
+  }, [checkResearcherAccess, user]);
 
   const handleLogout = async () => {
     await logout();
-    delete document.documentElement.dataset.motion;
     navigate('/login', { replace: true });
   };
 
@@ -33,12 +48,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <div className="chalk-doodles" aria-hidden="true">
-        <span className="doodle doodle--one">x² + y²</span>
-        <span className="doodle doodle--two">√144 = 12</span>
-        <span className="doodle doodle--three">a ÷ b</span>
-        <span className="doodle doodle--four">5(x + 2)</span>
-      </div>
+      <AlgebraicBackdrop />
       <header className="app-header">
         <AltrasLogo />
         <div className="app-header__tools">
@@ -54,9 +64,16 @@ export function AppShell() {
               </span>
             </summary>
             <nav className="user-menu__popover" aria-label="Account">
-              <Link to="/profile" onClick={closeUserMenu}>
-                Profile
-              </Link>
+              {researcherStatus !== 'authorized' && (
+                <Link to="/profile" onClick={closeUserMenu}>
+                  Profile
+                </Link>
+              )}
+              {researcherStatus === 'authorized' && (
+                <Link to="/researcher/results" onClick={closeUserMenu}>
+                  Researcher results
+                </Link>
+              )}
               <Link to="/settings" onClick={closeUserMenu}>
                 Settings
               </Link>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -27,11 +28,11 @@ export function LessonsPage() {
 
   return (
     <ContentState>
-      <div className="standard-page lesson-hub page-enter">
-        <BackLink label="Back to home" />
-        {!hub ? (
-          <p>Loading your lesson path…</p>
-        ) : (
+      {!hub ? (
+        <LoadingState variant="page" message="Loading your lesson path…" />
+      ) : (
+        <div className="standard-page lesson-hub page-enter">
+          <BackLink label="Back to home" />
           <>
             <section className="lesson-hub__header">
               <div>
@@ -110,8 +111,8 @@ export function LessonsPage() {
               })}
             </ol>
           </>
-        )}
-      </div>
+        </div>
+      )}
     </ContentState>
   );
 }
