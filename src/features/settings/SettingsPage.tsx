@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { BackLink } from '@/components/ui/BackLink';
+import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Panel } from '@/components/ui/Panel';
-import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { getUserSettings, updateUserSettings, type SettingsUpdate } from './settings.service';
 import { applyVisualPreferences } from './apply-preferences';
@@ -63,16 +63,32 @@ function VolumeControl({
 export function SettingsPage() {
   const user = useAuthStore((state) => state.user);
   const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [settingsUserId, setSettingsUserId] = useState<string | null>(null);
+  const [loadFailure, setLoadFailure] = useState<{ userId: string; message: string } | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const latestSaveRef = useRef(0);
 
   useEffect(() => {
     if (!user) return;
-    void getUserSettings(db, user.id).then((loaded) => {
-      setSettings(loaded);
-      applyVisualPreferences(loaded);
-    });
-  }, [user]);
+    let active = true;
+    void getUserSettings(user.id)
+      .then((loaded) => {
+        if (!active) return;
+        setSettings(loaded);
+        setSettingsUserId(user.id);
+        setLoadFailure(null);
+        applyVisualPreferences(loaded);
+      })
+      .catch(() => {
+        if (active) {
+          setLoadFailure({ userId: user.id, message: 'Unable to load your online settings.' });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadRevision, user]);
 
   useEffect(() => {
     if (saveState !== 'saved') return;
@@ -80,7 +96,25 @@ export function SettingsPage() {
     return () => window.clearTimeout(timeout);
   }, [saveState]);
 
-  if (!user || !settings) {
+  if (!user) {
+    return <LoadingState variant="page" message="Loading settings…" />;
+  }
+
+  const loadError = loadFailure?.userId === user.id ? loadFailure.message : '';
+  if (loadError) {
+    return (
+      <div className="standard-page page-enter">
+        <BackLink />
+        <Panel className="empty-state">
+          <h1>Settings are unavailable</h1>
+          <p>{loadError} Check your connection and try again.</p>
+          <Button onClick={() => setLoadRevision((revision) => revision + 1)}>Try again</Button>
+        </Panel>
+      </div>
+    );
+  }
+
+  if (!settings || settingsUserId !== user.id) {
     return <LoadingState variant="page" message="Loading settings…" />;
   }
 
@@ -94,7 +128,7 @@ export function SettingsPage() {
     });
     setSaveState('saving');
 
-    const saveOperation = updateUserSettings(db, user.id, update);
+    const saveOperation = updateUserSettings(user.id, update);
 
     try {
       const saved = await saveOperation;

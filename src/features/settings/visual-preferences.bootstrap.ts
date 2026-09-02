@@ -5,13 +5,12 @@ import {
   applyAuthoritativeVisualPreferences,
   getActiveVisualPreferencesUserId,
 } from './visual-preferences.cache';
-import { db } from '@/db/database';
 
 export async function hydrateVisualPreferencesForUser(userId: string): Promise<void> {
   const cached = activateVisualPreferencesForUser(userId);
 
   try {
-    const authoritative = await getUserSettings(db, userId);
+    const authoritative = await getUserSettings(userId);
     applyAuthoritativeVisualPreferences(userId, authoritative);
   } catch {
     if (cached && getActiveVisualPreferencesUserId() === userId) {

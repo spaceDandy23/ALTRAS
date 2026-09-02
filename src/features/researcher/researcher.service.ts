@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getSupabaseClient, isSupabaseConfigured } from '@/services/supabase.client';
+import { getSupabaseClient } from '@/services/supabase.client';
 
 const assessmentStatusSchema = z.enum(['not_started', 'in_progress', 'completed']);
 
@@ -147,17 +147,12 @@ export function calculateResearcherSummary(
 }
 
 export async function isCurrentUserResearcher(): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
   const { data, error } = await getSupabaseClient().rpc('is_researcher');
   if (error) throw new ResearcherAccessError('Unable to verify researcher access.');
   return data === true;
 }
 
 export async function getResearcherResults(): Promise<ResearcherParticipantResult[]> {
-  if (!isSupabaseConfigured) {
-    throw new ResearcherAccessError('Researcher results require the online database connection.');
-  }
-
   const { data, error } = await getSupabaseClient().rpc('get_researcher_results');
   if (error) {
     throw new ResearcherAccessError(researcherResultsErrorMessage(error.code));

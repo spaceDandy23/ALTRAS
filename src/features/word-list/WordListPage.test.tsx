@@ -3,13 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AltrasDatabase } from '@/db/database';
-import { registerUser } from '@/features/auth/auth.service';
-import {
-  startOrResumeAttempt,
-  submitActivityAnswer,
-} from '@/features/lessons/attempts/attempt.service';
-import { getLesson, initializePackagedContent } from '@/features/lessons/content/content.service';
-import { ensureUserLessonProgress } from '@/features/lessons/progress/progress.service';
+import { initializePackagedContent } from '@/features/lessons/content/content.service';
 import { AlmanacPage } from './AlmanacPage';
 import { WordListPage } from './WordListPage';
 import { mathWordGroups, wordListSchema } from './word-list.data';
@@ -126,28 +120,15 @@ describe('Math word list', () => {
     expect(screen.getByText('Word list destination')).toBeVisible();
   });
 
-  it('does not mutate account, settings, session, attempt, progress, or XP records', async () => {
+  it('does not mutate the bundled lesson-content cache', async () => {
     database = new AltrasDatabase(`altras-word-list-${crypto.randomUUID()}`);
     await initializePackagedContent(database);
-    const user = await registerUser(database, {
-      username: 'reference_reader',
-      displayName: 'Reference Reader',
-      password: 'Reference123',
-      confirmPassword: 'Reference123',
-    });
-    await ensureUserLessonProgress(database, user.id);
-    const lesson = await getLesson(database, 'lesson-operation-signals');
-    const attempt = await startOrResumeAttempt(database, user.id, lesson.id);
-    const activity = lesson.activities[0];
-    if (activity.type !== 'find-word') throw new Error('Unexpected activity fixture.');
-    await submitActivityAnswer(database, attempt.id, activity.id, activity.correctChoiceId);
     const before = await Promise.all([
-      database.users.toArray(),
-      database.profiles.toArray(),
-      database.settings.toArray(),
-      database.sessions.toArray(),
-      database.lessonAttempts.toArray(),
-      database.lessonProgress.toArray(),
+      database.sections.toArray(),
+      database.units.toArray(),
+      database.lessons.toArray(),
+      database.lessonItems.toArray(),
+      database.contentVersions.toArray(),
     ]);
 
     renderWordList();
@@ -157,12 +138,11 @@ describe('Math word list', () => {
 
     await expect(
       Promise.all([
-        database.users.toArray(),
-        database.profiles.toArray(),
-        database.settings.toArray(),
-        database.sessions.toArray(),
-        database.lessonAttempts.toArray(),
-        database.lessonProgress.toArray(),
+        database.sections.toArray(),
+        database.units.toArray(),
+        database.lessons.toArray(),
+        database.lessonItems.toArray(),
+        database.contentVersions.toArray(),
       ]),
     ).resolves.toEqual(before);
   });

@@ -2,25 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicUser } from '@/types/models';
 
 const mocks = vi.hoisted(() => ({
-  restoreSession: vi.fn(),
-  loginUser: vi.fn(),
+  restoreOnlineSession: vi.fn(),
+  loginOnlineUser: vi.fn(),
+  logoutOnlineUser: vi.fn(),
   hydrate: vi.fn(),
   deactivate: vi.fn(),
 }));
 
-vi.mock('@/features/auth/auth.service', () => ({
-  loginUser: mocks.loginUser,
-  logoutUser: vi.fn(),
-  registerUser: vi.fn(),
-  restoreSession: mocks.restoreSession,
-}));
 vi.mock('@/features/auth/online-auth.service', () => ({
-  loginOnlineUser: vi.fn(),
-  logoutOnlineUser: vi.fn(),
+  loginOnlineUser: mocks.loginOnlineUser,
+  logoutOnlineUser: mocks.logoutOnlineUser,
   registerOnlineUser: vi.fn(),
-  restoreOnlineSession: vi.fn(),
+  restoreOnlineSession: mocks.restoreOnlineSession,
 }));
-vi.mock('@/services/supabase.client', () => ({ isSupabaseConfigured: false }));
 vi.mock('@/features/settings/visual-preferences.bootstrap', () => ({
   hydrateVisualPreferencesForUser: mocks.hydrate,
 }));
@@ -55,8 +49,9 @@ function deferred() {
 describe('authenticated visual bootstrap', () => {
   beforeEach(() => {
     useAuthStore.setState({ status: 'idle', user: null });
-    mocks.restoreSession.mockReset();
-    mocks.loginUser.mockReset();
+    mocks.restoreOnlineSession.mockReset();
+    mocks.loginOnlineUser.mockReset();
+    mocks.logoutOnlineUser.mockReset();
     mocks.hydrate.mockReset();
     mocks.deactivate.mockReset();
   });
@@ -65,7 +60,7 @@ describe('authenticated visual bootstrap', () => {
 
   it('applies cached Large/Largest settings before authenticated routes become ready', async () => {
     const hydration = deferred();
-    mocks.restoreSession.mockResolvedValue(firstUser);
+    mocks.restoreOnlineSession.mockResolvedValue(firstUser);
     mocks.hydrate.mockImplementation(() => {
       document.documentElement.style.setProperty('--readability-scale', '1.3');
       return hydration.promise;
@@ -86,7 +81,7 @@ describe('authenticated visual bootstrap', () => {
     const hydration = deferred();
     useAuthStore.setState({ status: 'guest', user: null });
     document.documentElement.style.setProperty('--readability-scale', '1.3');
-    mocks.loginUser.mockResolvedValue(secondUser);
+    mocks.loginOnlineUser.mockResolvedValue(secondUser);
     mocks.hydrate.mockImplementation((userId: string) => {
       expect(userId).toBe(secondUser.id);
       document.documentElement.style.setProperty('--readability-scale', '1');
@@ -104,5 +99,16 @@ describe('authenticated visual bootstrap', () => {
     hydration.resolve();
     await login;
     expect(useAuthStore.getState()).toMatchObject({ status: 'authenticated', user: secondUser });
+  });
+
+  it('logs out through Supabase and clears the active preference identity', async () => {
+    useAuthStore.setState({ status: 'authenticated', user: firstUser });
+    mocks.logoutOnlineUser.mockResolvedValue(undefined);
+
+    await useAuthStore.getState().logout();
+
+    expect(mocks.logoutOnlineUser).toHaveBeenCalledOnce();
+    expect(mocks.deactivate).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState()).toMatchObject({ status: 'guest', user: null });
   });
 });

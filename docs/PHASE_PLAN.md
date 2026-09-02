@@ -5,7 +5,7 @@
 - ALTRAS targets landscape desktop and laptop browsers, with 1366×768 and 1920×1080 as primary review sizes.
 - ALTRAS is online-first: Supabase provides authentication, assessment data, and persisted progress.
 - Multiple students have isolated accounts on the same device; one student signs in at a time.
-- Authentication is server-backed (Supabase) for participants and researchers; local auth is used only in offline-fallback mode.
+- Authentication is server-backed by Supabase for participants and researchers, with no browser-only authentication path.
 - Assessments, progress, and settings require an internet connection for full functionality.
 - The Canva concepts guide the charcoal chalkboard atmosphere and learning interactions, not the literal layout or full feature scope.
 - Stable packaged-content IDs are contracts. Compatible IDs preserve progress; semantic breaking changes require new IDs or explicit migrations.
@@ -13,9 +13,9 @@
 ## Phase 1 foundation retained
 
 - React, TypeScript, Vite, React Router, Tailwind CSS, custom CSS, and installable PWA
-- Versioned Dexie/IndexedDB database and Zod validation for local caching
-- PBKDF2-SHA-256 local authentication fallback, with Supabase online auth for main flow
-- Protected routes, session restoration, and Supabase sync
+- Content-only Dexie/IndexedDB cache with Zod validation
+- Supabase authentication and session restoration
+- Protected routes and user-ID-isolated visual-preference caching
 - Main menu, student profile, per-user settings, and reusable UI components
 - Vitest, Testing Library, ESLint, and Prettier tooling
 
@@ -25,7 +25,7 @@
 - Safe instructional paragraphs, examples, and warnings with no HTML payloads
 - Discriminated `find-word` and `organize-translate` activity union
 - Zod-validated, versioned, idempotent local content initialization
-- Additive Dexie v2 migration with content, progress, and attempt tables
+- Content-only Dexie schema; progress and attempts are authoritative in Supabase
 - One six-activity introductory lesson and one prerequisite-gated five-activity `Order Matters` lesson
 - Lesson hub, overview/instruction board, active player, and result page; the legacy preview URL redirects to the normal lesson overview
 - Immediate answer persistence, session recovery, resume, confirmed restart, and preserved abandoned history
@@ -33,12 +33,12 @@
 - Best-result protection, improvement-only XP, and idempotent completion
 - Charcoal/near-black design tokens applied across Phase 1 and Phase 2 screens
 - Keyboard-operable activities, visible focus states, reduced-motion support, and concise corrective feedback
-- Protected Almanac linked only from the lesson hub, with a searchable, fully offline Math Word List
+- Protected Almanac linked only from the lesson hub, with a searchable, locally bundled Math Word List
 
 ## Content and versioning decisions
 
 - Packaged content is bundled TypeScript and requires stable string IDs.
-- `PACKAGED_CONTENT_VERSION` records the educational release independently from Dexie schema version 2.
+- `PACKAGED_CONTENT_VERSION` records the educational release independently from the content-cache schema.
 - Lesson metadata is stored separately from ordered lesson items so navigation can change without changing scoring or progress.
 - Initialization validates the entire manifest before opening a write transaction and uses upserts to avoid duplicates.
 - Progress and attempts are not reseeded or deleted when content updates.
@@ -47,11 +47,11 @@
 
 ### Phase 2.2 content expansion
 
-- `PACKAGED_CONTENT_VERSION` is 2; the Dexie schema remains version 2 because this is a packaged-content update, not a storage-shape change.
+- `PACKAGED_CONTENT_VERSION` is 2 and is independent from the content-only Dexie schema.
 - Lesson 2 retains the stable `lesson-order-matters` ID and its Lesson 1 prerequisite, so existing unlock progress remains valid.
 - Its learning objective is to translate phrases where spoken order affects mathematical order: “less than,” “subtracted from,” “more than,” and “the difference of A and B.”
 - The lesson contains two Find-the-Word activities and three Organize-and-Translate activities, for five activities total.
-- Initialization upserts the new metadata and items without modifying accounts, sessions, settings, attempts, or progress.
+- Initialization upserts only bundled metadata and items; student data remains in Supabase.
 - There is currently no Lesson 3. Additional lessons remain deferred until finalized educational content is provided.
 
 ### Phase 2.3 Math Word List
@@ -94,17 +94,20 @@
 ## Data storage and sync
 
 **Authoritative online data (Supabase):**
+
 - User accounts and authentication
 - Assessment attempts and scores
 - Lesson progress and XP
 - User settings and profile changes
 
 **Local caches:**
+
 - Lesson content (packaged and cached)
 - App shell and static assets
-- Attempt history and progress snapshots
+- User-ID-keyed theme, readability, and motion preferences
 
 **Limitations without internet:**
+
 - Cannot authenticate or sync progress
 - Cannot submit or retrieve assessments
 - Cannot modify profile or settings
@@ -112,6 +115,7 @@
 - Device loss or storage corruption cannot be recovered in Phase 2
 
 **Before research testing:**
+
 - Backup/export and validated recovery procedures must be added
 - Distribution may remain a PWA or use the same frontend inside a Windows wrapper if installation policies make that necessary
 

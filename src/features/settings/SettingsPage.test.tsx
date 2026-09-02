@@ -90,7 +90,7 @@ describe('settings save status', () => {
 
   it('does not reset a newer text-size choice when another setting finishes saving', async () => {
     vi.mocked(getUserSettings).mockResolvedValue(initialSettings);
-    vi.mocked(updateUserSettings).mockImplementation(async (_database, _userId, update) => {
+    vi.mocked(updateUserSettings).mockImplementation(async (_userId, update) => {
       if (update.readabilityScale !== undefined) {
         return { ...initialSettings, readabilityScale: update.readabilityScale, updatedAt: 2 };
       }
@@ -152,5 +152,32 @@ describe('settings save status', () => {
     await screen.findByRole('button', { name: 'Standard' });
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'));
     expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
+  });
+
+  it('shows a recoverable state when Supabase settings cannot load', async () => {
+    vi.mocked(getUserSettings)
+      .mockRejectedValueOnce(new Error('Unable to load online settings.'))
+      .mockResolvedValueOnce(initialSettings);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: 'user-1',
+        normalizedUsername: 'retry_student',
+        displayName: 'Retry Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Settings are unavailable' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: 'Standard' })).toBeVisible();
+    expect(getUserSettings).toHaveBeenCalledTimes(2);
   });
 });

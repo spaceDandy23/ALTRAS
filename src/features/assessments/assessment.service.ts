@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getSupabaseClient, isSupabaseConfigured } from '@/services/supabase.client';
+import { getSupabaseClient } from '@/services/supabase.client';
 import { assertParticipantLearningAccess } from '@/stores/researcher-access.store';
 import {
   assessmentAttemptSchema,
@@ -54,9 +54,6 @@ export class AssessmentError extends Error {
 }
 
 function requireOnlineServices() {
-  if (!isSupabaseConfigured) {
-    throw new AssessmentError('Assessments require an internet connection.');
-  }
   return getSupabaseClient();
 }
 

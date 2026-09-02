@@ -8,7 +8,7 @@ import {
   type LoginInput,
   type RegistrationInput,
 } from './auth.schemas';
-import { AuthError } from './auth.service';
+import { AuthError } from './auth.errors';
 
 const AUTH_DOMAIN = 'students.altras.invalid';
 

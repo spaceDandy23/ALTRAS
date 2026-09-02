@@ -109,7 +109,7 @@ export async function ensureOnlineLessonProgress(
       changes.push(created);
       byLessonId.set(lesson.id, toLessonProgress(created));
     } else if (current.status === 'locked' && prerequisiteCleared) {
-      changes.push({
+      const unlocked = {
         ...newRemoteProgress(userId, lesson, 'available'),
         best_score: current.bestScore,
         best_star_count: current.bestStarCount,
@@ -122,7 +122,9 @@ export async function ensureOnlineLessonProgress(
           ? new Date(current.lastAttemptedAt).toISOString()
           : null,
         cleared_at: current.clearedAt ? new Date(current.clearedAt).toISOString() : null,
-      });
+      };
+      changes.push(unlocked);
+      byLessonId.set(lesson.id, toLessonProgress(unlocked));
     }
   }
 
@@ -133,7 +135,10 @@ export async function ensureOnlineLessonProgress(
     if (error) throw new Error('Unable to initialize online lesson progress.');
   }
 
-  return readProgress(userId);
+  return lessons.flatMap((lesson) => {
+    const progress = byLessonId.get(lesson.id);
+    return progress ? [progress] : [];
+  });
 }
 
 export async function getOnlineLessonProgress(

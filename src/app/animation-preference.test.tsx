@@ -1,16 +1,18 @@
 import { render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
-import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
-import { hydrateVisualPreferencesForUser } from '@/features/settings/visual-preferences.bootstrap';
-import { deactivateVisualPreferences } from '@/features/settings/visual-preferences.cache';
+import {
+  activateVisualPreferencesForUser,
+  cacheVisualPreferences,
+  deactivateVisualPreferences,
+} from '@/features/settings/visual-preferences.cache';
 import { AppShell } from './AppShell';
 
 describe('stored motion preference', () => {
-  afterEach(async () => {
+  afterEach(() => {
     deactivateVisualPreferences();
-    await db.settings.clear();
+    localStorage.clear();
     useAuthStore.setState({ status: 'guest', user: null });
   });
 
@@ -26,19 +28,13 @@ describe('stored motion preference', () => {
         lastLoginAt: Date.now(),
       },
     });
-    await db.settings.put({
-      id: crypto.randomUUID(),
-      userId,
+    cacheVisualPreferences(userId, {
       theme: 'dark',
       readabilityScale: 1,
-      masterVolume: 80,
-      soundEffectsVolume: 80,
-      musicVolume: 60,
       animationsEnabled: false,
-      updatedAt: Date.now(),
     });
 
-    await hydrateVisualPreferencesForUser(userId);
+    activateVisualPreferencesForUser(userId);
     expect(document.documentElement.dataset.motion).toBe('off');
 
     render(
