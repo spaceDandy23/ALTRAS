@@ -11,7 +11,14 @@ const equations = [
 /** A non-interactive, shell-level chalk mark treatment for student pages. */
 export function AlgebraicBackdrop() {
   return (
-    <div className="algebraic-backdrop" aria-hidden="true">
+    <div
+      className="algebraic-backdrop"
+      aria-hidden="true"
+      style={{
+        ['--algebraic-backdrop-color' as string]: 'var(--muted)',
+        ['--algebraic-backdrop-size' as string]: 'clamp(1.1rem, 1.8vw + 0.8rem, 2.8rem)',
+      }}
+    >
       {equations.map((equation) => (
         <span
           key={equation.className}
