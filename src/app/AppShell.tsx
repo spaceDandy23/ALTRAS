@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
+import { AlgebraicBackdrop } from '@/components/decorative/AlgebraicBackdrop';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { resolveTheme } from '@/features/settings/apply-preferences';
@@ -47,12 +48,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <div className="chalk-doodles" aria-hidden="true">
-        <span className="doodle doodle--one">x² + y²</span>
-        <span className="doodle doodle--two">√144 = 12</span>
-        <span className="doodle doodle--three">a ÷ b</span>
-        <span className="doodle doodle--four">5(x + 2)</span>
-      </div>
+      <AlgebraicBackdrop />
       <header className="app-header">
         <AltrasLogo />
         <div className="app-header__tools">

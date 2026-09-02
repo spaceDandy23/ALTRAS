@@ -165,19 +165,16 @@ h3 {
   cursor: pointer;
   font-weight: 800;
   transition:
-    transform 140ms ease,
     box-shadow 140ms ease,
     background 140ms ease,
     border-color 140ms ease;
 }
 
 .button:hover:not(:disabled) {
-  transform: translateY(-2px);
   box-shadow: 0 5px 0 rgba(0, 0, 0, 0.42);
 }
 
 .button:active:not(:disabled) {
-  transform: translateY(1px);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
 }
 
@@ -561,45 +558,77 @@ h3 {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+  isolation: isolate;
   overflow-x: clip;
 }
 
-.chalk-doodles {
+.algebraic-backdrop {
   position: fixed;
-  inset: 0;
-  z-index: -1;
+  inset: 68px 0 0;
+  z-index: 0;
+  overflow: hidden;
   pointer-events: none;
+  user-select: none;
+  font-size: 16px;
 }
 
-.doodle {
+.algebraic-backdrop__equation {
   position: absolute;
-  color: rgba(255, 255, 255, 0.055);
+  color: rgba(247, 243, 227, 0.075);
   font-family: 'Segoe Print', 'Comic Sans MS', cursive;
-  font-size: 1.1rem;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 0 1px rgba(0, 0, 0, 0.16);
 }
 
-.doodle--one {
-  top: 18%;
-  left: 2%;
+.algebraic-backdrop__equation--one {
+  top: 12%;
+  left: 2.5%;
   transform: rotate(-14deg);
 }
 
-.doodle--two {
-  top: 23%;
+.algebraic-backdrop__equation--two {
+  top: 18%;
   right: 3%;
   transform: rotate(8deg);
 }
 
-.doodle--three {
-  bottom: 17%;
-  left: 4%;
-  font-size: 2.7rem;
+.algebraic-backdrop__equation--three {
+  top: 47%;
+  left: 1.4%;
+  font-size: 23px;
+  transform: rotate(6deg);
 }
 
-.doodle--four {
-  right: 4%;
-  bottom: 16%;
+.algebraic-backdrop__equation--four {
+  top: 57%;
+  right: 2.4%;
+  font-size: 24px;
   transform: rotate(-9deg);
+}
+
+.algebraic-backdrop__equation--five {
+  bottom: 10%;
+  left: 5%;
+  transform: rotate(-4deg);
+}
+
+.algebraic-backdrop__equation--six {
+  right: 7%;
+  bottom: 12%;
+  font-size: 21px;
+  transform: rotate(7deg);
+}
+
+.algebraic-backdrop__equation--seven {
+  top: 35%;
+  right: 8%;
+  color: rgba(101, 182, 238, 0.12);
+  font-family: sans-serif;
+  font-size: 40px;
+  font-weight: 900;
 }
 
 .app-header {
@@ -718,6 +747,8 @@ h3 {
 }
 
 .app-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   width: 100%;
   max-width: var(--content-wide);
@@ -3633,6 +3664,15 @@ a.almanac-option:hover {
   background: transparent;
 }
 
+:root[data-theme='light'] .algebraic-backdrop__equation {
+  color: rgba(13, 86, 136, 0.14);
+  text-shadow: none;
+}
+
+:root[data-theme='light'] .algebraic-backdrop__equation--seven {
+  color: rgba(23, 110, 170, 0.16);
+}
+
 :root[data-theme='light'] .form-field__input,
 :root[data-theme='light'] .word-list-search input,
 :root[data-theme='light'] .dialog,
@@ -3856,8 +3896,28 @@ a.almanac-option:hover {
     padding: 1.15rem 1rem 1.5rem;
   }
 
-  .chalk-doodles {
-    opacity: 0.45;
+  .algebraic-backdrop {
+    inset: 62px 0 0;
+  }
+
+  .algebraic-backdrop__equation--three,
+  .algebraic-backdrop__equation--four,
+  .algebraic-backdrop__equation--six,
+  .algebraic-backdrop__equation--seven {
+    display: none;
+  }
+
+  .algebraic-backdrop__equation--one {
+    top: 14%;
+    left: 1.25%;
+    font-size: 15px;
+  }
+
+  .algebraic-backdrop__equation--two {
+    top: auto;
+    right: 1.25%;
+    bottom: 10%;
+    font-size: 15px;
   }
 
   .home-start.menu-grid {
