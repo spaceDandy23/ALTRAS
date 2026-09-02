@@ -58,6 +58,32 @@ describe('route guards', () => {
     expect(screen.queryByText('Private content')).not.toBeInTheDocument();
   });
 
+  it('keeps the sign-in screen stable while guest auth is still resolving', () => {
+    useAuthStore.setState({ status: 'loading', user: null });
+
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              <GuestOnlyRoute>
+                <p>Login form</p>
+              </GuestOnlyRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const loading = screen.getByRole('status');
+    expect(loading).toHaveClass('loading-state--screen');
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading).toHaveTextContent('Checking sign-in status…');
+    expect(screen.queryByText('Opening your classroom…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Login form')).not.toBeInTheDocument();
+  });
+
   it('redirects an authenticated student away from login', () => {
     useAuthStore.setState({
       status: 'authenticated',

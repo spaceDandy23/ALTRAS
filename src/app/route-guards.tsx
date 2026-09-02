@@ -18,7 +18,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
 export function GuestOnlyRoute({ children }: { children: ReactNode }) {
   const status = useAuthStore((state) => state.status);
-  if (status === 'idle' || status === 'loading') return <AppLoading />;
+  if (status === 'idle' || status === 'loading') return <AppLoading message="Checking sign-in status…" />;
   if (status === 'authenticated') return <Navigate to="/" replace />;
   return children;
 }
