@@ -12,6 +12,11 @@ import {
   submitAssessmentAnswer,
 } from './assessment.service';
 
+const audio = vi.hoisted(() => ({
+  playCompletion: vi.fn(),
+  playSfx: vi.fn(),
+}));
+
 vi.mock('./assessment.service', () => ({
   completeAssessment: vi.fn(),
   getAssessmentAttempt: vi.fn(),
@@ -19,6 +24,7 @@ vi.mock('./assessment.service', () => ({
   startAssessment: vi.fn(),
   submitAssessmentAnswer: vi.fn(),
 }));
+vi.mock('@/services/audio/audio.manager', () => audio);
 
 const userId = '20000000-0000-4000-8000-000000000002';
 const questions: AssessmentQuestion[] = [
@@ -129,7 +135,9 @@ describe('assessment character guidance', () => {
     const companion = screen.getByLabelText('Mina, learning companion');
     expect(companion).toHaveAttribute('data-character-state', 'neutral');
     expect(companion).toHaveTextContent('assessment is complete');
-    const notice = screen.getByText('Correct answers are hidden while the research is in progress.');
+    const notice = screen.getByText(
+      'Correct answers are hidden while the research is in progress.',
+    );
     expect(notice.parentElement).toHaveClass('result-actions', 'assessment-result__actions');
   });
 
@@ -201,6 +209,13 @@ describe('assessment character guidance', () => {
     await act(async () => pendingSave.resolve(attempt('active', [answer()])));
     expect(await screen.findByText('Pre-test complete')).toBeInTheDocument();
     expect(completeAssessment).toHaveBeenCalledTimes(1);
+    expect(audio.playCompletion).toHaveBeenCalledWith(
+      '10000000-0000-4000-8000-000000000001',
+      false,
+    );
+    expect(audio.playSfx).toHaveBeenCalledWith('click');
+    expect(audio.playSfx).not.toHaveBeenCalledWith('correct');
+    expect(audio.playSfx).not.toHaveBeenCalledWith('incorrect');
   });
 
   it('does not advance or complete when saving fails and preserves the choice for retry', async () => {

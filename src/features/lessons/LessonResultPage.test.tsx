@@ -20,6 +20,7 @@ vi.mock('./progress/progress.service', () => ({
   getLessonHubData: vi.fn(),
   getLessonProgress: vi.fn(),
 }));
+vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
 
 describe('final lesson result actions', () => {
   afterEach(() => {

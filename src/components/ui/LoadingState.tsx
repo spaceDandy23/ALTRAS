@@ -3,7 +3,7 @@ export function LoadingState({
   className = '',
   variant = 'contained',
 }: {
-  message: string;
+  message?: string;
   className?: string;
   variant?: 'screen' | 'page' | 'contained';
 }) {
@@ -17,7 +17,7 @@ export function LoadingState({
       <div className="loading-mark" aria-hidden="true">
         x + ?
       </div>
-      <p>{message}</p>
+      {message ? <p>{message}</p> : null}
     </div>
   );
 }

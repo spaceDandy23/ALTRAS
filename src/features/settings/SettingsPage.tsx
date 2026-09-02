@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { getUserSettings, updateUserSettings, type SettingsUpdate } from './settings.service';
 import { applyVisualPreferences } from './apply-preferences';
 import type { UserSettings } from '@/types/models';
+import { setAudioVolumes } from '@/services/audio/audio.manager';
 
 function VolumeControl({
   label,
@@ -79,6 +80,7 @@ export function SettingsPage() {
         setSettingsUserId(user.id);
         setLoadFailure(null);
         applyVisualPreferences(loaded);
+        setAudioVolumes(loaded);
       })
       .catch(() => {
         if (active) {
@@ -124,6 +126,7 @@ export function SettingsPage() {
       if (!current) return current;
       const next = { ...current, ...update };
       applyVisualPreferences(next);
+      setAudioVolumes(next);
       return next;
     });
     setSaveState('saving');
@@ -137,6 +140,7 @@ export function SettingsPage() {
         if (!current) return saved;
         const reconciled = { ...current, ...update, updatedAt: saved.updatedAt };
         applyVisualPreferences(reconciled);
+        setAudioVolumes(reconciled);
         return reconciled;
       });
       setSaveState('saved');
@@ -149,7 +153,12 @@ export function SettingsPage() {
   const previewSetting = (update: SettingsUpdate) => {
     ++latestSaveRef.current;
     setSaveState('idle');
-    setSettings((current) => (current ? { ...current, ...update } : current));
+    setSettings((current) => {
+      if (!current) return current;
+      const next = { ...current, ...update };
+      setAudioVolumes(next);
+      return next;
+    });
   };
 
   const themeOptions = [

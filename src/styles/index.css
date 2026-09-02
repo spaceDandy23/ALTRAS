@@ -579,7 +579,8 @@ h3 {
   letter-spacing: 0.05em;
   white-space: nowrap;
   opacity: 0.44;
-  text-shadow: 0 0 12px color-mix(in srgb, var(--algebraic-backdrop-color, var(--muted)) 25%, transparent);
+  text-shadow: 0 0 12px
+    color-mix(in srgb, var(--algebraic-backdrop-color, var(--muted)) 25%, transparent);
 }
 
 .algebraic-backdrop__equation--one {
@@ -708,6 +709,26 @@ h3 {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+.audio-mute-button {
+  display: grid;
+  width: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--paper);
+  background: var(--control-bg);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.audio-mute-button:hover,
+.audio-mute-button[aria-pressed='true'] {
+  border-color: var(--line-strong);
+  background: var(--surface-soft);
 }
 
 .user-menu {
@@ -3952,6 +3973,11 @@ a.almanac-option:hover {
 
   .user-menu summary {
     min-width: auto;
+    min-height: 44px;
+  }
+
+  .audio-mute-button {
+    min-width: 44px;
     min-height: 44px;
   }
 

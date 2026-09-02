@@ -15,4 +15,10 @@ describe('LoadingState', () => {
     expect(loading).toHaveTextContent('Opening lesson…');
     expect(loading.querySelector('.loading-mark')).toHaveAttribute('aria-hidden', 'true');
   });
+
+  it('omits descriptive copy when a loader is intentionally visual-only', () => {
+    render(<LoadingState variant="page" />);
+
+    expect(screen.getByRole('status').querySelector('p')).not.toBeInTheDocument();
+  });
 });

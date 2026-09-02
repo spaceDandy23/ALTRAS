@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { FindWordActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
+import { playSfx } from '@/services/audio/audio.manager';
 
 export function FindWordActivityView({
   activity,
@@ -25,6 +26,7 @@ export function FindWordActivityView({
 
   const submit = async () => {
     if (!selected || submitted) return;
+    playSfx('click');
     setSaving(true);
     try {
       await onSubmit(selected);
@@ -82,7 +84,10 @@ export function FindWordActivityView({
                   name={activity.id}
                   value={choice.id}
                   checked={visibleAnswer === choice.id}
-                  onChange={() => setSelected(choice.id)}
+                  onChange={() => {
+                    playSfx('click');
+                    setSelected(choice.id);
+                  }}
                 />
                 <span>{choice.label}</span>
               </label>

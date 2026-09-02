@@ -9,7 +9,7 @@ export function ContentState({ children }: { children: ReactNode }) {
   const initialize = useContentStore((state) => state.initialize);
 
   if (status === 'idle' || status === 'loading') {
-    return <LoadingState variant="page" message="Preparing local lessons…" />;
+    return <LoadingState variant="page" />;
   }
   if (status === 'error') {
     return (

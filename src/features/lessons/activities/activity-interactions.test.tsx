@@ -5,6 +5,8 @@ import { packagedContent } from '../content/packaged-content';
 import { FindWordActivityView } from './FindWordActivityView';
 import { OrganizeTranslateActivityView } from './OrganizeTranslateActivityView';
 
+vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
+
 describe('accessible lesson activity interactions', () => {
   it('allows keyboard choice selection and requires explicit Find-the-Word submission', async () => {
     const user = userEvent.setup();

@@ -8,6 +8,7 @@ import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { loginSchema } from './auth.schemas';
 import { AuthFrame } from './AuthFrame';
 import { resolvePostLoginDestination } from './post-login-route';
+import { playSfx } from '@/services/audio/audio.manager';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -33,6 +34,7 @@ export function LoginPage() {
       return;
     }
 
+    playSfx('click');
     submittingRef.current = true;
     setSubmitting(true);
     try {

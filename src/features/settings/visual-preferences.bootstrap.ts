@@ -1,5 +1,6 @@
 import { applyVisualPreferences } from './apply-preferences';
 import { getUserSettings } from './settings.service';
+import { setAudioVolumes } from '@/services/audio/audio.manager';
 import {
   activateVisualPreferencesForUser,
   applyAuthoritativeVisualPreferences,
@@ -12,6 +13,11 @@ export async function hydrateVisualPreferencesForUser(userId: string): Promise<v
   try {
     const authoritative = await getUserSettings(userId);
     applyAuthoritativeVisualPreferences(userId, authoritative);
+    setAudioVolumes({
+      masterVolume: authoritative.masterVolume,
+      soundEffectsVolume: authoritative.soundEffectsVolume,
+      musicVolume: authoritative.musicVolume,
+    });
   } catch {
     if (cached && getActiveVisualPreferencesUserId() === userId) {
       applyVisualPreferences(cached);

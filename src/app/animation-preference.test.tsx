@@ -1,12 +1,20 @@
 import { render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import {
   activateVisualPreferencesForUser,
   cacheVisualPreferences,
   deactivateVisualPreferences,
 } from '@/features/settings/visual-preferences.cache';
+
+vi.mock('@/services/audio/audio.manager', () => ({
+  getAudioMuted: () => false,
+  playMusic: vi.fn(),
+  playSfx: vi.fn(),
+  setAudioMuted: vi.fn(),
+  stopMusic: vi.fn(),
+}));
 import { AppShell } from './AppShell';
 
 describe('stored motion preference', () => {

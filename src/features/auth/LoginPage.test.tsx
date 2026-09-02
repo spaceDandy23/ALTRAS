@@ -7,6 +7,8 @@ import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { LoginPage } from './LoginPage';
 import { resolvePostLoginDestination } from './post-login-route';
 
+vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
+
 const originalLogin = useAuthStore.getState().login;
 
 afterEach(() => {

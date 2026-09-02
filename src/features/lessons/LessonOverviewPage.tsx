@@ -16,6 +16,7 @@ import { getLessonProgress } from './progress/progress.service';
 import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
+import { playSfx } from '@/services/audio/audio.manager';
 
 export function LessonOverviewPage() {
   const { lessonId = '' } = useParams();
@@ -44,6 +45,7 @@ export function LessonOverviewPage() {
   if (!user) return null;
   const begin = () => {
     if (progress?.status === 'locked' || transitionBusy) return;
+    playSfx('click');
     void startTransition({
       loadingMessage: active ? 'Restoring your attempt…' : 'Preparing your lesson…',
       run: async () => {
@@ -115,7 +117,10 @@ export function LessonOverviewPage() {
                       <Button
                         variant="quiet"
                         disabled={transitionBusy}
-                        onClick={() => setConfirmRestart(true)}
+                        onClick={() => {
+                          playSfx('click');
+                          setConfirmRestart(true);
+                        }}
                       >
                         Restart lesson
                       </Button>

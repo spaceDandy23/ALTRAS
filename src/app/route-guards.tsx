@@ -27,7 +27,7 @@ function AuthenticatedBootstrapShell() {
         </div>
       </header>
       <main className="app-content">
-        <LoadingState variant="page" message="Opening your classroom…" />
+        <LoadingState variant="page" />
       </main>
     </div>
   );
@@ -36,7 +36,7 @@ function AuthenticatedBootstrapShell() {
 export function GuestOnlyRoute({ children }: { children: ReactNode }) {
   const status = useAuthStore((state) => state.status);
   if (status === 'idle' || status === 'loading') {
-    return <AppLoading message="" />;
+    return <AppLoading />;
   }
   if (status === 'authenticated') return <Navigate to="/" replace />;
   return children;
@@ -53,7 +53,7 @@ export function StudentRoute({ children }: { children: ReactNode }) {
   }, [checkAccess, user]);
 
   if (!user || checkedUserId !== user.id || status === 'idle' || status === 'loading') {
-    return <LoadingState variant="page" message="Verifying account access…" />;
+    return <LoadingState variant="page" />;
   }
 
   if (status === 'authorized') return <Navigate to="/researcher/results" replace />;
@@ -74,6 +74,6 @@ export function StudentRoute({ children }: { children: ReactNode }) {
   return children;
 }
 
-export function AppLoading({ message = 'Opening your classroom…' }: { message?: string }) {
+export function AppLoading({ message }: { message?: string }) {
   return <LoadingState variant="screen" message={message} />;
 }

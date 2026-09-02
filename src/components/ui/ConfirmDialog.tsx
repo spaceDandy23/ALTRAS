@@ -1,5 +1,6 @@
 import { Button } from './Button';
 import { createPortal } from 'react-dom';
+import { playSfx } from '@/services/audio/audio.manager';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -34,10 +35,23 @@ export function ConfirmDialog({
         <h2 id="dialog-title">{title}</h2>
         <div className="dialog__body">{children}</div>
         <div className="dialog__actions">
-          <Button variant="quiet" onClick={onCancel}>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              playSfx('click');
+              onCancel();
+            }}
+          >
             Cancel
           </Button>
-          <Button variant="danger" onClick={onConfirm} autoFocus>
+          <Button
+            variant="danger"
+            onClick={() => {
+              playSfx('click');
+              onConfirm();
+            }}
+            autoFocus
+          >
             {confirmLabel}
           </Button>
         </div>

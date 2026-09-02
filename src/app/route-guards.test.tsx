@@ -54,7 +54,7 @@ describe('route guards', () => {
     const loading = screen.getByRole('status');
     expect(loading).toHaveClass('loading-state--page');
     expect(loading).toHaveAttribute('aria-busy', 'true');
-    expect(loading).toHaveTextContent('Opening your classroom…');
+    expect(loading.querySelector('p')).not.toBeInTheDocument();
     expect(screen.queryByText('Private content')).not.toBeInTheDocument();
   });
 
@@ -78,6 +78,7 @@ describe('route guards', () => {
 
     const loading = screen.getByRole('status');
     expect(loading).toHaveClass('loading-state--screen');
+    expect(loading.querySelector('p')).not.toBeInTheDocument();
     expect(loading).not.toHaveTextContent('Checking sign in status');
     expect(loading).not.toHaveTextContent('Checking sign in state');
     expect(loading).not.toHaveTextContent('Opening your classroom…');

@@ -17,7 +17,9 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/howler": "^2.2.13",
     "dexie": "^4.4.5",
+    "howler": "^2.2.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",

@@ -20,6 +20,7 @@ import {
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
+import { playSfx } from '@/services/audio/audio.manager';
 
 export function LessonResultPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -31,7 +32,6 @@ export function LessonResultPage() {
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
   const [nextEntry, setNextEntry] = useState<LessonHubEntry | null>(null);
-
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
     void Promise.all([
@@ -127,15 +127,26 @@ export function LessonResultPage() {
           />
           <div className="result-actions">
             {attempt.cleared && nextEntry ? (
-              <Link className="button button--primary" to={nextDestination}>
+              <Link
+                className="button button--primary"
+                to={nextDestination}
+                onClick={() => playSfx('click')}
+              >
                 View next lesson
               </Link>
             ) : (
-              <Button onClick={retry} disabled={transitionBusy} aria-busy={transitionBusy}>
+              <Button
+                onClick={() => {
+                  playSfx('click');
+                  retry();
+                }}
+                disabled={transitionBusy}
+                aria-busy={transitionBusy}
+              >
                 {attempt.cleared ? 'Review lesson' : 'Retry lesson'}
               </Button>
             )}
-            <Link className="button button--quiet" to="/lessons">
+            <Link className="button button--quiet" to="/lessons" onClick={() => playSfx('click')}>
               Lessons
             </Link>
           </div>

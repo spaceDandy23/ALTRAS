@@ -15,7 +15,7 @@ export function ResearcherRoute({ children }: { children: ReactNode }) {
   }, [checkAccess, user]);
 
   if (!user || status === 'idle' || status === 'loading') {
-    return <LoadingState variant="page" message="Verifying researcher access…" />;
+    return <LoadingState variant="page" />;
   }
 
   if (status === 'denied') {

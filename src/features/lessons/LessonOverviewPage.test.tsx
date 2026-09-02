@@ -18,6 +18,7 @@ vi.mock('./attempts/attempt.service', () => ({
 }));
 vi.mock('./content/content.service', () => ({ getLesson: vi.fn() }));
 vi.mock('./progress/progress.service', () => ({ getLessonProgress: vi.fn() }));
+vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
 
 describe('lesson overview transitions', () => {
   afterEach(() => {

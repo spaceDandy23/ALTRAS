@@ -21,6 +21,7 @@ import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateAct
 import type { ActivityAnswer } from './domain/evaluation';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
+import { playCompletion, playSfx } from '@/services/audio/audio.manager';
 
 export function ActiveLessonPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -56,7 +57,11 @@ export function ActiveLessonPage() {
           return;
         }
         if (loadedAttempt.answers.length >= loadedLesson.activities.length) {
-          await completeAttempt(db, loadedAttempt.id);
+          const completedAttempt = await completeAttempt(db, loadedAttempt.id);
+          playCompletion(
+            completedAttempt.id,
+            completedAttempt.cleared === true && completedAttempt.xpImprovement > 0,
+          );
           navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
           return;
         }
@@ -125,6 +130,8 @@ export function ActiveLessonPage() {
     try {
       const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer, attempt);
       setAttempt(updated);
+      const submittedAnswer = updated.answers.find((item) => item.activityId === activity.id);
+      if (submittedAnswer) playSfx(submittedAnswer.isCorrect ? 'correct' : 'incorrect');
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -133,12 +140,17 @@ export function ActiveLessonPage() {
 
   const continueLesson = () => {
     if (!submitted || transitionBusy) return;
+    playSfx('click');
     if (activityIndex === lesson.activities.length - 1) {
       void startTransition({
         loadingMessage: 'Preparing your results…',
         run: async () => {
           await flushActiveTime().catch(() => undefined);
-          await completeAttempt(db, attempt.id);
+          const completedAttempt = await completeAttempt(db, attempt.id);
+          playCompletion(
+            completedAttempt.id,
+            completedAttempt.cleared === true && completedAttempt.xpImprovement > 0,
+          );
           return `/lessons/${lesson.id}/result/${attempt.id}`;
         },
         fallbackError: 'Unable to prepare your lesson result.',

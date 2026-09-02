@@ -5,6 +5,7 @@ import { FormField } from '@/components/ui/FormField';
 import { useAuthStore } from '@/stores/auth.store';
 import { registrationSchema } from './auth.schemas';
 import { AuthFrame } from './AuthFrame';
+import { playSfx } from '@/services/audio/audio.manager';
 
 export function RegisterPage() {
   const [form, setForm] = useState({
@@ -36,6 +37,7 @@ export function RegisterPage() {
       return;
     }
 
+    playSfx('click');
     setSubmitting(true);
     try {
       await register(form);
