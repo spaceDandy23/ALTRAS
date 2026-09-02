@@ -1,6 +1,6 @@
 import { Button } from './Button';
 import { createPortal } from 'react-dom';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -37,19 +37,17 @@ export function ConfirmDialog({
         <div className="dialog__actions">
           <Button
             variant="quiet"
-            onClick={() => {
-              playSfx('click');
-              onCancel();
-            }}
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+            onClick={onCancel}
           >
             Cancel
           </Button>
           <Button
             variant="danger"
-            onClick={() => {
-              playSfx('click');
-              onConfirm();
-            }}
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+            onClick={onConfirm}
             autoFocus
           >
             {confirmLabel}

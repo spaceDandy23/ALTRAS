@@ -14,7 +14,8 @@ import {
   submitAssessmentAnswer,
 } from './assessment.service';
 import type { AssessmentQuestion } from '@/types/assessment';
-import { playCompletion, playSfx } from '@/services/audio/audio.manager';
+import { playCompletion } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds} sec`;
@@ -122,7 +123,8 @@ export function AssessmentPage() {
           <Link
             className="button button--primary assessment-result__return"
             to="/"
-            onClick={() => playSfx('click')}
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
           >
             Return home
           </Link>
@@ -133,7 +135,6 @@ export function AssessmentPage() {
 
   const begin = async () => {
     if (!user) return;
-    playSfx('click');
     setSaving(true);
     setError('');
     try {
@@ -173,7 +174,7 @@ export function AssessmentPage() {
           <Link className="button button--quiet" to="/">
             Not now
           </Link>
-          <Button onClick={() => void begin()} disabled={saving || questions.length === 0}>
+          <Button onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown} onClick={() => void begin()} disabled={saving || questions.length === 0}>
             {saving ? 'Starting…' : `Start ${title.toLowerCase()}`}
           </Button>
         </div>
@@ -207,14 +208,12 @@ export function AssessmentPage() {
 
   const choose = (choiceId: string) => {
     if (!user || !question || submitted || saving || actionPendingRef.current) return;
-    playSfx('click');
     setSelectedChoiceId(choiceId);
     void saveChoice(choiceId).catch(() => undefined);
   };
 
   const continueTest = async () => {
     if (!user || !question || !displayedChoiceId || actionPendingRef.current) return;
-    playSfx('click');
     actionPendingRef.current = true;
     const isFinalQuestion = questionIndex === questions.length - 1;
     setPendingAction(isFinalQuestion ? 'submit' : 'continue');
@@ -290,6 +289,8 @@ export function AssessmentPage() {
               key={choice.id}
               className={displayedChoiceId === choice.id ? 'is-selected' : ''}
               disabled={saving || Boolean(submitted) || Boolean(pendingAction)}
+              onPointerDown={playNeutralClickOnPointerDown}
+              onKeyDown={playNeutralClickOnKeyDown}
               onClick={() => choose(choice.id)}
             >
               <span aria-hidden="true">{choice.id.toUpperCase()}</span>
@@ -311,6 +312,8 @@ export function AssessmentPage() {
                     : ''}
           </span>
           <Button
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
             onClick={() => void continueTest()}
             disabled={!displayedChoiceId || Boolean(pendingAction)}
             aria-busy={Boolean(pendingAction)}

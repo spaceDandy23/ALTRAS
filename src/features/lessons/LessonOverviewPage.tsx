@@ -16,7 +16,7 @@ import { getLessonProgress } from './progress/progress.service';
 import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function LessonOverviewPage() {
   const { lessonId = '' } = useParams();
@@ -45,7 +45,6 @@ export function LessonOverviewPage() {
   if (!user) return null;
   const begin = () => {
     if (progress?.status === 'locked' || transitionBusy) return;
-    playSfx('click');
     void startTransition({
       loadingMessage: active ? 'Restoring your attempt…' : 'Preparing your lesson…',
       run: async () => {
@@ -106,7 +105,7 @@ export function LessonOverviewPage() {
                   </p>
                 ) : (
                   <div className="lesson-overview__actions lesson-summary">
-                    <Button onClick={begin} disabled={transitionBusy} aria-busy={transitionBusy}>
+                    <Button onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown} onClick={begin} disabled={transitionBusy} aria-busy={transitionBusy}>
                       {active
                         ? 'Resume lesson'
                         : progress.attemptCount > 0
@@ -117,8 +116,9 @@ export function LessonOverviewPage() {
                       <Button
                         variant="quiet"
                         disabled={transitionBusy}
+                        onPointerDown={playNeutralClickOnPointerDown}
+                        onKeyDown={playNeutralClickOnKeyDown}
                         onClick={() => {
-                          playSfx('click');
                           setConfirmRestart(true);
                         }}
                       >

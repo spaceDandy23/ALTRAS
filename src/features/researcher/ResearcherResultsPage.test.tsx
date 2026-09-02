@@ -69,7 +69,7 @@ describe('researcher results dashboard', () => {
 
     expect(await screen.findByText('No participant data yet')).toBeInTheDocument();
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
-    expect(screen.getAllByText('—')).toHaveLength(3);
+    expect(screen.getAllByText('—')).toHaveLength(4);
   });
 
   it('supports search, filters, sorting, and anonymized participant details', async () => {
@@ -78,6 +78,9 @@ describe('researcher results dashboard', () => {
     render(<ResearcherResultsPage />);
 
     await screen.findByText('ALT-8F21C4A1');
+    expect(screen.getByRole('heading', { name: 'Average scores' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Completed assessment scores' })).toBeInTheDocument();
+    expect(screen.getByText('Assessment completion')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Assessment filter'), 'both-completed');
     expect(screen.getByText('ALT-8F21C4A1')).toBeInTheDocument();
     expect(screen.queryByText('ALT-8F21C4A2')).not.toBeInTheDocument();

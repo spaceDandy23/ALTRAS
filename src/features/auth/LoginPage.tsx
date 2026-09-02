@@ -8,7 +8,7 @@ import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { loginSchema } from './auth.schemas';
 import { AuthFrame } from './AuthFrame';
 import { resolvePostLoginDestination } from './post-login-route';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -34,7 +34,6 @@ export function LoginPage() {
       return;
     }
 
-    playSfx('click');
     submittingRef.current = true;
     setSubmitting(true);
     try {
@@ -88,6 +87,8 @@ export function LoginPage() {
           fullWidth
           disabled={submitting}
           aria-busy={submitting}
+          onPointerDown={playNeutralClickOnPointerDown}
+          onKeyDown={playNeutralClickOnKeyDown}
           className="auth-sign-in__submit"
         >
           <span className="auth-sign-in__submit-content" aria-live="polite">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { AlgebraicBackdrop } from '@/components/decorative/AlgebraicBackdrop';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
@@ -10,10 +10,10 @@ import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import {
   getAudioMuted,
   playMusic,
-  playSfx,
   setAudioMuted,
   stopMusic,
 } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function AppShell() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
@@ -24,6 +24,9 @@ export function AppShell() {
   const researcherStatus = useResearcherAccessStore((state) => state.status);
   const checkResearcherAccess = useResearcherAccessStore((state) => state.checkAccess);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isResearcherArea = location.pathname.startsWith('/researcher/');
+  const showResearcherShell = isResearcherArea || researcherStatus === 'authorized';
   useEffect(() => {
     const colorScheme =
       typeof window.matchMedia === 'function'
@@ -48,9 +51,13 @@ export function AppShell() {
   }, [checkResearcherAccess, user]);
 
   useEffect(() => {
+    if (isResearcherArea || researcherStatus === 'authorized') {
+      stopMusic();
+      return;
+    }
     playMusic('main');
     return stopMusic;
-  }, []);
+  }, [isResearcherArea, researcherStatus]);
 
   const handleLogout = async () => {
     await logout();
@@ -67,8 +74,11 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <AlgebraicBackdrop />
-      <header className="app-header">
+      <header className={`app-header${showResearcherShell ? ' app-header--researcher' : ''}`}>
         <AltrasLogo />
+        {showResearcherShell ? (
+          <ResearcherHeader userName={user?.displayName} onLogout={() => setConfirmingLogout(true)} />
+        ) : (
         <div className="app-header__tools">
           <OfflineStatus />
           <button
@@ -78,7 +88,14 @@ export function AppShell() {
             aria-pressed={audioMuted}
             onClick={toggleAudioMute}
           >
-            <span aria-hidden="true">{audioMuted ? '🔇' : '🔊'}</span>
+            <svg className="audio-mute-button__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" />
+              {audioMuted ? (
+                <path d="m17 9 4 6m0-6-4 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              ) : (
+                <path d="M16 9.5a4 4 0 0 1 0 5m2-7.5a7 7 0 0 1 0 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              )}
+            </svg>
           </button>
           <details className="user-menu" ref={menuRef}>
             <summary aria-label={`Open account menu for ${user?.displayName ?? 'student'}`}>
@@ -91,41 +108,27 @@ export function AppShell() {
               </span>
             </summary>
             <nav className="user-menu__popover" aria-label="Account">
-              {researcherStatus !== 'authorized' && (
-                <Link
-                  to="/profile"
-                  onClick={() => {
-                    playSfx('click');
-                    closeUserMenu();
-                  }}
-                >
-                  Profile
-                </Link>
-              )}
-              {researcherStatus === 'authorized' && (
-                <Link
-                  to="/researcher/results"
-                  onClick={() => {
-                    playSfx('click');
-                    closeUserMenu();
-                  }}
-                >
-                  Researcher results
-                </Link>
-              )}
+              <Link
+                to="/profile"
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
+                onClick={closeUserMenu}
+              >
+                Profile
+              </Link>
               <Link
                 to="/settings"
-                onClick={() => {
-                  playSfx('click');
-                  closeUserMenu();
-                }}
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
+                onClick={closeUserMenu}
               >
                 Settings
               </Link>
               <button
                 className="logout-button"
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
                 onClick={() => {
-                  playSfx('click');
                   closeUserMenu();
                   setConfirmingLogout(true);
                 }}
@@ -135,6 +138,7 @@ export function AppShell() {
             </nav>
           </details>
         </div>
+        )}
       </header>
       <main className="app-content">
         <Outlet />
@@ -148,6 +152,22 @@ export function AppShell() {
       >
         Your progress will remain on this device. You can sign back in at any time.
       </ConfirmDialog>
+    </div>
+  );
+}
+
+function ResearcherHeader({ userName, onLogout }: { userName?: string; onLogout: () => void }) {
+  return (
+    <div className="researcher-header__tools">
+      <span className="researcher-header__identity">Research console · {userName}</span>
+      <nav className="researcher-header__nav" aria-label="Researcher navigation">
+        <Link to="/researcher/results" aria-current="page">
+          Researcher results
+        </Link>
+        <button type="button" onClick={onLogout}>
+          Log out
+        </button>
+      </nav>
     </div>
   );
 }

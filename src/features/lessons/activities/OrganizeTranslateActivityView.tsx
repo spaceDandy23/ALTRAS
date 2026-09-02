@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { OrganizeTranslateActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function OrganizeTranslateActivityView({
   activity,
@@ -23,7 +23,6 @@ export function OrganizeTranslateActivityView({
   const available = activity.tokens.filter((token) => !sequence.includes(token.id));
   const submit = async () => {
     if (sequence.length !== activity.tokens.length || submitted) return;
-    playSfx('click');
     setSaving(true);
     try {
       await onSubmit(sequence);
@@ -84,10 +83,9 @@ export function OrganizeTranslateActivityView({
               <button
                 key={token.id}
                 className="available-token"
-                onClick={() => {
-                  playSfx('click');
-                  setSequence((current) => [...current, token.id]);
-                }}
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
+                onClick={() => setSequence((current) => [...current, token.id])}
               >
                 <span aria-hidden="true">+</span> {token.label}
               </button>
@@ -112,6 +110,8 @@ export function OrganizeTranslateActivityView({
             )}
             <Button
               disabled={sequence.length !== activity.tokens.length || saving}
+              onPointerDown={playNeutralClickOnPointerDown}
+              onKeyDown={playNeutralClickOnKeyDown}
               onClick={() => void submit()}
             >
               {saving ? 'Checking…' : 'Submit translation'}

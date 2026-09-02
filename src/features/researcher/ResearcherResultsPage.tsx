@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Modal } from '@/components/ui/Modal';
 import {
+  calculateScoreDistribution,
   calculateResearcherSummary,
   getResearcherResults,
   type ResearcherParticipantResult,
@@ -146,6 +147,7 @@ export function ResearcherResultsPage() {
   };
 
   const summary = useMemo(() => calculateResearcherSummary(participants), [participants]);
+  const scoreDistribution = useMemo(() => calculateScoreDistribution(participants), [participants]);
   const matchingParticipants = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleUpperCase('en-US');
     return participants
@@ -204,7 +206,7 @@ export function ResearcherResultsPage() {
     <section className="researcher-results page-enter" aria-labelledby="researcher-results-title">
       <header className="researcher-results__heading">
         <div>
-          <p className="researcher-kicker">Researcher results</p>
+          <p className="researcher-kicker">Research dashboard</p>
           <h1 id="researcher-results-title">Anonymized participant outcomes</h1>
           <p>
             Participant identities are anonymized. This view does not include names, emails,
@@ -218,6 +220,10 @@ export function ResearcherResultsPage() {
         <SummaryCard label="Pre-test completed" value={summary.preTestCompletedCount} />
         <SummaryCard label="Post-test completed" value={summary.postTestCompletedCount} />
         <SummaryCard label="Both assessments" value={summary.bothCompletedCount} />
+        <SummaryCard
+          label="Assessment completion"
+          value={summary.assessmentCompletionRate === null ? '—' : `${summary.assessmentCompletionRate.toFixed(0)}%`}
+        />
         <SummaryCard label="Average pre-test" value={formatScore(summary.averagePreTestScore)} />
         <SummaryCard label="Average post-test" value={formatScore(summary.averagePostTestScore)} />
         <SummaryCard
@@ -236,6 +242,14 @@ export function ResearcherResultsPage() {
             String(summary.allLessonsCompletedCount) + ' / ' + String(summary.participantCount)
           }
         />
+      </section>
+
+      <section className="researcher-charts" aria-label="Assessment score analysis">
+        <ScoreComparisonChart
+          preTestAverage={summary.averagePreTestScore}
+          postTestAverage={summary.averagePostTestScore}
+        />
+        <ScoreDistributionChart distribution={scoreDistribution} />
       </section>
 
       <section className="researcher-directory panel" aria-labelledby="participant-results-title">
@@ -471,6 +485,77 @@ export function ResearcherResultsPage() {
           </div>
         )}
       </Modal>
+    </section>
+  );
+}
+
+function ScoreComparisonChart({
+  preTestAverage,
+  postTestAverage,
+}: {
+  preTestAverage: number | null;
+  postTestAverage: number | null;
+}) {
+  const hasScores = preTestAverage !== null || postTestAverage !== null;
+  return (
+    <section className="researcher-chart panel" aria-labelledby="score-comparison-title">
+      <div className="researcher-chart__heading">
+        <div>
+          <p className="researcher-kicker">Assessment comparison</p>
+          <h2 id="score-comparison-title">Average scores</h2>
+        </div>
+        <span className="researcher-chart__note">Completed assessments only</span>
+      </div>
+      {hasScores ? (
+        <div className="score-comparison" role="img" aria-label={`Average pre-test score ${formatScore(preTestAverage)}. Average post-test score ${formatScore(postTestAverage)}.`}>
+          <ScoreBar label="Pre-test" value={preTestAverage} tone="pre" />
+          <ScoreBar label="Post-test" value={postTestAverage} tone="post" />
+        </div>
+      ) : (
+        <p className="researcher-chart__empty">No completed assessment scores are available yet.</p>
+      )}
+    </section>
+  );
+}
+
+function ScoreBar({ label, value, tone }: { label: string; value: number | null; tone: 'pre' | 'post' }) {
+  return (
+    <div className="score-comparison__row">
+      <div className="score-comparison__label"><span>{label}</span><strong>{formatScore(value)}</strong></div>
+      <div className="score-comparison__track" aria-hidden="true">
+        <span className={`score-comparison__bar score-comparison__bar--${tone}`} style={{ width: `${value ?? 0}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ScoreDistributionChart({ distribution }: { distribution: ReturnType<typeof calculateScoreDistribution> }) {
+  const highestCount = Math.max(1, ...distribution.flatMap((bin) => [bin.preTestCount, bin.postTestCount]));
+  const hasScores = distribution.some((bin) => bin.preTestCount > 0 || bin.postTestCount > 0);
+  return (
+    <section className="researcher-chart panel" aria-labelledby="score-distribution-title">
+      <div className="researcher-chart__heading">
+        <div>
+          <p className="researcher-kicker">Score distribution</p>
+          <h2 id="score-distribution-title">Completed assessment scores</h2>
+        </div>
+        <span className="researcher-chart__legend"><i className="is-pre" />Pre-test <i className="is-post" />Post-test</span>
+      </div>
+      {hasScores ? (
+        <dl className="score-distribution">
+          {distribution.map((bin) => (
+            <div key={bin.label}>
+              <dt>{bin.label}</dt>
+              <dd>
+                <span className="score-distribution__track" aria-hidden="true"><i className="is-pre" style={{ width: `${(bin.preTestCount / highestCount) * 100}%` }} /><i className="is-post" style={{ width: `${(bin.postTestCount / highestCount) * 100}%` }} /></span>
+                <span>Pre {bin.preTestCount}, post {bin.postTestCount}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="researcher-chart__empty">No completed assessment scores are available yet.</p>
+      )}
     </section>
   );
 }

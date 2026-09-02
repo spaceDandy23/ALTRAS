@@ -22,6 +22,7 @@ import type { ActivityAnswer } from './domain/evaluation';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
 import { playCompletion, playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function ActiveLessonPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -140,7 +141,6 @@ export function ActiveLessonPage() {
 
   const continueLesson = () => {
     if (!submitted || transitionBusy) return;
-    playSfx('click');
     if (activityIndex === lesson.activities.length - 1) {
       void startTransition({
         loadingMessage: 'Preparing your results…',
@@ -236,7 +236,7 @@ export function ActiveLessonPage() {
                 <h2>{activity.explanation.title}</h2>
                 <p>{activity.explanation.body}</p>
               </div>
-              <Button onClick={continueLesson} disabled={transitionBusy} aria-busy={transitionBusy}>
+              <Button onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown} onClick={continueLesson} disabled={transitionBusy} aria-busy={transitionBusy}>
                 {activityIndex === lesson.activities.length - 1 ? 'See results' : 'Continue'}
               </Button>
               {transitionError && (

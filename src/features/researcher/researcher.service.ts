@@ -61,8 +61,23 @@ export interface ResearcherSummary {
   averagePreTestScore: number | null;
   averagePostTestScore: number | null;
   averageScoreChange: number | null;
+  assessmentCompletionRate: number | null;
   allLessonsCompletedCount: number;
 }
+
+export interface ResearcherScoreDistributionBin {
+  label: string;
+  preTestCount: number;
+  postTestCount: number;
+}
+
+const scoreDistributionRanges = [
+  { label: '0–59', minimum: 0, maximum: 59 },
+  { label: '60–69', minimum: 60, maximum: 69 },
+  { label: '70–84', minimum: 70, maximum: 84 },
+  { label: '85–99', minimum: 85, maximum: 99 },
+  { label: '100', minimum: 100, maximum: 100 },
+] as const;
 
 export class ResearcherAccessError extends Error {
   constructor(message: string) {
@@ -138,12 +153,28 @@ export function calculateResearcherSummary(
     averagePreTestScore: average(preTestScores),
     averagePostTestScore: average(postTestScores),
     averageScoreChange: average(scoreChanges),
+    assessmentCompletionRate:
+      participants.length === 0 ? null : (scoreChanges.length / participants.length) * 100,
     allLessonsCompletedCount: participants.filter(
       (participant) =>
         participant.lessonsAvailable > 0 &&
         participant.lessonsCompleted === participant.lessonsAvailable,
     ).length,
   };
+}
+
+export function calculateScoreDistribution(
+  participants: ResearcherParticipantResult[],
+): ResearcherScoreDistributionBin[] {
+  return scoreDistributionRanges.map((range) => {
+    const includes = (score: number | null) =>
+      score !== null && score >= range.minimum && score <= range.maximum;
+    return {
+      label: range.label,
+      preTestCount: participants.filter((participant) => includes(participant.preTestScore)).length,
+      postTestCount: participants.filter((participant) => includes(participant.postTestScore)).length,
+    };
+  });
 }
 
 export async function isCurrentUserResearcher(): Promise<boolean> {

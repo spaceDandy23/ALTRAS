@@ -67,6 +67,7 @@ export function App() {
             <Route index element={<MainMenuPage />} />
             <Route path="assessments/:kind" element={<AssessmentPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="lessons" element={<LessonsPage />} />
             <Route path="lessons/almanac" element={<AlmanacPage />} />
             <Route path="lessons/almanac/word-list" element={<WordListPage />} />
@@ -84,7 +85,6 @@ export function App() {
               </ResearcherRoute>
             }
           />
-          <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { FindWordActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function FindWordActivityView({
   activity,
@@ -26,7 +26,6 @@ export function FindWordActivityView({
 
   const submit = async () => {
     if (!selected || submitted) return;
-    playSfx('click');
     setSaving(true);
     try {
       await onSubmit(selected);
@@ -78,16 +77,15 @@ export function FindWordActivityView({
               <label
                 key={choice.id}
                 className={`choice-option ${selected === choice.id ? 'choice-option--selected' : ''} ${submittedState}`}
+                onPointerDown={playNeutralClickOnPointerDown}
               >
                 <input
                   type="radio"
                   name={activity.id}
                   value={choice.id}
                   checked={visibleAnswer === choice.id}
-                  onChange={() => {
-                    playSfx('click');
-                    setSelected(choice.id);
-                  }}
+                  onKeyDown={playNeutralClickOnKeyDown}
+                  onChange={() => setSelected(choice.id)}
                 />
                 <span>{choice.label}</span>
               </label>
@@ -102,7 +100,7 @@ export function FindWordActivityView({
               {hintVisible ? 'Hide hint' : 'Show hint'}
             </Button>
           )}
-          <Button disabled={!selected || saving} onClick={() => void submit()}>
+          <Button disabled={!selected || saving} onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown} onClick={() => void submit()}>
             {saving ? 'Checking…' : 'Submit answer'}
           </Button>
         </div>

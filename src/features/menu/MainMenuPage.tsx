@@ -15,7 +15,7 @@ import {
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import type { LessonAttempt } from '@/types/learning';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function MainMenuPage() {
   const user = useAuthStore((state) => state.user);
@@ -116,7 +116,8 @@ export function MainMenuPage() {
                   <Link
                     className="button button--primary home-primary-action"
                     to={actionDestination}
-                    onClick={() => playSfx('click')}
+                    onPointerDown={playNeutralClickOnPointerDown}
+                    onKeyDown={playNeutralClickOnKeyDown}
                   >
                     {actionLabel}
                     <span aria-hidden="true">→</span>

@@ -20,7 +20,7 @@ import {
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function LessonResultPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -130,14 +130,16 @@ export function LessonResultPage() {
               <Link
                 className="button button--primary"
                 to={nextDestination}
-                onClick={() => playSfx('click')}
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
               >
                 View next lesson
               </Link>
             ) : (
               <Button
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
                 onClick={() => {
-                  playSfx('click');
                   retry();
                 }}
                 disabled={transitionBusy}
@@ -146,7 +148,7 @@ export function LessonResultPage() {
                 {attempt.cleared ? 'Review lesson' : 'Retry lesson'}
               </Button>
             )}
-            <Link className="button button--quiet" to="/lessons" onClick={() => playSfx('click')}>
+            <Link className="button button--quiet" to="/lessons" onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown}>
               Lessons
             </Link>
           </div>

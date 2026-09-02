@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateScoreDistribution,
   calculateResearcherSummary,
   researcherResultsErrorMessage,
   toResearcherParticipantResult,
@@ -42,8 +43,25 @@ describe('researcher results mapping and summary', () => {
       averagePreTestScore: 60,
       averagePostTestScore: 80,
       averageScoreChange: 30,
+      assessmentCompletionRate: 33.33333333333333,
       allLessonsCompletedCount: 1,
     });
+  });
+
+  it('groups completed assessment scores into dashboard distribution bins', () => {
+    expect(
+      calculateScoreDistribution([
+        participant('ALT-8F21C4A1', 40, 70),
+        participant('ALT-8F21C4A2', 80, 100),
+        participant('ALT-8F21C4A3', null, 90),
+      ]),
+    ).toEqual([
+      { label: '0–59', preTestCount: 1, postTestCount: 0 },
+      { label: '60–69', preTestCount: 0, postTestCount: 0 },
+      { label: '70–84', preTestCount: 1, postTestCount: 1 },
+      { label: '85–99', preTestCount: 0, postTestCount: 1 },
+      { label: '100', preTestCount: 0, postTestCount: 1 },
+    ]);
   });
 
   it('returns null averages for an empty dataset', () => {

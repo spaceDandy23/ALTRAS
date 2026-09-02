@@ -5,7 +5,7 @@ import { FormField } from '@/components/ui/FormField';
 import { useAuthStore } from '@/stores/auth.store';
 import { registrationSchema } from './auth.schemas';
 import { AuthFrame } from './AuthFrame';
-import { playSfx } from '@/services/audio/audio.manager';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function RegisterPage() {
   const [form, setForm] = useState({
@@ -37,7 +37,6 @@ export function RegisterPage() {
       return;
     }
 
-    playSfx('click');
     setSubmitting(true);
     try {
       await register(form);
@@ -99,7 +98,7 @@ export function RegisterPage() {
           autoComplete="new-password"
           required
         />
-        <Button type="submit" fullWidth disabled={submitting} className="auth-form__submit">
+        <Button type="submit" fullWidth disabled={submitting} className="auth-form__submit" onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown}>
           {submitting ? 'Creating account…' : 'Create account'}
         </Button>
       </form>

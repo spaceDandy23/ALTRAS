@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,7 @@ import { AppShell } from './AppShell';
 
 describe('authenticated audio mute control', () => {
   afterEach(() => {
+    cleanup();
     vi.clearAllMocks();
     useAuthStore.setState({ status: 'guest', user: null });
     useResearcherAccessStore.setState({ status: 'idle', userId: null });
@@ -48,6 +49,7 @@ describe('authenticated audio mute control', () => {
       </MemoryRouter>,
     );
 
+    expect(audio.playMusic).toHaveBeenCalledWith('main');
     const mute = screen.getByRole('button', { name: 'Mute audio' });
     await userEvent.setup().click(mute);
 
@@ -56,5 +58,35 @@ describe('authenticated audio mute control', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('does not start student music or expose Settings in the researcher area', () => {
+    const userId = '10000000-0000-4000-8000-000000000002';
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'researcher',
+        displayName: 'Researcher',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useResearcherAccessStore.setState({ status: 'authorized', userId });
+
+    render(
+      <MemoryRouter initialEntries={['/researcher/results']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="researcher/results" element={<p>Research area</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(audio.playMusic).not.toHaveBeenCalled();
+    expect(audio.stopMusic).toHaveBeenCalled();
+    expect(screen.getByText('Researcher results')).toBeInTheDocument();
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 });
