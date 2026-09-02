@@ -129,6 +129,8 @@ describe('assessment character guidance', () => {
     const companion = screen.getByLabelText('Mina, learning companion');
     expect(companion).toHaveAttribute('data-character-state', 'neutral');
     expect(companion).toHaveTextContent('assessment is complete');
+    const notice = screen.getByText('Correct answers are hidden while the research is in progress.');
+    expect(notice.parentElement).toHaveClass('result-actions', 'assessment-result__actions');
   });
 
   it.each(['pre-test', 'post-test'] as const)(

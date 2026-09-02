@@ -76,7 +76,11 @@ describe('route guards', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('status')).toHaveClass('loading-state--screen');
+    const loading = screen.getByRole('status');
+    expect(loading).toHaveClass('loading-state--screen');
+    expect(loading).not.toHaveTextContent('Checking sign in status');
+    expect(loading).not.toHaveTextContent('Checking sign in state');
+    expect(loading).not.toHaveTextContent('Opening your classroom…');
     expect(screen.queryByText('Login form')).not.toBeInTheDocument();
   });
 

@@ -114,12 +114,14 @@ export function AssessmentPage() {
             <dd>{formatDuration(attempt.completionSeconds ?? 0)}</dd>
           </div>
         </dl>
-        <p className="assessment-note">
-          Correct answers are hidden while the research is in progress.
-        </p>
-        <Link className="button button--primary assessment-result__return" to="/">
-          Return home
-        </Link>
+        <div className="result-actions assessment-result__actions">
+          <p className="assessment-note">
+            Correct answers are hidden while the research is in progress.
+          </p>
+          <Link className="button button--primary assessment-result__return" to="/">
+            Return home
+          </Link>
+        </div>
       </section>
     );
   }

@@ -35,7 +35,9 @@ function AuthenticatedBootstrapShell() {
 
 export function GuestOnlyRoute({ children }: { children: ReactNode }) {
   const status = useAuthStore((state) => state.status);
-  if (status === 'idle' || status === 'loading') return <AppLoading />;
+  if (status === 'idle' || status === 'loading') {
+    return <AppLoading message="" />;
+  }
   if (status === 'authenticated') return <Navigate to="/" replace />;
   return children;
 }
