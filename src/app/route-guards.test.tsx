@@ -40,7 +40,7 @@ describe('route guards', () => {
     expect(screen.queryByText('Private settings')).not.toBeInTheDocument();
   });
 
-  it('renders an accessible full transition state while authentication is loading', () => {
+  it('renders an accessible bootstrap shell while authentication is loading', () => {
     useAuthStore.setState({ status: 'loading', user: null });
 
     render(
@@ -52,13 +52,13 @@ describe('route guards', () => {
     );
 
     const loading = screen.getByRole('status');
-    expect(loading).toHaveClass('loading-state--screen');
+    expect(loading).toHaveClass('loading-state--page');
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(loading).toHaveTextContent('Opening your classroom…');
     expect(screen.queryByText('Private content')).not.toBeInTheDocument();
   });
 
-  it('keeps the sign-in screen stable while guest auth is still resolving', () => {
+  it('keeps the login form hidden while guest authentication is unresolved', () => {
     useAuthStore.setState({ status: 'loading', user: null });
 
     render(
@@ -76,12 +76,33 @@ describe('route guards', () => {
       </MemoryRouter>,
     );
 
-    const loading = screen.getByRole('status');
-    expect(loading).toHaveClass('loading-state--screen');
-    expect(loading).toHaveAttribute('aria-busy', 'true');
-    expect(loading).toHaveTextContent('Checking sign-in status…');
-    expect(screen.queryByText('Opening your classroom…')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('loading-state--screen');
     expect(screen.queryByText('Login form')).not.toBeInTheDocument();
+  });
+
+  it('preserves non-interactive authenticated layout while session restoration is unresolved', () => {
+    useAuthStore.setState({ status: 'loading', user: null });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <p>Private settings</p>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(container.querySelector('.auth-bootstrap-shell')).toBeInTheDocument();
+    expect(container.querySelector('.app-header')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('loading-state--page');
+    expect(screen.queryByText('Private settings')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('redirects an authenticated student away from login', () => {

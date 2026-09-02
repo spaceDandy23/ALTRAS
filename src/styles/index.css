@@ -165,16 +165,19 @@ h3 {
   cursor: pointer;
   font-weight: 800;
   transition:
+    transform 140ms ease,
     box-shadow 140ms ease,
     background 140ms ease,
     border-color 140ms ease;
 }
 
 .button:hover:not(:disabled) {
+  transform: translateY(-2px);
   box-shadow: 0 5px 0 rgba(0, 0, 0, 0.42);
 }
 
 .button:active:not(:disabled) {
+  transform: translateY(1px);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
 }
 
@@ -201,7 +204,6 @@ h3 {
 }
 
 .button--secondary {
-  padding-top: 100px;
   border-color: #bce2fb;
   color: #091820;
   background: var(--blue);
@@ -558,83 +560,143 @@ h3 {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
-  isolation: isolate;
   overflow-x: clip;
+  isolation: isolate;
 }
 
 .algebraic-backdrop {
-  --algebraic-backdrop-color: color-mix(in srgb, var(--paper) 22%, transparent);
-  --algebraic-backdrop-arrow-color: color-mix(in srgb, var(--blue) 30%, transparent);
-  --algebraic-backdrop-size: clamp(24px, 2.1vw, 38px);
   position: absolute;
-  inset: 68px 0 0;
+  inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
-  user-select: none;
-  font-size: 16px;
+  overflow: hidden;
 }
 
 .algebraic-backdrop__equation {
   position: absolute;
-  color: var(--algebraic-backdrop-color);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
-  font-size: var(--algebraic-backdrop-size);
+  color: var(--algebraic-backdrop-color, var(--muted));
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-size: var(--algebraic-backdrop-size, clamp(1.1rem, 1.6vw + 0.8rem, 2.8rem));
   font-weight: 700;
-  letter-spacing: 0.04em;
   line-height: 1;
-  text-shadow: 0 1px rgba(0, 0, 0, 0.16);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  opacity: 0.44;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--algebraic-backdrop-color, var(--muted)) 25%, transparent);
 }
 
 .algebraic-backdrop__equation--one {
   top: 12%;
-  left: 2.5%;
-  transform: rotate(-14deg);
+  left: 7%;
+  transform: rotate(-8deg);
 }
 
 .algebraic-backdrop__equation--two {
   top: 18%;
+  right: 8%;
+  transform: rotate(6deg);
+}
+
+.algebraic-backdrop__equation--three {
+  top: 38%;
+  left: 53%;
+  transform: rotate(-10deg);
+}
+
+.algebraic-backdrop__equation--four {
+  top: 52%;
+  right: 10%;
+  transform: rotate(7deg);
+}
+
+.algebraic-backdrop__equation--five {
+  top: 66%;
+  left: 6%;
+  transform: rotate(-7deg);
+}
+
+.algebraic-backdrop__equation--six {
+  top: 78%;
+  right: 17%;
+  transform: rotate(8deg);
+}
+
+.algebraic-backdrop__equation--seven {
+  top: 86%;
+  left: 46%;
+  transform: rotate(-12deg);
+}
+
+@media (max-width: 640px) {
+  .algebraic-backdrop__equation {
+    opacity: 0.3;
+  }
+
+  .algebraic-backdrop__equation--one {
+    left: 4%;
+  }
+
+  .algebraic-backdrop__equation--two {
+    right: 4%;
+  }
+
+  .algebraic-backdrop__equation--three {
+    left: 9%;
+  }
+
+  .algebraic-backdrop__equation--four {
+    right: 7%;
+  }
+
+  .algebraic-backdrop__equation--five {
+    left: 18%;
+  }
+
+  .algebraic-backdrop__equation--six {
+    right: 9%;
+  }
+}
+
+.chalk-doodles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.doodle {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.055);
+  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-size: 1.1rem;
+}
+
+.doodle--one {
+  top: 18%;
+  left: 2%;
+  transform: rotate(-14deg);
+}
+
+.doodle--two {
+  top: 23%;
   right: 3%;
   transform: rotate(8deg);
 }
 
-.algebraic-backdrop__equation--three {
-  top: 47%;
-  left: 1.4%;
-  font-size: clamp(28px, 2.4vw, 44px);
-  transform: rotate(6deg);
+.doodle--three {
+  bottom: 17%;
+  left: 4%;
+  font-size: 2.7rem;
 }
 
-.algebraic-backdrop__equation--four {
-  top: 57%;
-  right: 2.4%;
-  font-size: clamp(29px, 2.5vw, 46px);
+.doodle--four {
+  right: 4%;
+  bottom: 16%;
   transform: rotate(-9deg);
 }
 
-.algebraic-backdrop__equation--five {
-  bottom: 10%;
-  left: 5%;
-  transform: rotate(-4deg);
-}
-
-.algebraic-backdrop__equation--six {
-  right: 7%;
-  bottom: 12%;
-  font-size: clamp(26px, 2.2vw, 40px);
-  transform: rotate(7deg);
-}
-
-.algebraic-backdrop__equation--seven {
-  top: 35%;
-  right: 8%;
-  color: var(--algebraic-backdrop-arrow-color);
-  font-family: sans-serif;
-  font-size: clamp(48px, 4vw, 72px);
-  font-weight: 900;
-}
-
 .app-header {
+  position: relative;
   z-index: 10;
   display: flex;
   min-height: 68px;
@@ -765,6 +827,21 @@ h3 {
   min-height: 0;
   flex: 1;
   align-self: stretch;
+}
+
+.auth-bootstrap-shell__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.auth-bootstrap-shell__account {
+  display: block;
+  width: 160px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control-bg);
 }
 
 .standard-page,
@@ -1132,10 +1209,6 @@ h3 {
   grid-template-columns: repeat(2, 1fr);
   gap: 0.7rem;
   margin: 1.5rem 0;
-}
-
-.assessment-result__return {
-  margin-top: 1.25rem;
 }
 
 .assessment-result__details div {
@@ -3667,15 +3740,6 @@ a.almanac-option:hover {
   background: transparent;
 }
 
-:root[data-theme='light'] .algebraic-backdrop {
-  --algebraic-backdrop-color: color-mix(in srgb, var(--paper) 28%, transparent);
-  --algebraic-backdrop-arrow-color: color-mix(in srgb, var(--blue) 34%, transparent);
-}
-
-:root[data-theme='light'] .algebraic-backdrop__equation {
-  text-shadow: 0 1px rgba(255, 255, 255, 0.46);
-}
-
 :root[data-theme='light'] .form-field__input,
 :root[data-theme='light'] .word-list-search input,
 :root[data-theme='light'] .dialog,
@@ -3883,6 +3947,11 @@ a.almanac-option:hover {
     min-height: 44px;
   }
 
+  .auth-bootstrap-shell__account {
+    width: 72px;
+    min-height: 44px;
+  }
+
   .user-menu__popover {
     position: fixed;
     top: 68px;
@@ -3899,27 +3968,8 @@ a.almanac-option:hover {
     padding: 1.15rem 1rem 1.5rem;
   }
 
-  .algebraic-backdrop {
-    --algebraic-backdrop-size: clamp(19px, 5.8vw, 25px);
-    inset: 62px 0 0;
-  }
-
-  .algebraic-backdrop__equation--three,
-  .algebraic-backdrop__equation--four,
-  .algebraic-backdrop__equation--six,
-  .algebraic-backdrop__equation--seven {
-    display: none;
-  }
-
-  .algebraic-backdrop__equation--one {
-    top: 14%;
-    left: 1.25%;
-  }
-
-  .algebraic-backdrop__equation--two {
-    top: auto;
-    right: 1.25%;
-    bottom: 10%;
+  .chalk-doodles {
+    opacity: 0.45;
   }
 
   .home-start.menu-grid {

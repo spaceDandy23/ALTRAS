@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
@@ -9,16 +10,32 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const status = useAuthStore((state) => state.status);
   const location = useLocation();
 
-  if (status === 'idle' || status === 'loading') return <AppLoading />;
+  if (status === 'idle' || status === 'loading') return <AuthenticatedBootstrapShell />;
   if (status !== 'authenticated') {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
   return children;
 }
 
+function AuthenticatedBootstrapShell() {
+  return (
+    <div className="app-shell auth-bootstrap-shell">
+      <header className="app-header auth-bootstrap-shell__header">
+        <AltrasLogo linked={false} />
+        <div className="auth-bootstrap-shell__tools" aria-hidden="true">
+          <span className="auth-bootstrap-shell__account" />
+        </div>
+      </header>
+      <main className="app-content">
+        <LoadingState variant="page" message="Opening your classroom…" />
+      </main>
+    </div>
+  );
+}
+
 export function GuestOnlyRoute({ children }: { children: ReactNode }) {
   const status = useAuthStore((state) => state.status);
-  if (status === 'idle' || status === 'loading') return <AppLoading message="Checking sign-in status…" />;
+  if (status === 'idle' || status === 'loading') return <AppLoading />;
   if (status === 'authenticated') return <Navigate to="/" replace />;
   return children;
 }
