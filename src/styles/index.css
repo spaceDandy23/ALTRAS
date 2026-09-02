@@ -563,7 +563,10 @@ h3 {
 }
 
 .algebraic-backdrop {
-  position: fixed;
+  --algebraic-backdrop-color: color-mix(in srgb, var(--paper) 22%, transparent);
+  --algebraic-backdrop-arrow-color: color-mix(in srgb, var(--blue) 30%, transparent);
+  --algebraic-backdrop-size: clamp(24px, 2.1vw, 38px);
+  position: absolute;
   inset: 68px 0 0;
   z-index: 0;
   overflow: hidden;
@@ -574,9 +577,9 @@ h3 {
 
 .algebraic-backdrop__equation {
   position: absolute;
-  color: rgba(247, 243, 227, 0.075);
+  color: var(--algebraic-backdrop-color);
   font-family: 'Segoe Print', 'Comic Sans MS', cursive;
-  font-size: 18px;
+  font-size: var(--algebraic-backdrop-size);
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -598,14 +601,14 @@ h3 {
 .algebraic-backdrop__equation--three {
   top: 47%;
   left: 1.4%;
-  font-size: 23px;
+  font-size: clamp(28px, 2.4vw, 44px);
   transform: rotate(6deg);
 }
 
 .algebraic-backdrop__equation--four {
   top: 57%;
   right: 2.4%;
-  font-size: 24px;
+  font-size: clamp(29px, 2.5vw, 46px);
   transform: rotate(-9deg);
 }
 
@@ -618,16 +621,16 @@ h3 {
 .algebraic-backdrop__equation--six {
   right: 7%;
   bottom: 12%;
-  font-size: 21px;
+  font-size: clamp(26px, 2.2vw, 40px);
   transform: rotate(7deg);
 }
 
 .algebraic-backdrop__equation--seven {
   top: 35%;
   right: 8%;
-  color: rgba(101, 182, 238, 0.12);
+  color: var(--algebraic-backdrop-arrow-color);
   font-family: sans-serif;
-  font-size: 40px;
+  font-size: clamp(48px, 4vw, 72px);
   font-weight: 900;
 }
 
@@ -3664,13 +3667,13 @@ a.almanac-option:hover {
   background: transparent;
 }
 
-:root[data-theme='light'] .algebraic-backdrop__equation {
-  color: rgba(13, 86, 136, 0.14);
-  text-shadow: none;
+:root[data-theme='light'] .algebraic-backdrop {
+  --algebraic-backdrop-color: color-mix(in srgb, var(--paper) 28%, transparent);
+  --algebraic-backdrop-arrow-color: color-mix(in srgb, var(--blue) 34%, transparent);
 }
 
-:root[data-theme='light'] .algebraic-backdrop__equation--seven {
-  color: rgba(23, 110, 170, 0.16);
+:root[data-theme='light'] .algebraic-backdrop__equation {
+  text-shadow: 0 1px rgba(255, 255, 255, 0.46);
 }
 
 :root[data-theme='light'] .form-field__input,
@@ -3897,6 +3900,7 @@ a.almanac-option:hover {
   }
 
   .algebraic-backdrop {
+    --algebraic-backdrop-size: clamp(19px, 5.8vw, 25px);
     inset: 62px 0 0;
   }
 
@@ -3910,14 +3914,12 @@ a.almanac-option:hover {
   .algebraic-backdrop__equation--one {
     top: 14%;
     left: 1.25%;
-    font-size: 15px;
   }
 
   .algebraic-backdrop__equation--two {
     top: auto;
     right: 1.25%;
     bottom: 10%;
-    font-size: 15px;
   }
 
   .home-start.menu-grid {
