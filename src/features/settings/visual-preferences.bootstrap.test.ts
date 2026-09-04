@@ -6,8 +6,10 @@ import { hydrateVisualPreferencesForUser } from './visual-preferences.bootstrap'
 import {
   activateVisualPreferencesForUser,
   cacheVisualPreferences,
+  deactivateVisualPreferences,
   getActiveVisualPreferencesUserId,
   primeCachedVisualPreferences,
+  readCachedVisualPreferences,
 } from './visual-preferences.cache';
 
 vi.mock('./settings.service', () => ({ getUserSettings: vi.fn() }));
@@ -59,5 +61,16 @@ describe('visual preference bootstrap', () => {
     expect(getActiveVisualPreferencesUserId()).toBe(userB);
     expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
     expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('deactivates the visible preference without deleting the saved user preference', () => {
+    cacheVisualPreferences(userA, settings(userA, 1.3, 'light'));
+    activateVisualPreferencesForUser(userA);
+
+    deactivateVisualPreferences();
+
+    expect(getActiveVisualPreferencesUserId()).toBeNull();
+    expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
+    expect(readCachedVisualPreferences(userA)?.readabilityScale).toBe(1.3);
   });
 });

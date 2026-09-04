@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateScoreDistribution,
+  calculateLessonSummaries,
   calculateResearcherSummary,
   researcherResultsErrorMessage,
   toResearcherParticipantResult,
@@ -71,6 +72,14 @@ describe('researcher results mapping and summary', () => {
       averagePostTestScore: null,
       averageScoreChange: null,
     });
+  });
+
+  it('calculates lesson completion, score, and attempt summaries from authorized results', () => {
+    const first = participant('ALT-8F21C4A1', 40, 70);
+    const second = participant('ALT-8F21C4A2', 50, null);
+    first.lessonResults = [{ lessonId: 'lesson-1', status: 'cleared', bestScore: 90, latestScore: 90, attemptCount: 2, completedAt: 3, activeSeconds: 60 }];
+    second.lessonResults = [{ lessonId: 'lesson-1', status: 'in-progress', bestScore: 40, latestScore: 40, attemptCount: 1, completedAt: null, activeSeconds: 30 }];
+    expect(calculateLessonSummaries([first, second])).toEqual([{ lessonId: 'lesson-1', studentsStarted: 2, studentsCompleted: 1, completionRate: 50, averageScore: 90, averageAttempts: 1.5 }]);
   });
 
   it('maps only the anonymous fields returned by the researcher RPC', () => {

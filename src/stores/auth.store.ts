@@ -6,6 +6,7 @@ import {
   restoreOnlineSession,
 } from '@/features/auth/online-auth.service';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { applyExperienceScope } from '@/features/researcher/researcher-experience';
 import { hydrateVisualPreferencesForUser } from '@/features/settings/visual-preferences.bootstrap';
 import { deactivateVisualPreferences } from '@/features/settings/visual-preferences.cache';
 import { resetAudio } from '@/services/audio/audio.manager';
@@ -34,6 +35,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await restoreOnlineSession();
       if (!user) {
         deactivateVisualPreferences();
+        applyExperienceScope('neutral');
         set({ user: null, status: 'guest' });
         return;
       }
@@ -41,6 +43,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user, status: 'authenticated' });
     } catch {
       deactivateVisualPreferences();
+      applyExperienceScope('neutral');
       set({ user: null, status: 'guest' });
     }
   },
@@ -57,6 +60,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await logoutOnlineUser();
     deactivateVisualPreferences();
+    applyExperienceScope('neutral');
     resetAudio();
     set({ user: null, status: 'guest' });
     useResearcherAccessStore.getState().clear();

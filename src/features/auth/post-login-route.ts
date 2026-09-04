@@ -4,7 +4,7 @@ export function resolvePostLoginDestination(
   researcherStatus: ResearcherAccessStatus,
   requestedPath?: string,
 ): string {
-  if (researcherStatus === 'authorized') return '/researcher/results';
+  if (researcherStatus === 'authorized') return '/researcher';
   if (!requestedPath || requestedPath.startsWith('/researcher')) return '/';
   return requestedPath;
 }

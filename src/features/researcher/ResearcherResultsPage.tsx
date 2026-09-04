@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { Modal } from '@/components/ui/Modal';
 import {
   calculateScoreDistribution,
-  calculateResearcherSummary,
-  getResearcherResults,
   type ResearcherParticipantResult,
 } from './researcher.service';
+import { useResearcherData } from './ResearcherDataContext';
+import { ResearcherContentLoading } from './ResearcherContentLoading';
 
 type ParticipantFilter =
   'all' | 'pre-completed' | 'post-completed' | 'both-completed' | 'incomplete';
@@ -109,45 +108,13 @@ function sortValue(participant: ResearcherParticipantResult, sort: SortKey): num
 }
 
 export function ResearcherResultsPage() {
-  const [participants, setParticipants] = useState<ResearcherParticipantResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { participants, loading, error, retry } = useResearcherData();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ParticipantFilter>('all');
   const [sort, setSort] = useState<SortKey>('participant');
   const [descending, setDescending] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [requestVersion, setRequestVersion] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    void getResearcherResults()
-      .then((loaded) => {
-        if (active) {
-          setParticipants(loaded);
-          setError('');
-        }
-      })
-      .catch((cause: unknown) => {
-        if (active) {
-          setError(cause instanceof Error ? cause.message : 'Unable to load researcher results.');
-        }
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [requestVersion]);
-
-  const load = () => {
-    setLoading(true);
-    setError('');
-    setRequestVersion((version) => version + 1);
-  };
-
-  const summary = useMemo(() => calculateResearcherSummary(participants), [participants]);
-  const scoreDistribution = useMemo(() => calculateScoreDistribution(participants), [participants]);
   const matchingParticipants = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleUpperCase('en-US');
     return participants
@@ -188,7 +155,7 @@ export function ResearcherResultsPage() {
   };
 
   if (loading) {
-    return <LoadingState variant="page" message="Loading anonymized participant results…" />;
+    return <ResearcherContentLoading message="Loading anonymized participant results…" />;
   }
 
   if (error) {
@@ -197,7 +164,7 @@ export function ResearcherResultsPage() {
         <p className="researcher-kicker">Researcher results</p>
         <h1 id="researcher-results-error">Results are unavailable</h1>
         <p>{error}</p>
-        <Button onClick={load}>Try again</Button>
+        <Button onClick={retry}>Try again</Button>
       </section>
     );
   }
@@ -206,51 +173,14 @@ export function ResearcherResultsPage() {
     <section className="researcher-results page-enter" aria-labelledby="researcher-results-title">
       <header className="researcher-results__heading">
         <div>
-          <p className="researcher-kicker">Research dashboard</p>
-          <h1 id="researcher-results-title">Anonymized participant outcomes</h1>
+          <p className="researcher-kicker">Participants</p>
+          <h1 id="researcher-results-title">Participant learning states</h1>
           <p>
             Participant identities are anonymized. This view does not include names, emails,
             authentication IDs, answers, or answer keys.
           </p>
         </div>
       </header>
-
-      <section className="researcher-summary" aria-label="Research summary">
-        <SummaryCard label="Participants" value={summary.participantCount} />
-        <SummaryCard label="Pre-test completed" value={summary.preTestCompletedCount} />
-        <SummaryCard label="Post-test completed" value={summary.postTestCompletedCount} />
-        <SummaryCard label="Both assessments" value={summary.bothCompletedCount} />
-        <SummaryCard
-          label="Assessment completion"
-          value={summary.assessmentCompletionRate === null ? '—' : `${summary.assessmentCompletionRate.toFixed(0)}%`}
-        />
-        <SummaryCard label="Average pre-test" value={formatScore(summary.averagePreTestScore)} />
-        <SummaryCard label="Average post-test" value={formatScore(summary.averagePostTestScore)} />
-        <SummaryCard
-          label="Average score change"
-          value={
-            summary.averageScoreChange === null
-              ? '—'
-              : (summary.averageScoreChange > 0 ? '+' : '') +
-                summary.averageScoreChange.toFixed(1) +
-                ' pts'
-          }
-        />
-        <SummaryCard
-          label="All available lessons"
-          value={
-            String(summary.allLessonsCompletedCount) + ' / ' + String(summary.participantCount)
-          }
-        />
-      </section>
-
-      <section className="researcher-charts" aria-label="Assessment score analysis">
-        <ScoreComparisonChart
-          preTestAverage={summary.averagePreTestScore}
-          postTestAverage={summary.averagePostTestScore}
-        />
-        <ScoreDistributionChart distribution={scoreDistribution} />
-      </section>
 
       <section className="researcher-directory panel" aria-labelledby="participant-results-title">
         <div className="researcher-directory__heading">
@@ -489,7 +419,7 @@ export function ResearcherResultsPage() {
   );
 }
 
-function ScoreComparisonChart({
+export function ScoreComparisonChart({
   preTestAverage,
   postTestAverage,
 }: {
@@ -529,7 +459,7 @@ function ScoreBar({ label, value, tone }: { label: string; value: number | null;
   );
 }
 
-function ScoreDistributionChart({ distribution }: { distribution: ReturnType<typeof calculateScoreDistribution> }) {
+export function ScoreDistributionChart({ distribution }: { distribution: ReturnType<typeof calculateScoreDistribution> }) {
   const highestCount = Math.max(1, ...distribution.flatMap((bin) => [bin.preTestCount, bin.postTestCount]));
   const hasScores = distribution.some((bin) => bin.preTestCount > 0 || bin.postTestCount > 0);
   return (
@@ -560,7 +490,7 @@ function ScoreDistributionChart({ distribution }: { distribution: ReturnType<typ
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string | number }) {
+export function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return (
     <article className="researcher-summary__card panel">
       <span>{label}</span>

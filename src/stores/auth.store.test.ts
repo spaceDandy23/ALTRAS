@@ -56,7 +56,10 @@ describe('authenticated visual bootstrap', () => {
     mocks.deactivate.mockReset();
   });
 
-  afterEach(() => document.documentElement.style.removeProperty('--readability-scale'));
+  afterEach(() => {
+    delete document.documentElement.dataset.experience;
+    document.documentElement.style.removeProperty('--readability-scale');
+  });
 
   it('applies cached Large/Largest settings before authenticated routes become ready', async () => {
     const hydration = deferred();
@@ -103,6 +106,7 @@ describe('authenticated visual bootstrap', () => {
 
   it('logs out through Supabase and clears the active preference identity', async () => {
     useAuthStore.setState({ status: 'authenticated', user: firstUser });
+    document.documentElement.dataset.experience = 'student';
     mocks.logoutOnlineUser.mockResolvedValue(undefined);
 
     await useAuthStore.getState().logout();
@@ -110,5 +114,6 @@ describe('authenticated visual bootstrap', () => {
     expect(mocks.logoutOnlineUser).toHaveBeenCalledOnce();
     expect(mocks.deactivate).toHaveBeenCalledOnce();
     expect(useAuthStore.getState()).toMatchObject({ status: 'guest', user: null });
+    expect(document.documentElement.dataset.experience).toBe('neutral');
   });
 });

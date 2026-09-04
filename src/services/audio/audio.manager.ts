@@ -1,5 +1,6 @@
 import { Howl, Howler } from 'howler';
 import { AUDIO_ASSETS, type MusicTrack, type SfxName } from './audio.manifest';
+import { isStudentExperience } from '@/features/researcher/researcher-experience';
 
 export interface AudioVolumes {
   masterVolume: number;
@@ -167,7 +168,7 @@ export function preloadSfx(...names: SfxName[]) {
 }
 
 export function playMusic(track: MusicTrack = 'main') {
-  if (!canUseAudio()) return;
+  if (!canUseAudio() || !isStudentExperience()) return;
   musicRequested = true;
 
   if (activeMusicTrack !== track) {
@@ -195,7 +196,7 @@ export function stopMusic() {
 }
 
 export function playSfx(name: SfxName): number | null {
-  if (!canUseAudio() || sfxOutputVolume() === 0) return null;
+  if (!canUseAudio() || !isStudentExperience() || sfxOutputVolume() === 0) return null;
   const instance = getOrCreateSfx(name);
   if (!instance) return null;
 
@@ -209,6 +210,7 @@ export function playSfx(name: SfxName): number | null {
 }
 
 export function playCompletion(eventId: string, withReward: boolean) {
+  if (!isStudentExperience()) return;
   if (completedEvents.has(eventId)) return;
   completedEvents.add(eventId);
 

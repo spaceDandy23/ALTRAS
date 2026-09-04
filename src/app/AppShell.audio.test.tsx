@@ -16,13 +16,39 @@ const audio = vi.hoisted(() => ({
 vi.mock('@/services/audio/audio.manager', () => audio);
 
 import { AppShell } from './AppShell';
+import { ResolvedExperienceRoute } from './route-guards';
+
+const originalCheckAccess = useResearcherAccessStore.getState().checkAccess;
 
 describe('authenticated audio mute control', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
     useAuthStore.setState({ status: 'guest', user: null });
-    useResearcherAccessStore.setState({ status: 'idle', userId: null });
+    useResearcherAccessStore.setState({ status: 'idle', userId: null, checkAccess: originalCheckAccess });
+    delete document.documentElement.dataset.experience;
+    document.documentElement.style.removeProperty('--readability-scale');
+  });
+
+  it('does not mount the student audio shell while experience resolution is pending', () => {
+    const userId = '10000000-0000-4000-8000-000000000003';
+    useAuthStore.setState({ status: 'authenticated', user: { id: userId, normalizedUsername: 'pending_researcher', displayName: 'Pending Researcher', createdAt: 1, lastLoginAt: 1 } });
+    useResearcherAccessStore.setState({ status: 'loading', userId, checkAccess: vi.fn(() => new Promise<void>(() => undefined)) });
+    document.documentElement.style.setProperty('--readability-scale', '1.3');
+
+    render(
+      <MemoryRouter>
+        <ResolvedExperienceRoute>
+          <AppShell />
+        </ResolvedExperienceRoute>
+      </MemoryRouter>,
+    );
+
+    expect(document.documentElement.dataset.experience).toBe('neutral');
+    expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1.3');
+    expect(audio.playMusic).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Mute audio' })).not.toBeInTheDocument();
+    expect(document.querySelector('.app-shell')).not.toBeInTheDocument();
   });
 
   it('toggles a keyboard-accessible temporary mute layer without exposing settings controls', async () => {
@@ -60,33 +86,4 @@ describe('authenticated audio mute control', () => {
     );
   });
 
-  it('does not start student music or expose Settings in the researcher area', () => {
-    const userId = '10000000-0000-4000-8000-000000000002';
-    useAuthStore.setState({
-      status: 'authenticated',
-      user: {
-        id: userId,
-        normalizedUsername: 'researcher',
-        displayName: 'Researcher',
-        createdAt: 1,
-        lastLoginAt: 1,
-      },
-    });
-    useResearcherAccessStore.setState({ status: 'authorized', userId });
-
-    render(
-      <MemoryRouter initialEntries={['/researcher/results']}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="researcher/results" element={<p>Research area</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(audio.playMusic).not.toHaveBeenCalled();
-    expect(audio.stopMusic).toHaveBeenCalled();
-    expect(screen.getByText('Researcher results')).toBeInTheDocument();
-    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
-  });
 });

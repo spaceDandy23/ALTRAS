@@ -19,7 +19,7 @@ afterEach(() => {
 describe('post-login routing', () => {
   it('sends an authorized researcher to researcher results', () => {
     expect(resolvePostLoginDestination('authorized', '/lessons/lesson-one')).toBe(
-      '/researcher/results',
+      '/researcher',
     );
   });
 

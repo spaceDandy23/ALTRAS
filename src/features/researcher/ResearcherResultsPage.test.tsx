@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResearcherParticipantResult } from './researcher.service';
 import { ResearcherResultsPage } from './ResearcherResultsPage';
 import { getResearcherResults } from './researcher.service';
+import { ResearcherDataProvider } from './ResearcherDataContext';
 
 vi.mock('./researcher.service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./researcher.service')>();
@@ -49,38 +50,39 @@ const results: ResearcherParticipantResult[] = [
   },
 ];
 
+function renderPage() {
+  return render(<ResearcherDataProvider><ResearcherResultsPage /></ResearcherDataProvider>);
+}
+
 describe('researcher results dashboard', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders an accessible centered loading state while results are requested', () => {
     vi.mocked(getResearcherResults).mockReturnValue(new Promise(() => undefined));
-    render(<ResearcherResultsPage />);
+    renderPage();
 
     const loading = screen.getByRole('status');
     expect(loading).toHaveClass('loading-state--page');
+    expect(loading).toHaveClass('researcher-content-loading');
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
     expect(loading).toHaveTextContent('Loading anonymized participant results…');
   });
 
-  it('renders an empty dataset without misleading averages', async () => {
+  it('renders an empty participant dataset clearly', async () => {
     vi.mocked(getResearcherResults).mockResolvedValue([]);
-    render(<ResearcherResultsPage />);
+    renderPage();
 
     expect(await screen.findByText('No participant data yet')).toBeInTheDocument();
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
-    expect(screen.getAllByText('—')).toHaveLength(4);
   });
 
   it('supports search, filters, sorting, and anonymized participant details', async () => {
     vi.mocked(getResearcherResults).mockResolvedValue(results);
     const user = userEvent.setup();
-    render(<ResearcherResultsPage />);
+    renderPage();
 
     await screen.findByText('ALT-8F21C4A1');
-    expect(screen.getByRole('heading', { name: 'Average scores' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Completed assessment scores' })).toBeInTheDocument();
-    expect(screen.getByText('Assessment completion')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Assessment filter'), 'both-completed');
     expect(screen.getByText('ALT-8F21C4A1')).toBeInTheDocument();
     expect(screen.queryByText('ALT-8F21C4A2')).not.toBeInTheDocument();
@@ -118,7 +120,7 @@ describe('researcher results dashboard', () => {
     }));
     vi.mocked(getResearcherResults).mockResolvedValue(manyResults);
     const user = userEvent.setup();
-    render(<ResearcherResultsPage />);
+    renderPage();
 
     expect(await screen.findByText('ALT-00000001')).toBeInTheDocument();
     expect(screen.queryByText('ALT-00000016')).not.toBeInTheDocument();
@@ -146,7 +148,7 @@ describe('researcher results dashboard', () => {
 
   it('reports loading failures without rendering participant data', async () => {
     vi.mocked(getResearcherResults).mockRejectedValue(new Error('Researcher access required.'));
-    render(<ResearcherResultsPage />);
+    renderPage();
 
     await waitFor(() => expect(screen.getByText('Results are unavailable')).toBeInTheDocument());
     expect(screen.queryByText('ALT-8F21C4A1')).not.toBeInTheDocument();

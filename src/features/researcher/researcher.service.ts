@@ -71,6 +71,15 @@ export interface ResearcherScoreDistributionBin {
   postTestCount: number;
 }
 
+export interface ResearcherLessonSummary {
+  lessonId: string;
+  studentsStarted: number;
+  studentsCompleted: number;
+  completionRate: number | null;
+  averageScore: number | null;
+  averageAttempts: number | null;
+}
+
 const scoreDistributionRanges = [
   { label: '0–59', minimum: 0, maximum: 59 },
   { label: '60–69', minimum: 60, maximum: 69 },
@@ -173,6 +182,23 @@ export function calculateScoreDistribution(
       label: range.label,
       preTestCount: participants.filter((participant) => includes(participant.preTestScore)).length,
       postTestCount: participants.filter((participant) => includes(participant.postTestScore)).length,
+    };
+  });
+}
+
+export function calculateLessonSummaries(participants: ResearcherParticipantResult[]): ResearcherLessonSummary[] {
+  const lessonIds = Array.from(new Set(participants.flatMap((participant) => participant.lessonResults.map((lesson) => lesson.lessonId)))).sort();
+  return lessonIds.map((lessonId) => {
+    const results = participants.map((participant) => participant.lessonResults.find((lesson) => lesson.lessonId === lessonId)).filter((lesson): lesson is ResearcherLessonResult => Boolean(lesson));
+    const started = results.filter((lesson) => lesson.attemptCount > 0);
+    const completed = results.filter((lesson) => lesson.status === 'cleared');
+    return {
+      lessonId,
+      studentsStarted: started.length,
+      studentsCompleted: completed.length,
+      completionRate: started.length === 0 ? null : (completed.length / started.length) * 100,
+      averageScore: average(completed.map((lesson) => lesson.bestScore)),
+      averageAttempts: average(started.map((lesson) => lesson.attemptCount)),
     };
   });
 }

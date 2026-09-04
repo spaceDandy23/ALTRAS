@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { AssessmentPage } from '@/features/assessments/AssessmentPage';
@@ -12,6 +12,11 @@ import { MainMenuPage } from '@/features/menu/MainMenuPage';
 import { ProfilePage } from '@/features/profile/ProfilePage';
 import { ResearcherResultsPage } from '@/features/researcher/ResearcherResultsPage';
 import { ResearcherRoute } from '@/features/researcher/ResearcherRoute';
+import { ResearcherLayout } from '@/features/researcher/ResearcherLayout';
+import { ResearcherDashboardPage } from '@/features/researcher/ResearcherDashboardPage';
+import { ResearcherAssessmentsPage } from '@/features/researcher/ResearcherAssessmentsPage';
+import { ResearcherLessonsPage } from '@/features/researcher/ResearcherLessonsPage';
+import { ResearcherReportsPage } from '@/features/researcher/ResearcherReportsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { AlmanacPage, AlmanacReviewPlaceholder } from '@/features/word-list/AlmanacPage';
 import { WordListPage } from '@/features/word-list/WordListPage';
@@ -20,7 +25,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import { AppShell } from './AppShell';
 import { NotFoundPage } from './NotFoundPage';
-import { GuestOnlyRoute, ProtectedRoute, StudentRoute } from './route-guards';
+import { GuestOnlyRoute, ProtectedRoute, ResolvedExperienceRoute, StudentRoute } from './route-guards';
 
 export function App() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -53,14 +58,16 @@ export function App() {
         <Route
           element={
             <ProtectedRoute>
-              <AppShell />
+              <ResolvedExperienceRoute>
+                <Outlet />
+              </ResolvedExperienceRoute>
             </ProtectedRoute>
           }
         >
           <Route
             element={
               <StudentRoute>
-                <Outlet />
+                <AppShell />
               </StudentRoute>
             }
           >
@@ -77,14 +84,14 @@ export function App() {
             <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
             <Route path="lessons/:lessonId/preview" element={<LessonPreviewPage />} />
           </Route>
-          <Route
-            path="researcher/results"
-            element={
-              <ResearcherRoute>
-                <ResearcherResultsPage />
-              </ResearcherRoute>
-            }
-          />
+          <Route path="researcher" element={<ResearcherRoute><ResearcherLayout /></ResearcherRoute>}>
+            <Route index element={<ResearcherDashboardPage />} />
+            <Route path="participants" element={<ResearcherResultsPage />} />
+            <Route path="assessments" element={<ResearcherAssessmentsPage />} />
+            <Route path="lessons" element={<ResearcherLessonsPage />} />
+            <Route path="reports" element={<ResearcherReportsPage />} />
+            <Route path="results" element={<Navigate to="/researcher/participants" replace />} />
+          </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

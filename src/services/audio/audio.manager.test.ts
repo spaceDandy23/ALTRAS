@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { howlInstances, MockHowl, MockHowler } = vi.hoisted(() => {
   const instances: Array<{
@@ -60,6 +60,11 @@ describe('audio manager', () => {
     howlInstances.length = 0;
     vi.clearAllMocks();
     MockHowler.ctx.state = 'running';
+    document.documentElement.dataset.experience = 'student';
+  });
+
+  afterEach(() => {
+    delete document.documentElement.dataset.experience;
   });
 
   it('automatically starts one looping music instance when Howler is already running', () => {
@@ -163,6 +168,35 @@ describe('audio manager', () => {
     expect(howlInstances).toHaveLength(1);
     expect(howlInstances[0].options.src).toEqual(['/audio/sfx/click.wav']);
     expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects all SFX outside the confirmed student experience', () => {
+    for (const scope of ['neutral', 'researcher'] as const) {
+      document.documentElement.dataset.experience = scope;
+      expect(playSfx('click')).toBeNull();
+      expect(playSfx('correct')).toBeNull();
+      expect(howlInstances).toHaveLength(0);
+    }
+  });
+
+  it('does not start BGM outside the confirmed student experience', () => {
+    document.documentElement.dataset.experience = 'researcher';
+    playMusic();
+    expect(howlInstances).toHaveLength(0);
+
+    document.documentElement.dataset.experience = 'student';
+    playMusic();
+    expect(howlInstances).toHaveLength(1);
+  });
+
+  it('does not consume completion events outside the student experience', () => {
+    document.documentElement.dataset.experience = 'researcher';
+    playCompletion('researcher-attempt', true);
+    expect(howlInstances).toHaveLength(0);
+
+    document.documentElement.dataset.experience = 'student';
+    playCompletion('researcher-attempt', true);
+    expect(howlInstances).toHaveLength(1);
   });
 
   it('temporarily mutes active audio without replacing saved volume levels', () => {

@@ -64,15 +64,29 @@ describe('page-level loading audit', () => {
       'src/features/lessons/components/ContentState.tsx',
       'src/features/settings/SettingsPage.tsx',
       'src/features/assessments/AssessmentPage.tsx',
+      'src/features/researcher/ResearcherDashboardPage.tsx',
       'src/features/researcher/ResearcherResultsPage.tsx',
+      'src/features/researcher/ResearcherAssessmentsPage.tsx',
+      'src/features/researcher/ResearcherLessonsPage.tsx',
       'src/features/researcher/ResearcherRoute.tsx',
     ];
 
     for (const routeFile of routeFiles) {
       const source = readFileSync(resolve(process.cwd(), routeFile), 'utf8');
-      const loadingUsages = source.match(/<LoadingState[\s\S]*?\/>/g) ?? [];
+      const loadingUsages =
+        source.match(/<(?:LoadingState|ResearcherContentLoading)[\s\S]*?\/>/g) ?? [];
       expect(loadingUsages.length, routeFile).toBeGreaterThan(0);
-      for (const usage of loadingUsages) expect(usage, routeFile).toContain('variant="page"');
+      for (const usage of loadingUsages) {
+        if (usage.startsWith('<LoadingState')) {
+          expect(usage, routeFile).toContain('variant="page"');
+        }
+      }
     }
+
+    const researcherLoadingSource = readFileSync(
+      resolve(process.cwd(), 'src/features/researcher/ResearcherContentLoading.tsx'),
+      'utf8',
+    );
+    expect(researcherLoadingSource).toContain('variant="page"');
   });
 });

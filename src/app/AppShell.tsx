@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { AlgebraicBackdrop } from '@/components/decorative/AlgebraicBackdrop';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
@@ -22,11 +22,7 @@ export function AppShell() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const researcherStatus = useResearcherAccessStore((state) => state.status);
-  const checkResearcherAccess = useResearcherAccessStore((state) => state.checkAccess);
   const navigate = useNavigate();
-  const location = useLocation();
-  const isResearcherArea = location.pathname.startsWith('/researcher/');
-  const showResearcherShell = isResearcherArea || researcherStatus === 'authorized';
   useEffect(() => {
     const colorScheme =
       typeof window.matchMedia === 'function'
@@ -47,17 +43,13 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (user) void checkResearcherAccess(user.id);
-  }, [checkResearcherAccess, user]);
-
-  useEffect(() => {
-    if (isResearcherArea || researcherStatus === 'authorized') {
+    if (researcherStatus !== 'denied') {
       stopMusic();
       return;
     }
     playMusic('main');
     return stopMusic;
-  }, [isResearcherArea, researcherStatus]);
+  }, [researcherStatus]);
 
   const handleLogout = async () => {
     await logout();
@@ -74,11 +66,8 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <AlgebraicBackdrop />
-      <header className={`app-header${showResearcherShell ? ' app-header--researcher' : ''}`}>
+      <header className="app-header">
         <AltrasLogo />
-        {showResearcherShell ? (
-          <ResearcherHeader userName={user?.displayName} onLogout={() => setConfirmingLogout(true)} />
-        ) : (
         <div className="app-header__tools">
           <OfflineStatus />
           <button
@@ -138,7 +127,6 @@ export function AppShell() {
             </nav>
           </details>
         </div>
-        )}
       </header>
       <main className="app-content">
         <Outlet />
@@ -152,22 +140,6 @@ export function AppShell() {
       >
         Your progress will remain on this device. You can sign back in at any time.
       </ConfirmDialog>
-    </div>
-  );
-}
-
-function ResearcherHeader({ userName, onLogout }: { userName?: string; onLogout: () => void }) {
-  return (
-    <div className="researcher-header__tools">
-      <span className="researcher-header__identity">Research console · {userName}</span>
-      <nav className="researcher-header__nav" aria-label="Researcher navigation">
-        <Link to="/researcher/results" aria-current="page">
-          Researcher results
-        </Link>
-        <button type="button" onClick={onLogout}>
-          Log out
-        </button>
-      </nav>
     </div>
   );
 }
