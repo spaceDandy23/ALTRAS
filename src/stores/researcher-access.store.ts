@@ -10,6 +10,9 @@ interface ResearcherAccessState {
   clear: () => void;
 }
 
+let accessGeneration = 0;
+let pendingCheck: { userId: string; promise: Promise<void> } | null = null;
+
 export const useResearcherAccessStore = create<ResearcherAccessState>((set, get) => ({
   status: 'idle',
   userId: null,
@@ -22,14 +25,29 @@ export const useResearcherAccessStore = create<ResearcherAccessState>((set, get)
       return;
     }
 
-    set({ status: 'loading', userId });
-    try {
-      set({ status: (await isCurrentUserResearcher()) ? 'authorized' : 'denied' });
-    } catch {
-      set({ status: 'error' });
-    }
+    if (pendingCheck?.userId === userId) return pendingCheck.promise;
+    const generation = ++accessGeneration;
+    const promise = (async () => {
+      set({ status: 'loading', userId });
+      try {
+        const status = (await isCurrentUserResearcher()) ? 'authorized' : 'denied';
+        if (generation === accessGeneration && get().userId === userId) set({ status });
+      } catch {
+        if (generation === accessGeneration && get().userId === userId) set({ status: 'error' });
+      } finally {
+        if (generation === accessGeneration && pendingCheck?.userId === userId) {
+          pendingCheck = null;
+        }
+      }
+    })();
+    pendingCheck = { userId, promise };
+    return promise;
   },
-  clear: () => set({ status: 'idle', userId: null }),
+  clear: () => {
+    accessGeneration += 1;
+    pendingCheck = null;
+    set({ status: 'idle', userId: null });
+  },
 }));
 
 export function assertParticipantLearningAccess(): void {

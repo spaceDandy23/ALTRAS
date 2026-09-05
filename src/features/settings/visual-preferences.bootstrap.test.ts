@@ -13,6 +13,8 @@ import {
 } from './visual-preferences.cache';
 
 vi.mock('./settings.service', () => ({ getUserSettings: vi.fn() }));
+const setAudioVolumes = vi.hoisted(() => vi.fn());
+vi.mock('@/services/audio/audio.manager', () => ({ setAudioVolumes }));
 
 const userA = '00000000-0000-4000-8000-000000000001';
 const userB = '00000000-0000-4000-8000-000000000002';
@@ -72,5 +74,11 @@ describe('visual preference bootstrap', () => {
     expect(getActiveVisualPreferencesUserId()).toBeNull();
     expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
     expect(readCachedVisualPreferences(userA)?.readabilityScale).toBe(1.3);
+  });
+
+  it('leaves audio silent when authoritative settings cannot be resolved', async () => {
+    vi.mocked(getUserSettings).mockRejectedValue(new Error('offline'));
+    await hydrateVisualPreferencesForUser(userB);
+    expect(setAudioVolumes).not.toHaveBeenCalled();
   });
 });

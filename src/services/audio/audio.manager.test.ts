@@ -59,6 +59,7 @@ describe('audio manager', () => {
     resetAudio();
     howlInstances.length = 0;
     vi.clearAllMocks();
+    setAudioVolumes({ masterVolume: 100, soundEffectsVolume: 100, musicVolume: 100 });
     MockHowler.ctx.state = 'running';
     document.documentElement.dataset.experience = 'student';
   });
@@ -120,10 +121,20 @@ describe('audio manager', () => {
     expect(howlInstances[0].stop).toHaveBeenCalled();
     expect(howlInstances[0].unload).toHaveBeenCalled();
     expect(getAudioVolumes()).toEqual({
-      masterVolume: 100,
-      soundEffectsVolume: 100,
-      musicVolume: 100,
+      masterVolume: 0,
+      soundEffectsVolume: 0,
+      musicVolume: 0,
     });
+  });
+
+  it('fails safe to silence until settings resolve', () => {
+    resetAudio();
+    howlInstances.length = 0;
+    playMusic();
+    playSfx('click');
+    expect(getAudioVolumes()).toEqual({ masterVolume: 0, soundEffectsVolume: 0, musicVolume: 0 });
+    expect(howlInstances).toHaveLength(1);
+    expect(howlInstances[0].play).not.toHaveBeenCalled();
   });
 
   it('applies master and individual music/SFX volumes to active instances', () => {

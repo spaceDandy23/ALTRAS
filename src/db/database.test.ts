@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { AltrasDatabase } from './database';
 
 describe('content cache database', () => {
-  it('contains only lesson-content tables and preserves cached content when reopened', async () => {
+  it('contains versioned offline content and assessment-draft tables', async () => {
     const name = `altras-content-${crypto.randomUUID()}`;
     const first = new AltrasDatabase(name);
     await first.open();
 
-    expect(first.verno).toBe(1);
+    expect(first.verno).toBe(2);
     expect(first.tables.map((table) => table.name).sort()).toEqual([
+      'assessmentDrafts',
       'contentVersions',
       'lessonItems',
       'lessons',

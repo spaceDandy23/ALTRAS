@@ -4,6 +4,7 @@ import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageLoadError } from '@/components/ui/PageLoadError';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
 import { resolveLessonCharacterDialogue } from '@/features/characters/character.dialogue';
 import { db } from '@/db/database';
@@ -28,19 +29,37 @@ export function LessonOverviewPage() {
   const [progress, setProgress] = useState<LessonProgress | null>(null);
   const [active, setActive] = useState<LessonAttempt | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');
+  const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${loadRevision}`;
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
+    let current = true;
     void Promise.all([
       getLesson(db, lessonId),
       getLessonProgress(db, user.id, lessonId),
       getActiveAttempt(db, user.id, lessonId),
-    ]).then(([nextLesson, nextProgress, nextActive]) => {
-      setLesson(nextLesson);
-      setProgress(nextProgress);
-      setActive(nextActive);
-    });
-  }, [contentStatus, lessonId, user]);
+    ])
+      .then(([nextLesson, nextProgress, nextActive]) => {
+        if (!current) return;
+        setLesson(nextLesson);
+        setProgress(nextProgress);
+        setActive(nextActive);
+        setLoadError('');
+        setLoadedFor(loadKey);
+      })
+      .catch(() => {
+        if (current) {
+          setLoadError('This lesson could not be loaded.');
+          setLoadedFor(loadKey);
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [contentStatus, lessonId, loadKey, user]);
 
   if (!user) return null;
   const begin = () => {
@@ -76,7 +95,15 @@ export function LessonOverviewPage() {
 
   return (
     <ContentState>
-      {!lesson || !progress ? (
+      {loadedFor !== loadKey ? (
+        <LoadingState variant="page" message="Opening lesson…" />
+      ) : loadError ? (
+        <PageLoadError
+          title="Lesson unavailable"
+          message={loadError}
+          onRetry={() => setLoadRevision((revision) => revision + 1)}
+        />
+      ) : !lesson || !progress ? (
         <LoadingState variant="page" message="Opening lesson…" />
       ) : (
         <div className="standard-page lesson-overview page-enter">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageLoadError } from '@/components/ui/PageLoadError';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
 import { resolveLessonCharacterDialogue } from '@/features/characters/character.dialogue';
 import { resolveLessonResultReaction } from '@/features/characters/lesson-result-reaction';
@@ -32,28 +33,58 @@ export function LessonResultPage() {
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
   const [nextEntry, setNextEntry] = useState<LessonHubEntry | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');
+  const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${attemptId}:${loadRevision}`;
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
+    let current = true;
     void Promise.all([
       getLesson(db, lessonId),
       getAttempt(db, user.id, attemptId),
       getLessonProgress(db, user.id, lessonId),
       getLessonHubData(db, user.id),
-    ]).then(([loadedLesson, loadedAttempt, loadedProgress, hub]) => {
-      setLesson(loadedLesson);
-      setAttempt(loadedAttempt);
-      setProgress(loadedProgress);
-      setNextEntry(
-        hub.entries.find(
-          ({ lesson: candidate, progress: candidateProgress }) =>
-            candidate.prerequisiteLessonId === loadedLesson.id &&
-            candidateProgress.status !== 'locked',
-        ) ?? null,
-      );
-    });
-  }, [attemptId, contentStatus, lessonId, user]);
+    ])
+      .then(([loadedLesson, loadedAttempt, loadedProgress, hub]) => {
+        if (!current) return;
+        setLesson(loadedLesson);
+        setAttempt(loadedAttempt);
+        setProgress(loadedProgress);
+        setNextEntry(
+          hub.entries.find(
+            ({ lesson: candidate, progress: candidateProgress }) =>
+              candidate.prerequisiteLessonId === loadedLesson.id &&
+              candidateProgress.status !== 'locked',
+          ) ?? null,
+        );
+        setLoadError('');
+        setLoadedFor(loadKey);
+      })
+      .catch(() => {
+        if (current) {
+          setLoadError('This lesson result could not be loaded.');
+          setLoadedFor(loadKey);
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [attemptId, contentStatus, lessonId, loadKey, user]);
 
-  if (!user || !lesson || !attempt || !progress || attempt.status !== 'completed') {
+  if (loadedFor === loadKey && loadError) {
+    return (
+      <ContentState>
+        <PageLoadError
+          title="Result unavailable"
+          message={loadError}
+          onRetry={() => setLoadRevision((revision) => revision + 1)}
+        />
+      </ContentState>
+    );
+  }
+
+  if (loadedFor !== loadKey || !user || !lesson || !attempt || !progress || attempt.status !== 'completed') {
     return (
       <ContentState>
         <LoadingState variant="page" message="Loading your result…" />

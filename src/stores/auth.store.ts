@@ -4,6 +4,7 @@ import {
   logoutOnlineUser,
   registerOnlineUser,
   restoreOnlineSession,
+  subscribeToOnlineAuthChanges,
 } from '@/features/auth/online-auth.service';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { applyExperienceScope } from '@/features/researcher/researcher-experience';
@@ -23,47 +24,84 @@ interface AuthState {
   register: (input: RegistrationInput) => Promise<void>;
   logout: () => Promise<void>;
   replaceUser: (user: PublicUser) => void;
+  subscribeToAuthChanges: () => () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  status: 'idle',
-  user: null,
-  initialize: async () => {
-    if (get().status !== 'idle') return;
-    set({ status: 'loading' });
-    try {
-      const user = await restoreOnlineSession();
-      if (!user) {
-        deactivateVisualPreferences();
-        applyExperienceScope('neutral');
-        set({ user: null, status: 'guest' });
-        return;
-      }
-      await hydrateVisualPreferencesForUser(user.id);
-      set({ user, status: 'authenticated' });
-    } catch {
-      deactivateVisualPreferences();
-      applyExperienceScope('neutral');
-      set({ user: null, status: 'guest' });
-    }
-  },
-  login: async (input) => {
-    const user = await loginOnlineUser(input);
-    await hydrateVisualPreferencesForUser(user.id);
-    set({ user, status: 'authenticated' });
-  },
-  register: async (input) => {
-    const user = await registerOnlineUser(input);
-    await hydrateVisualPreferencesForUser(user.id);
-    set({ user, status: 'authenticated' });
-  },
-  logout: async () => {
-    await logoutOnlineUser();
+let authGeneration = 0;
+
+export const useAuthStore = create<AuthState>((set, get) => {
+  const clearUserScope = () => {
+    useResearcherAccessStore.getState().clear();
     deactivateVisualPreferences();
     applyExperienceScope('neutral');
     resetAudio();
-    set({ user: null, status: 'guest' });
-    useResearcherAccessStore.getState().clear();
-  },
-  replaceUser: (user) => set({ user }),
-}));
+  };
+
+  const authenticate = async (user: PublicUser, generation: number) => {
+    await hydrateVisualPreferencesForUser(user.id);
+    if (generation === authGeneration) set({ user, status: 'authenticated' });
+  };
+
+  const acceptAuthUser = (user: PublicUser | null) => {
+    if (user && get().status === 'authenticated' && get().user?.id === user.id) {
+      set({ user });
+      return;
+    }
+    const generation = ++authGeneration;
+    clearUserScope();
+    if (!user) {
+      set({ user: null, status: 'guest' });
+      return;
+    }
+    set({ user: null, status: 'loading' });
+    void authenticate(user, generation).catch(() => {
+      if (generation === authGeneration) set({ user: null, status: 'guest' });
+    });
+  };
+
+  return {
+    status: 'idle',
+    user: null,
+    initialize: async () => {
+      if (get().status !== 'idle') return;
+      const generation = ++authGeneration;
+      set({ status: 'loading' });
+      try {
+        const user = await restoreOnlineSession();
+        if (generation !== authGeneration) return;
+        if (!user) {
+          clearUserScope();
+          set({ user: null, status: 'guest' });
+          return;
+        }
+        await authenticate(user, generation);
+      } catch {
+        if (generation !== authGeneration) return;
+        clearUserScope();
+        set({ user: null, status: 'guest' });
+      }
+    },
+    login: async (input) => {
+      const generation = ++authGeneration;
+      clearUserScope();
+      const user = await loginOnlineUser(input);
+      if (generation !== authGeneration) return;
+      await authenticate(user, generation);
+    },
+    register: async (input) => {
+      const generation = ++authGeneration;
+      clearUserScope();
+      const user = await registerOnlineUser(input);
+      if (generation !== authGeneration) return;
+      await authenticate(user, generation);
+    },
+    logout: async () => {
+      await logoutOnlineUser();
+      authGeneration += 1;
+      clearUserScope();
+      set({ user: null, status: 'guest' });
+    },
+    replaceUser: (user) => set({ user }),
+    subscribeToAuthChanges: () => subscribeToOnlineAuthChanges(acceptAuthUser),
+  };
+});

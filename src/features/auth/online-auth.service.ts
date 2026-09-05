@@ -105,6 +105,19 @@ export async function restoreOnlineSession(): Promise<PublicUser | null> {
   return data.session ? toPublicUser(data.session.user) : null;
 }
 
+export function subscribeToOnlineAuthChanges(
+  listener: (user: PublicUser | null) => void,
+): () => void {
+  const { data } = getSupabaseClient().auth.onAuthStateChange((_event, session) => {
+    try {
+      listener(session ? toPublicUser(session.user) : null);
+    } catch {
+      listener(null);
+    }
+  });
+  return () => data.subscription.unsubscribe();
+}
+
 export async function logoutOnlineUser(): Promise<void> {
   const { error } = await getSupabaseClient().auth.signOut();
   if (error) throw mapAuthFailure(error.message, 'Unable to sign out.');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageLoadError } from '@/components/ui/PageLoadError';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
 import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
 import { db } from '@/db/database';
@@ -23,20 +24,40 @@ export function MainMenuPage() {
   const [hub, setHub] = useState<LessonHubData | null>(null);
   const [activeAttempt, setActiveAttempt] = useState<LessonAttempt | null>(null);
   const [totalXp, setTotalXp] = useState(0);
+  const [loadError, setLoadError] = useState('');
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');
+  const loadKey = `${user?.id ?? 'guest'}:${loadRevision}`;
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
-    void getLessonHubData(db, user.id).then(async (nextHub) => {
-      const playable = nextHub.entries.filter(({ lesson }) => lesson.contentStatus === 'playable');
-      const [attempts, xp] = await Promise.all([
-        Promise.all(playable.map(({ lesson }) => getActiveAttempt(db, user.id, lesson.id))),
-        getTotalXp(db, user.id),
-      ]);
-      setHub(nextHub);
-      setActiveAttempt(attempts.find((attempt) => attempt !== null) ?? null);
-      setTotalXp(xp);
-    });
-  }, [contentStatus, user]);
+    let active = true;
+    void getLessonHubData(db, user.id)
+      .then(async (nextHub) => {
+        const playable = nextHub.entries.filter(
+          ({ lesson }) => lesson.contentStatus === 'playable',
+        );
+        const [attempts, xp] = await Promise.all([
+          Promise.all(playable.map(({ lesson }) => getActiveAttempt(db, user.id, lesson.id))),
+          getTotalXp(db, user.id),
+        ]);
+        if (!active) return;
+        setHub(nextHub);
+        setActiveAttempt(attempts.find((attempt) => attempt !== null) ?? null);
+        setTotalXp(xp);
+        setLoadError('');
+        setLoadedFor(loadKey);
+      })
+      .catch(() => {
+        if (active) {
+          setLoadError('Your learning summary could not be loaded.');
+          setLoadedFor(loadKey);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [contentStatus, loadKey, user]);
 
   const activeEntry = hub?.entries.find(({ progress }) => progress.status === 'in-progress');
   const nextEntry =
@@ -68,7 +89,15 @@ export function MainMenuPage() {
 
   return (
     <ContentState>
-      {!hub || !nextEntry ? (
+      {loadedFor !== loadKey ? (
+        <LoadingState variant="page" message="Preparing your lesson…" />
+      ) : loadError ? (
+        <PageLoadError
+          title="Home is unavailable"
+          message={loadError}
+          onRetry={() => setLoadRevision((revision) => revision + 1)}
+        />
+      ) : !hub || !nextEntry ? (
         <LoadingState variant="page" message="Preparing your lesson…" />
       ) : (
         <div className="menu-page page-enter">

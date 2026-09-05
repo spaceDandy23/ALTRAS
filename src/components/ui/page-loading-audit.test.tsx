@@ -64,6 +64,7 @@ describe('page-level loading audit', () => {
       'src/features/lessons/components/ContentState.tsx',
       'src/features/settings/SettingsPage.tsx',
       'src/features/assessments/AssessmentPage.tsx',
+      'src/features/assessments/AssessmentPage.async.tsx',
       'src/features/researcher/ResearcherDashboardPage.tsx',
       'src/features/researcher/ResearcherResultsPage.tsx',
       'src/features/researcher/ResearcherAssessmentsPage.tsx',

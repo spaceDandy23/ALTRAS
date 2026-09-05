@@ -15,15 +15,26 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
 5. Run `supabase/migrations/202608300003_assessment_flow.sql`.
 6. Run `supabase/migrations/202608310001_researcher_results.sql`.
 7. Run `supabase/migrations/202608310002_researcher_student_separation.sql`.
-8. Copy the project URL and publishable key from **Project Settings > API Keys**.
-9. Create `.env.local` from `.env.example` and add those two public values.
+8. Run `supabase/migrations/202609040001_assessment_answer_draft_upsert.sql` to support
+   resumable pre-test and post-test drafts whose answers synchronize in the background.
+9. Run `supabase/migrations/202609050001_research_data_integrity.sql` to install private lesson
+   answer keys, server-authoritative lesson operations, safe assessment-resume reads, serialized
+   assessment answer mutation, and non-destructive progress initialization.
+10. Run `supabase/migrations/202609050002_assessment_answer_conflict_fix.sql` to apply the
+    PostgreSQL-safe assessment answer upsert conflict target.
+11. Copy the project URL and publishable key from **Project Settings > API Keys**.
+12. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 
 ## Vercel
 
 Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the Vercel project environment variables.
-Redeploy only after the database migration and application tests pass.
+Apply every migration, including the assessment answer upsert, research-data integrity, and
+assessment conflict-fix migrations, before deploying this frontend. The integrity migration changes
+RPC signatures and removes the old direct-write grants, so the new frontend and migrations must be
+released together, database first. Redeploy only after the database migrations and application tests
+pass.
 
 ## Researcher access
 

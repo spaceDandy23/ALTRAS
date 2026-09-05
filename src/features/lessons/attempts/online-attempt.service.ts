@@ -7,8 +7,8 @@ import {
   submittedActivityAnswerSchema,
   type LessonAttempt,
 } from '@/types/learning';
-import { getLesson, getAllLessons } from '../content/content.service';
-import { evaluateActivity, type ActivityAnswer } from '../domain/evaluation';
+import { getLesson } from '../content/content.service';
+import type { ActivityAnswer } from '../domain/evaluation';
 import { getOnlineLessonProgress } from '../progress/online-progress.service';
 import { AttemptError } from './attempt.errors';
 
@@ -110,36 +110,16 @@ async function createOnlineAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
-  const lesson = await getLesson(database, lessonId);
-  const id = crypto.randomUUID();
-  const { error } = await getSupabaseClient().from('lesson_attempts').insert({
-    id,
-    user_id: userId,
-    lesson_id: lessonId,
-    content_version: lesson.contentVersion,
-    expected_activity_count: lesson.activities.length,
-    passing_threshold: lesson.passingThreshold,
-    status: 'active',
+  await getLesson(database, lessonId);
+  const { data, error } = await getSupabaseClient().rpc('start_lesson_attempt', {
+    p_lesson_id: lessonId,
   });
   if (error) {
     const existing = await getOnlineActiveAttempt(userId, lessonId);
     if (existing) return existing;
     throw new AttemptError('Unable to start this online attempt.');
   }
-
-  const now = new Date().toISOString();
-  const progress = await getOnlineLessonProgress(database, userId, lessonId);
-  const { error: progressError } = await getSupabaseClient()
-    .from('lesson_progress')
-    .update({
-      status: progress.status === 'cleared' ? 'cleared' : 'in-progress',
-      first_started_at: progress.firstStartedAt
-        ? new Date(progress.firstStartedAt).toISOString()
-        : now,
-    })
-    .eq('user_id', userId)
-    .eq('lesson_id', lessonId);
-  if (progressError) throw new AttemptError('The attempt started, but progress could not update.');
+  const id = z.object({ id: z.string().uuid() }).parse(data).id;
   return readAttempt(id);
 }
 
@@ -195,17 +175,11 @@ export async function submitOnlineActivityAnswer(
   const activity = lesson.activities.find((item) => item.id === activityId);
   if (!activity) throw new AttemptError('This activity is not part of the lesson.');
 
-  const { data, error } = await getSupabaseClient()
-    .from('attempt_answers')
-    .insert({
-      attempt_id: attemptId,
-      activity_id: activityId,
-      activity_type: activity.type,
-      submitted_answer: answer,
-      is_correct: evaluateActivity(activity, answer),
-    })
-    .select('activity_id, activity_type, submitted_answer, is_correct, submitted_at')
-    .single();
+  const { data, error } = await getSupabaseClient().rpc('submit_lesson_activity_answer', {
+    p_attempt_id: attemptId,
+    p_activity_id: activityId,
+    p_submitted_answer: answer,
+  });
   if (error?.code === '23505') return readAttempt(attemptId);
   if (error) throw new AttemptError('Unable to save this answer online.');
 
@@ -228,13 +202,8 @@ export async function completeOnlineAttempt(
   if (attempt.answers.length !== lesson.activities.length) {
     throw new AttemptError('Complete every activity before finishing the lesson.');
   }
-  const lessons = await getAllLessons(database);
-  const followUps = lessons
-    .filter((candidate) => candidate.prerequisiteLessonId === lesson.id)
-    .map((candidate) => candidate.id);
   const { error } = await getSupabaseClient().rpc('complete_lesson_attempt', {
     p_attempt_id: attemptId,
-    p_follow_up_lesson_ids: followUps,
   });
   if (error) throw new AttemptError('Unable to finish and score this lesson online.');
   return readAttempt(attemptId);

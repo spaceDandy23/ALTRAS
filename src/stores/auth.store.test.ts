@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   logoutOnlineUser: vi.fn(),
   hydrate: vi.fn(),
   deactivate: vi.fn(),
+  subscribe: vi.fn(),
 }));
 
 vi.mock('@/features/auth/online-auth.service', () => ({
@@ -14,6 +15,7 @@ vi.mock('@/features/auth/online-auth.service', () => ({
   logoutOnlineUser: mocks.logoutOnlineUser,
   registerOnlineUser: vi.fn(),
   restoreOnlineSession: mocks.restoreOnlineSession,
+  subscribeToOnlineAuthChanges: mocks.subscribe,
 }));
 vi.mock('@/features/settings/visual-preferences.bootstrap', () => ({
   hydrateVisualPreferencesForUser: mocks.hydrate,
@@ -54,6 +56,7 @@ describe('authenticated visual bootstrap', () => {
     mocks.logoutOnlineUser.mockReset();
     mocks.hydrate.mockReset();
     mocks.deactivate.mockReset();
+    mocks.subscribe.mockReset();
   });
 
   afterEach(() => {
@@ -115,5 +118,54 @@ describe('authenticated visual bootstrap', () => {
     expect(mocks.deactivate).toHaveBeenCalledOnce();
     expect(useAuthStore.getState()).toMatchObject({ status: 'guest', user: null });
     expect(document.documentElement.dataset.experience).toBe('neutral');
+  });
+
+  it('follows cross-tab session loss and returns the app to neutral scope', () => {
+    let listener!: (user: PublicUser | null) => void;
+    const unsubscribe = vi.fn();
+    mocks.subscribe.mockImplementation((nextListener) => {
+      listener = nextListener;
+      return unsubscribe;
+    });
+    useAuthStore.setState({ status: 'authenticated', user: firstUser });
+    document.documentElement.dataset.experience = 'student';
+
+    const cleanup = useAuthStore.getState().subscribeToAuthChanges();
+    listener(null);
+
+    expect(useAuthStore.getState()).toMatchObject({ status: 'guest', user: null });
+    expect(document.documentElement.dataset.experience).toBe('neutral');
+    cleanup();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('discards stale preference hydration after an auth-event account switch', async () => {
+    let listener!: (user: PublicUser | null) => void;
+    mocks.subscribe.mockImplementation((nextListener) => {
+      listener = nextListener;
+      return vi.fn();
+    });
+    const firstHydration = deferred();
+    const secondHydration = deferred();
+    mocks.hydrate.mockImplementation((userId: string) =>
+      userId === firstUser.id ? firstHydration.promise : secondHydration.promise,
+    );
+    useAuthStore.getState().subscribeToAuthChanges();
+
+    listener(firstUser);
+    await vi.waitFor(() => expect(mocks.hydrate).toHaveBeenCalledWith(firstUser.id));
+    listener(secondUser);
+    await vi.waitFor(() => expect(mocks.hydrate).toHaveBeenCalledWith(secondUser.id));
+    firstHydration.resolve();
+    await firstHydration.promise;
+    expect(useAuthStore.getState()).toMatchObject({ status: 'loading', user: null });
+
+    secondHydration.resolve();
+    await vi.waitFor(() =>
+      expect(useAuthStore.getState()).toMatchObject({
+        status: 'authenticated',
+        user: secondUser,
+      }),
+    );
   });
 });

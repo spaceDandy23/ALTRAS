@@ -7,6 +7,8 @@ interface ModalProps {
   titleId: string;
   children: ReactNode;
   className?: string;
+  descriptionId?: string;
+  role?: 'dialog' | 'alertdialog';
 }
 
 const focusableSelector = [
@@ -18,7 +20,15 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function Modal({ open, onClose, titleId, children, className = '' }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  titleId,
+  children,
+  className = '',
+  descriptionId,
+  role = 'dialog',
+}: ModalProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
 
@@ -47,8 +57,6 @@ export function Modal({ open, onClose, titleId, children, className = '' }: Moda
 
       const focusable = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter(
-        (element) => element.getClientRects().length > 0 || element === document.activeElement,
       );
 
       if (focusable.length === 0) {
@@ -88,9 +96,10 @@ export function Modal({ open, onClose, titleId, children, className = '' }: Moda
       <section
         ref={dialogRef}
         className={`modal ${className}`}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         tabIndex={-1}
       >
         {children}

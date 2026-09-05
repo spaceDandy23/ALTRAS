@@ -41,3 +41,22 @@ export type AssessmentKind = z.infer<typeof assessmentKindSchema>;
 export type AssessmentQuestion = z.infer<typeof assessmentQuestionSchema>;
 export type AssessmentAnswer = z.infer<typeof assessmentAnswerSchema>;
 export type AssessmentAttempt = z.infer<typeof assessmentAttemptSchema>;
+
+export type AssessmentDraftSyncStatus = 'pending' | 'synced' | 'pending_submission';
+
+export interface AssessmentDraft {
+  id: string;
+  userId: string;
+  assessment: AssessmentKind;
+  attemptId: string;
+  startedAt: number;
+  contentVersion: number;
+  expectedQuestionCount: number;
+  questions: AssessmentQuestion[];
+  answers: AssessmentAnswer[];
+  currentQuestionIndex: number;
+  revision: number;
+  syncedRevision: number;
+  updatedAt: number;
+  syncStatus: AssessmentDraftSyncStatus;
+}

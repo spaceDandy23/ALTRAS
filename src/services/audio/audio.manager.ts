@@ -9,9 +9,9 @@ export interface AudioVolumes {
 }
 
 const DEFAULT_VOLUMES: AudioVolumes = {
-  masterVolume: 100,
-  soundEffectsVolume: 100,
-  musicVolume: 100,
+  masterVolume: 0,
+  soundEffectsVolume: 0,
+  musicVolume: 0,
 };
 
 let volumes = { ...DEFAULT_VOLUMES };

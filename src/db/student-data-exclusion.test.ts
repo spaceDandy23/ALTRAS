@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AltrasDatabase } from './database';
 
 describe('student data exclusion from browser persistence', () => {
-  it('does not define authentication, profile, settings, progress, or attempt tables', async () => {
+  it('does not persist authentication, profiles, settings, or authoritative attempt records', async () => {
     const database = new AltrasDatabase(`altras-content-only-${crypto.randomUUID()}`);
     await database.open();
 
@@ -15,6 +15,8 @@ describe('student data exclusion from browser persistence', () => {
         'sessions',
         'lessonProgress',
         'lessonAttempts',
+        'assessmentAttempts',
+        'assessmentAnswers',
       ]),
     );
 

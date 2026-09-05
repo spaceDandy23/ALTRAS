@@ -1,10 +1,17 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
+import { db } from '@/db/database';
 import type { AssessmentAttempt, AssessmentQuestion } from '@/types/assessment';
-import { AssessmentPage } from './AssessmentPage';
+import { AssessmentPage } from './AssessmentPage.async';
+import {
+  createAssessmentDraft,
+  getAssessmentDraft,
+  saveAssessmentDraft,
+  updateDraftAnswer,
+} from './assessment-draft.service';
 import {
   completeAssessment,
   getAssessmentAttempt,
@@ -96,9 +103,11 @@ function renderAssessment(kind: 'pre-test' | 'post-test' = 'pre-test') {
 }
 
 describe('assessment character guidance', () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.clearAllMocks();
     useAuthStore.setState({ status: 'guest', user: null });
+    await db.assessmentDrafts.clear();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
   });
 
   function authenticate(loadedQuestions = questions) {
@@ -165,15 +174,23 @@ describe('assessment character guidance', () => {
     const user = userEvent.setup();
     renderAssessment();
 
-    const choice = await screen.findByRole('button', { name: 'The sum of two values' });
+    const choice = await screen.findByRole('radio', { name: 'The sum of two values' });
     await user.click(choice);
 
     expect(choice).toHaveClass('is-selected');
+    expect(choice).toHaveAttribute('role', 'radio');
+    expect(choice).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radiogroup')).toHaveAccessibleName(questions[0].prompt);
     expect(screen.getByRole('button', { name: 'Submit test' })).toBeEnabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Saving answer…');
+    expect(screen.queryByText('Answer saved')).not.toBeInTheDocument();
+    await waitFor(async () => {
+      expect((await getAssessmentDraft(userId, 'pre-test'))?.answers).toEqual([
+        expect.objectContaining({ questionId: questions[0].id, selectedChoiceId: 'a' }),
+      ]);
+    });
   });
 
-  it('waits for an in-flight save and then advances automatically', async () => {
+  it('advances immediately while an answer save remains in flight', async () => {
     authenticate(twoQuestions);
     vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
     const pendingSave = deferred<AssessmentAttempt>();
@@ -181,14 +198,17 @@ describe('assessment character guidance', () => {
     const user = userEvent.setup();
     renderAssessment();
 
-    await user.click(await screen.findByRole('button', { name: 'The sum of two values' }));
+    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
     await user.click(screen.getByRole('button', { name: 'Next question' }));
-    expect(screen.getByRole('button', { name: 'Saving and continuing…' })).toBeDisabled();
-
-    await act(async () => pendingSave.resolve(attempt('active', [answer()])));
     expect(
       await screen.findByRole('heading', { name: twoQuestions[1].prompt }),
     ).toBeInTheDocument();
+    expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: twoQuestions[1].prompt })).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+    await act(async () => pendingSave.resolve(attempt('active', [answer()])));
     expect(submitAssessmentAnswer).toHaveBeenCalledTimes(1);
   });
 
@@ -201,9 +221,9 @@ describe('assessment character guidance', () => {
     const user = userEvent.setup();
     renderAssessment();
 
-    await user.click(await screen.findByRole('button', { name: 'The sum of two values' }));
+    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
     await user.click(screen.getByRole('button', { name: 'Submit test' }));
-    expect(screen.getByRole('button', { name: 'Saving and submitting…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
     expect(completeAssessment).not.toHaveBeenCalled();
 
     await act(async () => pendingSave.resolve(attempt('active', [answer()])));
@@ -216,9 +236,10 @@ describe('assessment character guidance', () => {
     expect(audio.playSfx).toHaveBeenCalledWith('click');
     expect(audio.playSfx).not.toHaveBeenCalledWith('correct');
     expect(audio.playSfx).not.toHaveBeenCalledWith('incorrect');
+    await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toBeNull();
   });
 
-  it('does not advance or complete when saving fails and preserves the choice for retry', async () => {
+  it('retains a failed final submission locally and allows retry', async () => {
     authenticate();
     vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
     const pendingSave = deferred<AssessmentAttempt>();
@@ -226,7 +247,7 @@ describe('assessment character guidance', () => {
     const user = userEvent.setup();
     renderAssessment();
 
-    const choice = await screen.findByRole('button', { name: 'The sum of two values' });
+    const choice = await screen.findByRole('radio', { name: 'The sum of two values' });
     await user.click(choice);
     await user.click(screen.getByRole('button', { name: 'Submit test' }));
     await act(async () =>
@@ -240,13 +261,16 @@ describe('assessment character guidance', () => {
     ).toBeInTheDocument();
     expect(completeAssessment).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Submit test' })).toBeEnabled();
+    await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toMatchObject({
+      syncStatus: 'pending_submission',
+    });
 
     vi.mocked(submitAssessmentAnswer).mockResolvedValue(attempt('active', [answer()]));
     vi.mocked(completeAssessment).mockResolvedValue(attempt('submitted', [answer()]));
     await user.click(screen.getByRole('button', { name: 'Submit test' }));
 
     expect(await screen.findByText('Pre-test complete')).toBeInTheDocument();
-    expect(submitAssessmentAnswer).toHaveBeenCalledTimes(2);
+    expect(submitAssessmentAnswer).toHaveBeenCalledTimes(3);
     expect(completeAssessment).toHaveBeenCalledTimes(1);
   });
 
@@ -258,7 +282,7 @@ describe('assessment character guidance', () => {
     const user = userEvent.setup();
     renderAssessment();
 
-    await user.click(await screen.findByRole('button', { name: 'The sum of two values' }));
+    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
     const next = screen.getByRole('button', { name: 'Next question' });
     await user.dblClick(next);
     await act(async () => pendingSave.resolve(attempt('active', [answer()])));
@@ -268,5 +292,42 @@ describe('assessment character guidance', () => {
     ).toBeInTheDocument();
     expect(submitAssessmentAnswer).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
+  });
+
+  it('restores a newer unsynced local answer without replacing it with stale server data', async () => {
+    authenticate();
+    const server = attempt('active', [{ ...answer(), answeredAt: 10 }]);
+    const local = updateDraftAnswer(createAssessmentDraft(server, questions), questions[0].id, 'b', 20);
+    await saveAssessmentDraft(local);
+    vi.mocked(getAssessmentAttempt).mockResolvedValue(server);
+    vi.mocked(submitAssessmentAnswer).mockResolvedValue(server);
+    renderAssessment();
+
+    expect(await screen.findByRole('radio', { name: 'The quotient of two values' })).toHaveClass(
+      'is-selected',
+    );
+  });
+
+  it('keeps an offline final submission pending instead of showing a result', async () => {
+    authenticate();
+    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
+    vi.mocked(submitAssessmentAnswer).mockRejectedValue(new Error('offline'));
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const user = userEvent.setup();
+    renderAssessment();
+
+    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
+    await user.click(screen.getByRole('button', { name: 'Submit test' }));
+
+    expect(
+      await screen.findByText(
+        'Your answers are saved on this device and will be submitted when you’re back online.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Pre-test complete')).not.toBeInTheDocument();
+    expect(completeAssessment).not.toHaveBeenCalled();
+    await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toMatchObject({
+      syncStatus: 'pending_submission',
+    });
   });
 });

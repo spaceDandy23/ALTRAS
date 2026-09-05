@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageLoadError } from '@/components/ui/PageLoadError';
 import { ActivityCharacterAssistant } from '@/features/characters/components/ActivityCharacterAssistant';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
@@ -37,6 +38,10 @@ export function ActiveLessonPage() {
   const [confirmExit, setConfirmExit] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [hintActivityId, setHintActivityId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');
+  const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${attemptId}:${loadRevision}`;
   const activeSegmentStartedAt = useRef<number | null>(null);
 
   const flushActiveTime = useCallback(async () => {
@@ -50,15 +55,17 @@ export function ActiveLessonPage() {
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
-    void Promise.all([getLesson(db, lessonId), getAttempt(db, user.id, attemptId)]).then(
-      async ([loadedLesson, loadedAttempt]) => {
+    let current = true;
+    void Promise.all([getLesson(db, lessonId), getAttempt(db, user.id, attemptId)])
+      .then(async ([loadedLesson, loadedAttempt]) => {
         if (loadedAttempt.lessonId !== loadedLesson.id) throw new Error('Attempt mismatch.');
         if (loadedAttempt.status === 'completed') {
-          navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
+          if (current) navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
           return;
         }
         if (loadedAttempt.answers.length >= loadedLesson.activities.length) {
           const completedAttempt = await completeAttempt(db, loadedAttempt.id);
+          if (!current) return;
           playCompletion(
             completedAttempt.id,
             completedAttempt.cleared === true && completedAttempt.xpImprovement > 0,
@@ -66,12 +73,23 @@ export function ActiveLessonPage() {
           navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
           return;
         }
+        if (!current) return;
         setLesson(loadedLesson);
         setAttempt(loadedAttempt);
         setActivityIndex(loadedAttempt.answers.length);
-      },
-    );
-  }, [attemptId, contentStatus, lessonId, navigate, user]);
+        setLoadError('');
+        setLoadedFor(loadKey);
+      })
+      .catch(() => {
+        if (current) {
+          setLoadError('Your lesson attempt could not be restored.');
+          setLoadedFor(loadKey);
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [attemptId, contentStatus, lessonId, loadKey, navigate, user]);
 
   useEffect(() => {
     if (saveState !== 'saved') return;
@@ -104,7 +122,19 @@ export function ActiveLessonPage() {
     };
   }, [attempt, flushActiveTime]);
 
-  if (!user || !lesson || !attempt) {
+  if (loadedFor === loadKey && loadError) {
+    return (
+      <ContentState>
+        <PageLoadError
+          title="Lesson attempt unavailable"
+          message={loadError}
+          onRetry={() => setLoadRevision((revision) => revision + 1)}
+        />
+      </ContentState>
+    );
+  }
+
+  if (loadedFor !== loadKey || !user || !lesson || !attempt) {
     return (
       <ContentState>
         <LoadingState variant="page" message="Restoring your attempt…" />

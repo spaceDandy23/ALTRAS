@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
@@ -120,5 +121,25 @@ describe('final lesson result actions', () => {
       state: 'encouraging',
       dialogueEvent: 'lesson-not-passed',
     });
+  });
+
+  it('shows a recoverable result error and retries a failed load', async () => {
+    const lesson = packagedContent.lessons[0];
+    const userId = '20000000-0000-4000-8000-000000000005';
+    const attemptId = '10000000-0000-4000-8000-000000000005';
+    const attempt: LessonAttempt = { id: attemptId, userId, lessonId: lesson.id, contentVersion: lesson.contentVersion, status: 'completed', startedAt: 1, lastUpdatedAt: 2, completedAt: 2, abandonedAt: null, answers: [], finalScore: 0, starCount: 0, cleared: false, xpImprovement: 0 };
+    const progress: LessonProgress = { id: `${userId}:${lesson.id}`, userId, lessonId: lesson.id, status: 'available', bestScore: 0, bestStarCount: 0, attemptCount: 1, xpAwarded: 0, firstStartedAt: 1, lastAttemptedAt: 2, clearedAt: null };
+    vi.mocked(getLesson).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(attempt);
+    vi.mocked(getLessonProgress).mockResolvedValue(progress);
+    vi.mocked(getLessonHubData).mockResolvedValue({ section: packagedContent.sections[0], unit: packagedContent.units[0], entries: [] });
+    useAuthStore.setState({ status: 'authenticated', user: { id: userId, normalizedUsername: 'result_retry', displayName: 'Result Retry', createdAt: 1, lastLoginAt: 1 } });
+    useContentStore.setState({ status: 'ready', error: null });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}><Routes><Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Result unavailable' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: 'Try again' })).toBeInTheDocument();
   });
 });

@@ -40,11 +40,7 @@ const remoteAttemptSchema = z.object({
   assessment_attempt_answers: z.array(remoteAnswerSchema).optional().default([]),
 });
 
-const attemptColumns = `
-  id, user_id, assessment, status, started_at, submitted_at, score,
-  completion_seconds, content_version, expected_question_count,
-  assessment_attempt_answers (question_id, selected_choice_id, answered_at)
-`;
+const ASSESSMENT_REQUEST_TIMEOUT_MS = 15_000;
 
 export class AssessmentError extends Error {
   constructor(message: string) {
@@ -55,6 +51,23 @@ export class AssessmentError extends Error {
 
 function requireOnlineServices() {
   return getSupabaseClient();
+}
+
+async function withAssessmentTimeout<T>(operation: PromiseLike<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(operation),
+      new Promise<T>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new AssessmentError('The assessment request timed out.')),
+          ASSESSMENT_REQUEST_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function toQuestion(input: unknown): AssessmentQuestion {
@@ -94,25 +107,23 @@ export function toAssessmentAttempt(input: unknown): AssessmentAttempt {
 }
 
 export async function getAssessmentQuestions(kind: AssessmentKind): Promise<AssessmentQuestion[]> {
-  const { data, error } = await requireOnlineServices().rpc('get_assessment_questions', {
-    p_assessment: kind,
-  });
+  const { data, error } = await withAssessmentTimeout(
+    requireOnlineServices().rpc('get_assessment_questions', { p_assessment: kind }),
+  );
   if (error) throw new AssessmentError('Unable to load the assessment questions.');
   return z.array(remoteQuestionSchema).parse(data).map(toQuestion);
 }
 
 export async function getAssessmentAttempt(
-  userId: string,
+  _userId: string,
   kind: AssessmentKind,
 ): Promise<AssessmentAttempt | null> {
-  const { data, error } = await requireOnlineServices()
-    .from('assessment_attempts')
-    .select(attemptColumns)
-    .eq('user_id', userId)
-    .eq('assessment', kind)
-    .maybeSingle();
+  const { data, error } = await withAssessmentTimeout(
+    requireOnlineServices().rpc('get_assessment_attempt', { p_assessment: kind }),
+  );
   if (error) throw new AssessmentError('Unable to restore this assessment.');
-  return data ? toAssessmentAttempt(data) : null;
+  const records = z.array(remoteAttemptSchema).parse(data ?? []);
+  return records[0] ? toAssessmentAttempt(records[0]) : null;
 }
 
 export async function startAssessment(
@@ -121,7 +132,9 @@ export async function startAssessment(
 ): Promise<AssessmentAttempt> {
   assertParticipantLearningAccess();
   const client = requireOnlineServices();
-  const { error } = await client.rpc('start_assessment', { p_assessment: kind });
+  const { error } = await withAssessmentTimeout(
+    client.rpc('start_assessment', { p_assessment: kind }),
+  );
   if (error) throw new AssessmentError('Unable to start this assessment.');
   const attempt = await getAssessmentAttempt(userId, kind);
   if (!attempt) throw new AssessmentError('The assessment did not start correctly.');
@@ -135,11 +148,13 @@ export async function submitAssessmentAnswer(
   currentAttempt: AssessmentAttempt,
 ): Promise<AssessmentAttempt> {
   assertParticipantLearningAccess();
-  const { error } = await requireOnlineServices().rpc('submit_assessment_answer', {
-    p_attempt_id: attemptId,
-    p_question_id: questionId,
-    p_choice_id: choiceId,
-  });
+  const { error } = await withAssessmentTimeout(
+    requireOnlineServices().rpc('submit_assessment_answer', {
+      p_attempt_id: attemptId,
+      p_question_id: questionId,
+      p_choice_id: choiceId,
+    }),
+  );
   if (error) throw new AssessmentError('Unable to save this answer. Please try again.');
 
   // The server has confirmed the insert, so avoid a second round trip just to
@@ -169,9 +184,9 @@ export async function completeAssessment(
   attemptId: string,
 ): Promise<AssessmentAttempt> {
   assertParticipantLearningAccess();
-  const { error } = await requireOnlineServices().rpc('complete_assessment', {
-    p_attempt_id: attemptId,
-  });
+  const { error } = await withAssessmentTimeout(
+    requireOnlineServices().rpc('complete_assessment', { p_attempt_id: attemptId }),
+  );
   if (error) throw new AssessmentError('Answer every question before submitting the test.');
   const attempt = await getAssessmentAttempt(userId, kind);
   if (!attempt) throw new AssessmentError('Unable to load the submitted result.');

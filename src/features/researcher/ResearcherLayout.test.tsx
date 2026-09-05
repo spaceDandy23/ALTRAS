@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { useAuthStore } from '@/stores/auth.store';
 import { ResearcherDashboardPage } from './ResearcherDashboardPage';
 import { ResearcherLayout } from './ResearcherLayout';
@@ -22,7 +23,7 @@ describe('researcher workspace layout', () => {
     const desktop = screen.getByRole('navigation', { name: 'Researcher pages' });
     expect(desktop).toHaveTextContent('DashboardParticipantsAssessmentsLessonsReports');
     expect(desktop.querySelector('a.is-active')).toHaveTextContent('Assessments');
-    expect(screen.getByText('Research Lead')).toBeInTheDocument();
+    expect(screen.getAllByText('Research Lead')).toHaveLength(2);
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mute audio' })).not.toBeInTheDocument();
   });
@@ -46,5 +47,17 @@ describe('researcher workspace layout', () => {
     expect(loading.parentElement).toBe(document.body);
     expect(loading).toHaveClass('loading-state--page', 'researcher-content-loading');
     expect(screen.getByRole('navigation', { name: 'Researcher pages' })).toBeInTheDocument();
+  });
+
+  it('exposes the existing logout confirmation from mobile navigation', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/researcher']}><Routes><Route path="researcher" element={<ResearcherLayout />}><Route index element={<p>Dashboard</p>} /></Route></Routes></MemoryRouter>);
+
+    const mobileNavigation = screen.getByRole('navigation', { name: 'Researcher pages mobile' });
+    const mobileLogout = mobileNavigation.parentElement?.querySelector('button');
+    expect(mobileLogout).toHaveTextContent('Log out');
+    await user.click(mobileLogout as HTMLButtonElement);
+    expect(screen.getByRole('alertdialog', { name: 'Leave the research workspace?' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
   });
 });

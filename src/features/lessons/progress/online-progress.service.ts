@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { AltrasDatabase } from '@/db/database';
 import { getSupabaseClient } from '@/services/supabase.client';
 import { assertParticipantLearningAccess } from '@/stores/researcher-access.store';
-import { lessonProgressSchema, type LessonProgress, type StoredLesson } from '@/types/learning';
+import { lessonProgressSchema, type LessonProgress } from '@/types/learning';
 import { getAllLessons } from '../content/content.service';
 import type { LessonHubData } from './progress.service';
 
@@ -21,19 +21,6 @@ const remoteProgressSchema = z.object({
 
 const progressColumns =
   'user_id, lesson_id, status, best_score, best_star_count, attempt_count, xp_awarded, first_started_at, last_attempted_at, cleared_at';
-
-interface RemoteProgressWrite {
-  user_id: string;
-  lesson_id: string;
-  status: LessonProgress['status'];
-  best_score: number;
-  best_star_count: number;
-  attempt_count: number;
-  xp_awarded: number;
-  first_started_at: string | null;
-  last_attempted_at: string | null;
-  cleared_at: string | null;
-}
 
 function timestamp(value: string | null): number | null {
   return value ? Date.parse(value) : null;
@@ -56,25 +43,6 @@ export function toLessonProgress(input: unknown): LessonProgress {
   });
 }
 
-function newRemoteProgress(
-  userId: string,
-  lesson: StoredLesson,
-  status: LessonProgress['status'],
-): RemoteProgressWrite {
-  return {
-    user_id: userId,
-    lesson_id: lesson.id,
-    status,
-    best_score: 0,
-    best_star_count: 0,
-    attempt_count: 0,
-    xp_awarded: 0,
-    first_started_at: null,
-    last_attempted_at: null,
-    cleared_at: null,
-  };
-}
-
 async function readProgress(userId: string): Promise<LessonProgress[]> {
   const { data, error } = await getSupabaseClient()
     .from('lesson_progress')
@@ -90,50 +58,10 @@ export async function ensureOnlineLessonProgress(
 ): Promise<LessonProgress[]> {
   assertParticipantLearningAccess();
   const lessons = await database.lessons.orderBy('[unitId+displayOrder]').toArray();
+  const { error } = await getSupabaseClient().rpc('initialize_lesson_progress');
+  if (error) throw new Error('Unable to initialize online lesson progress.');
   const existing = await readProgress(userId);
   const byLessonId = new Map(existing.map((progress) => [progress.lessonId, progress]));
-  const changes: ReturnType<typeof newRemoteProgress>[] = [];
-
-  for (const lesson of lessons) {
-    const current = byLessonId.get(lesson.id);
-    const prerequisiteCleared = lesson.prerequisiteLessonId
-      ? byLessonId.get(lesson.prerequisiteLessonId)?.status === 'cleared'
-      : true;
-
-    if (!current) {
-      const created = newRemoteProgress(
-        userId,
-        lesson,
-        prerequisiteCleared ? 'available' : 'locked',
-      );
-      changes.push(created);
-      byLessonId.set(lesson.id, toLessonProgress(created));
-    } else if (current.status === 'locked' && prerequisiteCleared) {
-      const unlocked = {
-        ...newRemoteProgress(userId, lesson, 'available'),
-        best_score: current.bestScore,
-        best_star_count: current.bestStarCount,
-        attempt_count: current.attemptCount,
-        xp_awarded: current.xpAwarded,
-        first_started_at: current.firstStartedAt
-          ? new Date(current.firstStartedAt).toISOString()
-          : null,
-        last_attempted_at: current.lastAttemptedAt
-          ? new Date(current.lastAttemptedAt).toISOString()
-          : null,
-        cleared_at: current.clearedAt ? new Date(current.clearedAt).toISOString() : null,
-      };
-      changes.push(unlocked);
-      byLessonId.set(lesson.id, toLessonProgress(unlocked));
-    }
-  }
-
-  if (changes.length > 0) {
-    const { error } = await getSupabaseClient()
-      .from('lesson_progress')
-      .upsert(changes, { onConflict: 'user_id,lesson_id' });
-    if (error) throw new Error('Unable to initialize online lesson progress.');
-  }
 
   return lessons.flatMap((lesson) => {
     const progress = byLessonId.get(lesson.id);

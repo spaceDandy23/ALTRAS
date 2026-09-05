@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
-import { AssessmentPage } from '@/features/assessments/AssessmentPage';
+import { AssessmentPage } from '@/features/assessments/AssessmentPage.async';
 import { LessonsPage } from '@/features/lessons/LessonsPage';
 import { ActiveLessonPage } from '@/features/lessons/ActiveLessonPage';
 import { LessonOverviewPage } from '@/features/lessons/LessonOverviewPage';
@@ -23,22 +23,29 @@ import { WordListPage } from '@/features/word-list/WordListPage';
 import { validateProductionConfiguration } from '@/services/supabase.client';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
+import { AppErrorBoundary } from './AppErrorBoundary';
+import { PwaUpdatePrompt } from '@/components/status/PwaUpdatePrompt';
 import { AppShell } from './AppShell';
 import { NotFoundPage } from './NotFoundPage';
 import { GuestOnlyRoute, ProtectedRoute, ResolvedExperienceRoute, StudentRoute } from './route-guards';
 
 export function App() {
   const initialize = useAuthStore((state) => state.initialize);
+  const subscribeToAuthChanges = useAuthStore((state) => state.subscribeToAuthChanges);
   const initializeContent = useContentStore((state) => state.initialize);
   useEffect(() => {
     validateProductionConfiguration();
+    const unsubscribe = subscribeToAuthChanges();
     void initialize();
     void initializeContent();
-  }, [initialize, initializeContent]);
+    return unsubscribe;
+  }, [initialize, initializeContent, subscribeToAuthChanges]);
 
   return (
-    <BrowserRouter>
-      <Routes>
+    <AppErrorBoundary>
+      <PwaUpdatePrompt />
+      <BrowserRouter>
+        <Routes>
         <Route
           path="/login"
           element={
@@ -94,7 +101,8 @@ export function App() {
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </AppErrorBoundary>
   );
 }
