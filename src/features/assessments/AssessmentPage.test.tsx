@@ -1,14 +1,15 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import { db } from '@/db/database';
-import type { AssessmentAttempt, AssessmentQuestion } from '@/types/assessment';
+import type { AssessmentAttempt, AssessmentDraft, AssessmentQuestion } from '@/types/assessment';
 import { AssessmentPage } from './AssessmentPage.async';
 import {
   createAssessmentDraft,
   getAssessmentDraft,
+  markDraftPendingSubmission,
   saveAssessmentDraft,
   updateDraftAnswer,
 } from './assessment-draft.service';
@@ -16,27 +17,23 @@ import {
   completeAssessment,
   getAssessmentAttempt,
   getAssessmentQuestions,
-  submitAssessmentAnswer,
+  startAssessment,
+  syncAssessmentDraft,
 } from './assessment.service';
 
-const audio = vi.hoisted(() => ({
-  playCompletion: vi.fn(),
-  playSfx: vi.fn(),
-}));
-
+const audio = vi.hoisted(() => ({ playCompletion: vi.fn(), playSfx: vi.fn() }));
 vi.mock('./assessment.service', () => ({
   completeAssessment: vi.fn(),
   getAssessmentAttempt: vi.fn(),
   getAssessmentQuestions: vi.fn(),
   startAssessment: vi.fn(),
-  submitAssessmentAnswer: vi.fn(),
+  syncAssessmentDraft: vi.fn(),
 }));
 vi.mock('@/services/audio/audio.manager', () => audio);
-
 const userId = '20000000-0000-4000-8000-000000000002';
 const questions: AssessmentQuestion[] = [
   {
-    id: 'pre-question-1',
+    id: 'q1',
     assessment: 'pre-test',
     displayOrder: 1,
     prompt: 'Which phrase represents addition?',
@@ -48,50 +45,47 @@ const questions: AssessmentQuestion[] = [
     isPlaceholder: false,
   },
 ];
-
-const twoQuestions: AssessmentQuestion[] = [
+const twoQuestions = [
   ...questions,
-  {
-    ...questions[0],
-    id: 'pre-question-2',
-    displayOrder: 2,
-    prompt: 'Which phrase represents division?',
-  },
+  { ...questions[0], id: 'q2', displayOrder: 2, prompt: 'Which phrase represents division?' },
 ];
-
-function answer(questionId = questions[0].id, selectedChoiceId = 'a') {
-  return { questionId, selectedChoiceId, answeredAt: 2 };
-}
-
-function attempt(
-  status: 'active' | 'submitted',
-  answers: AssessmentAttempt['answers'] = [],
-): AssessmentAttempt {
+function attempt(): AssessmentAttempt {
   return {
     id: '10000000-0000-4000-8000-000000000001',
     userId,
     assessment: 'pre-test',
-    status,
+    status: 'active',
     startedAt: 1,
-    submittedAt: status === 'submitted' ? 2 : null,
-    score: status === 'submitted' ? 100 : null,
-    completionSeconds: status === 'submitted' ? 60 : null,
+    submittedAt: null,
+    score: null,
+    completionSeconds: null,
     contentVersion: 1,
     expectedQuestionCount: 1,
-    answers,
+    answers: [],
+    acceptedRevision: 0,
+    acceptedMutationId: null,
+    submittedRevision: null,
   };
 }
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
   });
-  return { promise, resolve, reject };
+  return { promise, resolve };
 }
-
+let server: AssessmentAttempt | null;
+function accept(snapshot: AssessmentDraft) {
+  server = {
+    ...attempt(),
+    assessment: snapshot.assessment,
+    expectedQuestionCount: snapshot.expectedQuestionCount,
+    answers: snapshot.answers,
+    acceptedRevision: snapshot.revision,
+    acceptedMutationId: snapshot.mutationId,
+  };
+  return server;
+}
 function renderAssessment(kind: 'pre-test' | 'post-test' = 'pre-test') {
   return render(
     <MemoryRouter initialEntries={[`/assessments/${kind}`]}>
@@ -101,233 +95,296 @@ function renderAssessment(kind: 'pre-test' | 'post-test' = 'pre-test') {
     </MemoryRouter>,
   );
 }
-
-describe('assessment character guidance', () => {
-  afterEach(async () => {
-    vi.clearAllMocks();
-    useAuthStore.setState({ status: 'guest', user: null });
-    await db.assessmentDrafts.clear();
-    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-  });
-
-  function authenticate(loadedQuestions = questions) {
-    useAuthStore.setState({
-      status: 'authenticated',
-      user: {
-        id: userId,
-        normalizedUsername: 'assessment_student',
-        displayName: 'Assessment Student',
-        createdAt: 1,
-        lastLoginAt: 1,
-      },
-    });
-    vi.mocked(getAssessmentQuestions).mockResolvedValue(loadedQuestions);
-  }
-
-  it('shows only neutral introduction guidance before an assessment starts', async () => {
-    authenticate();
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(null);
-    renderAssessment();
-
-    await screen.findByRole('heading', { name: 'Check what you know' });
-    const companion = screen.getByLabelText('Mina, learning companion');
-    expect(companion).toHaveAttribute('data-character-state', 'neutral');
-    expect(companion).toHaveTextContent('Take your time');
-  });
-
-  it('shows neutral completion guidance after submission', async () => {
-    authenticate();
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('submitted'));
-    renderAssessment();
-
-    await screen.findByText('Pre-test complete');
-    const companion = screen.getByLabelText('Mina, learning companion');
-    expect(companion).toHaveAttribute('data-character-state', 'neutral');
-    expect(companion).toHaveTextContent('assessment is complete');
-    const notice = screen.getByText(
-      'Correct answers are hidden while the research is in progress.',
-    );
-    expect(notice.parentElement).toHaveClass('result-actions', 'assessment-result__actions');
-  });
-
-  it.each(['pre-test', 'post-test'] as const)(
-    'shows neutral assessment guidance without correctness feedback during the %s',
-    async (kind) => {
-      authenticate();
-      vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-      const { container } = renderAssessment(kind);
-
-      await screen.findByRole('heading', { name: questions[0].prompt });
-      const companion = screen.getByLabelText('Mina, learning companion');
-      expect(companion).toHaveAttribute('data-character-state', 'explaining');
-      expect(companion).toHaveTextContent('Choose the answer that best matches the phrase.');
-      expect(container.querySelector('[data-character-state="correct"]')).not.toBeInTheDocument();
-      expect(container.querySelector('[data-character-state="incorrect"]')).not.toBeInTheDocument();
+beforeEach(() => {
+  server = attempt();
+  useAuthStore.setState({
+    status: 'authenticated',
+    user: {
+      id: userId,
+      normalizedUsername: 'student',
+      displayName: 'Student',
+      createdAt: 1,
+      lastLoginAt: 1,
     },
-  );
-
-  it('shows a selected choice immediately while its save is pending', async () => {
-    authenticate();
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-    const pendingSave = deferred<AssessmentAttempt>();
-    vi.mocked(submitAssessmentAnswer).mockReturnValue(pendingSave.promise);
-    const user = userEvent.setup();
-    renderAssessment();
-
-    const choice = await screen.findByRole('radio', { name: 'The sum of two values' });
-    await user.click(choice);
-
-    expect(choice).toHaveClass('is-selected');
-    expect(choice).toHaveAttribute('role', 'radio');
-    expect(choice).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radiogroup')).toHaveAccessibleName(questions[0].prompt);
-    expect(screen.getByRole('button', { name: 'Submit test' })).toBeEnabled();
-    expect(screen.queryByText('Answer saved')).not.toBeInTheDocument();
-    await waitFor(async () => {
-      expect((await getAssessmentDraft(userId, 'pre-test'))?.answers).toEqual([
-        expect.objectContaining({ questionId: questions[0].id, selectedChoiceId: 'a' }),
-      ]);
-    });
   });
+  vi.mocked(getAssessmentQuestions).mockResolvedValue(questions);
+  vi.mocked(getAssessmentAttempt).mockImplementation(async () => server);
+  vi.mocked(startAssessment).mockImplementation(async () => {
+    server = attempt();
+    return server;
+  });
+  vi.mocked(syncAssessmentDraft).mockImplementation(async (snapshot) => accept(snapshot));
+  vi.mocked(completeAssessment).mockImplementation(async (_user, _kind, _id, revision) => {
+    server = {
+      ...server!,
+      status: 'submitted',
+      score: 100,
+      submittedAt: 2,
+      completionSeconds: 60,
+      submittedRevision: revision,
+    };
+    return server;
+  });
+});
+afterEach(async () => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.resetAllMocks();
+  useAuthStore.setState({ status: 'guest', user: null });
+  await db.assessmentDrafts.clear();
+  Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+});
 
-  it('advances immediately while an answer save remains in flight', async () => {
-    authenticate(twoQuestions);
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-    const pendingSave = deferred<AssessmentAttempt>();
-    vi.mocked(submitAssessmentAnswer).mockReturnValue(pendingSave.promise);
+describe('assessment UX and bootstrap', () => {
+  it('shows neutral introduction and completion guidance with unchanged result actions', async () => {
+    server = null;
     const user = userEvent.setup();
     renderAssessment();
-
-    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
-    await user.click(screen.getByRole('button', { name: 'Next question' }));
-    expect(
-      await screen.findByRole('heading', { name: twoQuestions[1].prompt }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: twoQuestions[1].prompt })).toHaveAttribute(
-      'aria-live',
-      'polite',
+    await screen.findByRole('heading', { name: 'Check what you know' });
+    expect(screen.getByLabelText('Mina, learning companion')).toHaveAttribute(
+      'data-character-state',
+      'neutral',
     );
-    await act(async () => pendingSave.resolve(attempt('active', [answer()])));
-    expect(submitAssessmentAnswer).toHaveBeenCalledTimes(1);
-  });
-
-  it('waits for the final answer save before completing the assessment', async () => {
-    authenticate();
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-    const pendingSave = deferred<AssessmentAttempt>();
-    vi.mocked(submitAssessmentAnswer).mockReturnValue(pendingSave.promise);
-    vi.mocked(completeAssessment).mockResolvedValue(attempt('submitted', [answer()]));
-    const user = userEvent.setup();
-    renderAssessment();
-
+    await user.click(screen.getByRole('button', { name: 'Start pre-test' }));
     await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
     await user.click(screen.getByRole('button', { name: 'Submit test' }));
-    expect(screen.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
-    expect(completeAssessment).not.toHaveBeenCalled();
-
-    await act(async () => pendingSave.resolve(attempt('active', [answer()])));
-    expect(await screen.findByText('Pre-test complete')).toBeInTheDocument();
-    expect(completeAssessment).toHaveBeenCalledTimes(1);
-    expect(audio.playCompletion).toHaveBeenCalledWith(
-      '10000000-0000-4000-8000-000000000001',
-      false,
+    await screen.findByText('Pre-test complete');
+    expect(screen.getByLabelText('Mina, learning companion')).toHaveAttribute(
+      'data-character-state',
+      'neutral',
     );
-    expect(audio.playSfx).toHaveBeenCalledWith('click');
+    expect(
+      screen.getByText('Correct answers are hidden while the research is in progress.')
+        .parentElement,
+    ).toHaveClass('result-actions', 'assessment-result__actions');
+    expect(audio.playCompletion).toHaveBeenCalledWith(attempt().id, false);
     expect(audio.playSfx).not.toHaveBeenCalledWith('correct');
     expect(audio.playSfx).not.toHaveBeenCalledWith('incorrect');
     await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toBeNull();
   });
-
-  it('retains a failed final submission locally and allows retry', async () => {
-    authenticate();
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-    const pendingSave = deferred<AssessmentAttempt>();
-    vi.mocked(submitAssessmentAnswer).mockReturnValue(pendingSave.promise);
+  it.each(['pre-test', 'post-test'] as const)(
+    'retains neutral guidance and accessible immediate choices in %s',
+    async (kind) => {
+      server = { ...attempt(), assessment: kind };
+      vi.mocked(getAssessmentQuestions).mockResolvedValue(
+        questions.map((q) => ({ ...q, assessment: kind })),
+      );
+      vi.mocked(syncAssessmentDraft).mockReturnValue(new Promise(() => undefined));
+      const user = userEvent.setup();
+      const view = renderAssessment(kind);
+      const choice = await screen.findByRole('radio', { name: 'The sum of two values' });
+      await user.click(choice);
+      expect(choice).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radiogroup')).toHaveAccessibleName(questions[0].prompt);
+      expect(screen.getByRole('button', { name: 'Submit test' })).toBeEnabled();
+      expect(screen.getByLabelText('Mina, learning companion')).toHaveAttribute(
+        'data-character-state',
+        'explaining',
+      );
+      expect(view.container.querySelector('[data-character-state="correct"]')).toBeNull();
+    },
+  );
+  it('keeps Next immediate and does not double-save when navigation is repeated during a slow sync', async () => {
+    server = { ...attempt(), expectedQuestionCount: 2 };
+    vi.mocked(getAssessmentQuestions).mockResolvedValue(twoQuestions);
+    const pending = deferred<void>();
+    vi.mocked(syncAssessmentDraft).mockImplementation(async (snapshot) => {
+      await pending.promise;
+      return accept(snapshot);
+    });
     const user = userEvent.setup();
     renderAssessment();
-
+    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
+    await user.dblClick(screen.getByRole('button', { name: 'Next question' }));
+    expect(screen.getByRole('heading', { name: twoQuestions[1].prompt })).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+    expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
+    await act(async () => pending.resolve());
+    await waitFor(() => expect(syncAssessmentDraft).toHaveBeenCalledTimes(1));
+  });
+  it('freezes editing and serializes Submit behind autosync', async () => {
+    const pending = deferred<void>();
+    vi.mocked(syncAssessmentDraft).mockImplementation(async (snapshot) => {
+      await pending.promise;
+      return accept(snapshot);
+    });
+    const user = userEvent.setup();
+    renderAssessment();
     const choice = await screen.findByRole('radio', { name: 'The sum of two values' });
     await user.click(choice);
+    await waitFor(() => expect(syncAssessmentDraft).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole('button', { name: 'Submit test' }));
-    await act(async () =>
-      pendingSave.reject(new Error('Unable to save this answer. Please try again.')),
-    );
-
-    expect(screen.getByRole('heading', { name: questions[0].prompt })).toBeInTheDocument();
-    expect(choice).toHaveClass('is-selected');
-    expect(
-      await screen.findByText('Unable to save this answer. Please try again.'),
-    ).toBeInTheDocument();
+    expect(choice).toBeDisabled();
     expect(completeAssessment).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Submit test' })).toBeEnabled();
-    await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toMatchObject({
-      syncStatus: 'pending_submission',
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+      window.dispatchEvent(new Event('focus'));
     });
-
-    vi.mocked(submitAssessmentAnswer).mockResolvedValue(attempt('active', [answer()]));
-    vi.mocked(completeAssessment).mockResolvedValue(attempt('submitted', [answer()]));
-    await user.click(screen.getByRole('button', { name: 'Submit test' }));
-
-    expect(await screen.findByText('Pre-test complete')).toBeInTheDocument();
-    expect(submitAssessmentAnswer).toHaveBeenCalledTimes(3);
+    await act(async () => pending.resolve());
+    await screen.findByText('Pre-test complete');
+    expect(syncAssessmentDraft).toHaveBeenCalledTimes(1);
     expect(completeAssessment).toHaveBeenCalledTimes(1);
   });
-
-  it('guards rapid repeated navigation without duplicate saves or skipped questions', async () => {
-    authenticate(twoQuestions);
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-    const pendingSave = deferred<AssessmentAttempt>();
-    vi.mocked(submitAssessmentAnswer).mockReturnValue(pendingSave.promise);
+  it('surfaces local write failures, retains memory answers, and submits those rather than stale disk data', async () => {
+    const pending = deferred<void>();
+    vi.mocked(syncAssessmentDraft).mockImplementation(async (snapshot) => {
+      await pending.promise;
+      return accept(snapshot);
+    });
     const user = userEvent.setup();
     renderAssessment();
-
-    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
-    const next = screen.getByRole('button', { name: 'Next question' });
-    await user.dblClick(next);
-    await act(async () => pendingSave.resolve(attempt('active', [answer()])));
-
-    expect(
-      await screen.findByRole('heading', { name: twoQuestions[1].prompt }),
-    ).toBeInTheDocument();
-    expect(submitAssessmentAnswer).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
+    const choice = await screen.findByRole('radio', { name: 'The quotient of two values' });
+    vi.spyOn(db.assessmentDrafts, 'put').mockRejectedValue(new Error('QuotaExceededError'));
+    await user.click(choice);
+    await screen.findByText(/Local saving failed/);
+    expect(choice).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText(/Saved on this device/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Submit test' }));
+    await act(async () => pending.resolve());
+    await screen.findByText('Pre-test complete');
+    expect(server?.answers[0].selectedChoiceId).toBe('b');
+    expect(completeAssessment).toHaveBeenCalledWith(userId, 'pre-test', attempt().id, 1);
+    expect(await getAssessmentDraft(userId, 'pre-test')).not.toBeNull(); // Older local revision is not deleted.
   });
-
-  it('restores a newer unsynced local answer without replacing it with stale server data', async () => {
-    authenticate();
-    const server = attempt('active', [{ ...answer(), answeredAt: 10 }]);
-    const local = updateDraftAnswer(createAssessmentDraft(server, questions), questions[0].id, 'b', 20);
-    await saveAssessmentDraft(local);
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(server);
-    vi.mocked(submitAssessmentAnswer).mockResolvedValue(server);
-    renderAssessment();
-
-    expect(await screen.findByRole('radio', { name: 'The quotient of two values' })).toHaveClass(
-      'is-selected',
-    );
-  });
-
-  it('keeps an offline final submission pending instead of showing a result', async () => {
-    authenticate();
-    vi.mocked(getAssessmentAttempt).mockResolvedValue(attempt('active'));
-    vi.mocked(submitAssessmentAnswer).mockRejectedValue(new Error('offline'));
-    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+  it('automatically recovers a committed result whose completion response was lost', async () => {
+    const complete = vi.mocked(completeAssessment).getMockImplementation()!;
+    vi.mocked(completeAssessment).mockImplementationOnce(async (...args) => {
+      await complete(...args);
+      throw new Error('timeout');
+    });
     const user = userEvent.setup();
     renderAssessment();
-
     await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
     await user.click(screen.getByRole('button', { name: 'Submit test' }));
-
-    expect(
-      await screen.findByText(
-        'Your answers are saved on this device and will be submitted when you’re back online.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Pre-test complete')).not.toBeInTheDocument();
-    expect(completeAssessment).not.toHaveBeenCalled();
+    await screen.findByText('Pre-test complete');
+    expect(syncAssessmentDraft).toHaveBeenCalledTimes(1);
+    expect(completeAssessment).toHaveBeenCalledTimes(1);
+  });
+  it('retains pending offline submission, freezes edits, and recovers on reconnect without reopening', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    vi.mocked(syncAssessmentDraft).mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderAssessment();
+    await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
+    await user.click(screen.getByRole('button', { name: 'Submit test' }));
+    await screen.findByText(/Submission is pending/);
+    expect(screen.getByRole('radio', { name: 'The sum of two values' })).toBeDisabled();
     await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toMatchObject({
       syncStatus: 'pending_submission',
     });
+    expect(completeAssessment).not.toHaveBeenCalled();
+    vi.mocked(syncAssessmentDraft).mockImplementation(async (snapshot) => accept(snapshot));
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    act(() => window.dispatchEvent(new Event('online')));
+    await screen.findByText('Pre-test complete');
+  });
+  it('recovers an already submitted attempt before replaying a pending local snapshot', async () => {
+    const local = markDraftPendingSubmission(
+      updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q1', 'a'),
+    );
+    await saveAssessmentDraft(local);
+    server = {
+      ...accept(local),
+      status: 'submitted',
+      score: 100,
+      submittedRevision: local.revision,
+      submittedAt: 2,
+    };
+    renderAssessment();
+    await screen.findByText('Pre-test complete');
+    expect(syncAssessmentDraft).not.toHaveBeenCalled();
+    expect(completeAssessment).not.toHaveBeenCalled();
+    await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toBeNull();
+  });
+  it.each(['questions', 'attempt', 'local', 'empty'] as const)(
+    'shows a recoverable bootstrap error for %s failure and retry works',
+    async (failure) => {
+      if (failure === 'questions')
+        vi.mocked(getAssessmentQuestions).mockRejectedValueOnce(new Error('network'));
+      if (failure === 'attempt')
+        vi.mocked(getAssessmentAttempt).mockRejectedValueOnce(new Error('network'));
+      if (failure === 'empty') vi.mocked(getAssessmentQuestions).mockResolvedValueOnce([]);
+      if (failure === 'local')
+        vi.spyOn(db.assessmentDrafts, 'where').mockImplementationOnce(() => {
+          throw new Error('IDB unavailable');
+        });
+      const user = userEvent.setup();
+      renderAssessment();
+      await screen.findByRole('heading', { name: 'We couldn’t load this test' });
+      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      await screen.findByRole('radiogroup');
+    },
+  );
+  it('ignores stale bootstrap responses when the authenticated user changes', async () => {
+    const pending = deferred<AssessmentAttempt | null>();
+    vi.mocked(getAssessmentAttempt).mockReturnValueOnce(pending.promise).mockResolvedValue(null);
+    const user = userEvent.setup();
+    renderAssessment();
+    act(() =>
+      useAuthStore.setState({
+        user: { ...useAuthStore.getState().user!, id: crypto.randomUUID() },
+      }),
+    );
+    await screen.findByRole('heading', { name: 'Check what you know' });
+    await act(async () => pending.resolve(attempt()));
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(startAssessment).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('link', { name: 'Not now' }));
+  });
+  it('keeps attempt creation failure recoverable without mounting a broken player', async () => {
+    server = null;
+    vi.mocked(startAssessment).mockRejectedValueOnce(new Error('Unable to start the test.'));
+    const user = userEvent.setup();
+    renderAssessment();
+    await user.click(await screen.findByRole('button', { name: 'Start pre-test' }));
+    await screen.findByText('Unable to start the test.');
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start pre-test' }));
+    await screen.findByRole('radiogroup');
+  });
+  it('reports incompatible local content as a recoverable error without discarding it', async () => {
+    const local = createAssessmentDraft(attempt(), questions);
+    await saveAssessmentDraft({
+      ...local,
+      contentVersion: 2,
+      questions: questions.map((q) => ({ ...q, contentVersion: 2 })),
+    });
+    renderAssessment();
+    await screen.findByRole('heading', { name: 'We couldn’t load this test' });
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(await getAssessmentDraft(userId, 'pre-test')).not.toBeNull();
+  });
+  it('restores an invalid local index safely without dereferencing an empty question', async () => {
+    const local = updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q1', 'b');
+    await saveAssessmentDraft({ ...local, currentQuestionIndex: 999 });
+    renderAssessment();
+    await screen.findByRole('radiogroup');
+    expect(screen.getByText('Question 1 of 1')).toBeInTheDocument();
+  });
+  it('preserves unsynced local answers despite newer wall-clock timestamps on the server', async () => {
+    const local = updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q1', 'b', 1);
+    await saveAssessmentDraft(local);
+    server = {
+      ...attempt(),
+      answers: [{ questionId: 'q1', selectedChoiceId: 'a', answeredAt: 999999999 }],
+    };
+    vi.mocked(syncAssessmentDraft).mockReturnValue(new Promise(() => undefined));
+    renderAssessment();
+    expect(
+      await screen.findByRole('radio', { name: 'The quotient of two values' }),
+    ).toHaveAttribute('aria-checked', 'true');
+  });
+  it('disposes reconnect/focus/visibility handlers after leaving the attempt', async () => {
+    const removeWindow = vi.spyOn(window, 'removeEventListener');
+    const removeDocument = vi.spyOn(document, 'removeEventListener');
+    const view = renderAssessment();
+    await screen.findByRole('radiogroup');
+    view.unmount();
+    expect(removeWindow).toHaveBeenCalledWith('online', expect.any(Function));
+    expect(removeWindow).toHaveBeenCalledWith('focus', expect.any(Function));
+    expect(removeDocument).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
   });
 });

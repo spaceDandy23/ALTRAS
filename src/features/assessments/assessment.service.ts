@@ -8,6 +8,7 @@ import {
   type AssessmentAttempt,
   type AssessmentKind,
   type AssessmentQuestion,
+  type AssessmentDraft,
 } from '@/types/assessment';
 
 const remoteQuestionSchema = z.object({
@@ -37,6 +38,9 @@ const remoteAttemptSchema = z.object({
   completion_seconds: z.number().int().nullable(),
   content_version: z.number().int(),
   expected_question_count: z.number().int(),
+  accepted_revision: z.number().int().nonnegative(),
+  accepted_mutation_id: z.string().uuid().nullable(),
+  submitted_revision: z.number().int().nonnegative().nullable(),
   assessment_attempt_answers: z.array(remoteAnswerSchema).optional().default([]),
 });
 
@@ -96,6 +100,9 @@ export function toAssessmentAttempt(input: unknown): AssessmentAttempt {
     completionSeconds: record.completion_seconds,
     contentVersion: record.content_version,
     expectedQuestionCount: record.expected_question_count,
+    acceptedRevision: record.accepted_revision,
+    acceptedMutationId: record.accepted_mutation_id,
+    submittedRevision: record.submitted_revision,
     answers: record.assessment_attempt_answers
       .map((answer) => ({
         questionId: answer.question_id,
@@ -115,7 +122,7 @@ export async function getAssessmentQuestions(kind: AssessmentKind): Promise<Asse
 }
 
 export async function getAssessmentAttempt(
-  _userId: string,
+  userId: string,
   kind: AssessmentKind,
 ): Promise<AssessmentAttempt | null> {
   const { data, error } = await withAssessmentTimeout(
@@ -123,6 +130,9 @@ export async function getAssessmentAttempt(
   );
   if (error) throw new AssessmentError('Unable to restore this assessment.');
   const records = z.array(remoteAttemptSchema).parse(data ?? []);
+  if (records.some((record) => record.user_id !== userId || record.assessment !== kind)) {
+    throw new AssessmentError('The restored assessment belongs to another session.');
+  }
   return records[0] ? toAssessmentAttempt(records[0]) : null;
 }
 
@@ -141,54 +151,52 @@ export async function startAssessment(
   return attempt;
 }
 
-export async function submitAssessmentAnswer(
-  attemptId: string,
-  questionId: string,
-  choiceId: string,
-  currentAttempt: AssessmentAttempt,
-): Promise<AssessmentAttempt> {
-  assertParticipantLearningAccess();
-  const { error } = await withAssessmentTimeout(
-    requireOnlineServices().rpc('submit_assessment_answer', {
-      p_attempt_id: attemptId,
-      p_question_id: questionId,
-      p_choice_id: choiceId,
-    }),
-  );
-  if (error) throw new AssessmentError('Unable to save this answer. Please try again.');
-
-  // The server has confirmed the insert, so avoid a second round trip just to
-  // reconstruct state the client already has.
-  const now = Date.now();
-  const newAnswer = { questionId, selectedChoiceId: choiceId, answeredAt: now };
-  const existingAnswerIndex = currentAttempt.answers.findIndex(
-    (answer) => answer.questionId === questionId,
-  );
-
-  return {
-    ...currentAttempt,
-    answers:
-      existingAnswerIndex >= 0
-        ? [
-            ...currentAttempt.answers.slice(0, existingAnswerIndex),
-            newAnswer,
-            ...currentAttempt.answers.slice(existingAnswerIndex + 1),
-          ]
-        : [...currentAttempt.answers, newAnswer],
-  };
-}
-
 export async function completeAssessment(
   userId: string,
   kind: AssessmentKind,
   attemptId: string,
+  revision: number,
 ): Promise<AssessmentAttempt> {
   assertParticipantLearningAccess();
   const { error } = await withAssessmentTimeout(
-    requireOnlineServices().rpc('complete_assessment', { p_attempt_id: attemptId }),
+    requireOnlineServices().rpc('complete_assessment_revision', {
+      p_attempt_id: attemptId,
+      p_revision: revision,
+    }),
   );
-  if (error) throw new AssessmentError('Answer every question before submitting the test.');
+  if (error)
+    throw new AssessmentError(
+      'Submission is not yet confirmed. We will check the saved result before retrying.',
+    );
   const attempt = await getAssessmentAttempt(userId, kind);
   if (!attempt) throw new AssessmentError('Unable to load the submitted result.');
   return attempt;
+}
+
+export class AssessmentConflictError extends AssessmentError {}
+
+export async function syncAssessmentDraft(draft: AssessmentDraft): Promise<AssessmentAttempt> {
+  assertParticipantLearningAccess();
+  const { error } = await withAssessmentTimeout(
+    requireOnlineServices().rpc('sync_assessment_draft', {
+      p_attempt_id: draft.attemptId,
+      p_base_revision: draft.syncedRevision,
+      p_revision: draft.revision,
+      p_mutation_id: draft.mutationId,
+      p_answers: draft.answers.map((answer) => ({
+        question_id: answer.questionId,
+        selected_choice_id: answer.selectedChoiceId,
+      })),
+    }),
+  );
+  if (error?.code === '40001') {
+    throw new AssessmentConflictError(
+      'This test changed in another tab or device. Reload the saved test to review its answers. Your local draft has been kept.',
+    );
+  }
+  if (error) throw new AssessmentError('Unable to sync the test. We will retry.');
+  const result = await getAssessmentAttempt(draft.userId, draft.assessment);
+  if (!result || result.id !== draft.attemptId)
+    throw new AssessmentError('Unable to confirm the saved test.');
+  return result;
 }

@@ -55,3 +55,60 @@ where user_id = 'PASTE-USER-UUID-HERE';
 
 Researcher access is view-only and research-only. Editing lessons, managing users,
 exports, and advanced analytics require a separately scoped admin system.
+
+## Batch 2 assessment revision sync (pending migration)
+
+`supabase/migrations/202609060001_assessment_revision_sync.sql` is additive and has
+not been applied remotely by this change. Validate it in a disposable/local database
+before a coordinated release. It revokes the legacy unversioned answer/completion
+RPC grants, so old cached clients must refresh/update; do not deploy it independently
+of the revision-aware frontend. Apply the database migration before releasing the
+new frontend during the coordinated rollout. The new client deliberately fails
+closed if the revision columns/RPCs are unavailable.
+
+### Revision and recovery contract
+
+- Each answer mutation advances the local integer `revision` and receives a UUID
+  `mutationId`. Question navigation and submission intent do not advance an answer
+  revision, except a legacy revision-zero submission gets its first snapshot revision.
+- `syncedRevision` is the acknowledged server base, not a timestamp. A snapshot RPC
+  sends that base, its revision/token, and all selected choices. Under the owning
+  attempt-row lock, the server accepts only the exact current base and a strictly
+  newer revision. An exact revision/token/answer retry is idempotent. Conflicting
+  tabs are rejected even if their local counter is larger. Server time never chooses
+  the winning answer.
+- `pendingSnapshot` records the last sent revision/token before transmission. It is
+  retained by newer edits. After a lost response, an authoritative match advances
+  only `syncedRevision`; newer in-memory answers remain pending and are sent next.
+- One coordinator owns autosync, retry, online/focus/visibility events, manual Submit,
+  and pending-submission recovery. It reads server status before writes, drains the
+  latest memory snapshot, and finalizes only its acknowledged revision. Answer editing
+  is frozen while submission is unresolved. Retry backoff has one timer and a bounded
+  automatic burst; a meaningful user/connectivity trigger starts a new burst.
+- Completion uses server scoring and records `submitted_revision`. Ambiguous responses
+  are recovered through authoritative status, without replaying answers into a submitted
+  attempt. IndexedDB deletion is conditional on the submitted revision/token still
+  matching the stored draft. A different/newer draft is retained and reported.
+- Local-write failure does not block immediate navigation or replace current memory
+  with an older disk draft. The UI distinguishes local failure, local-save pending,
+  saved locally/account pending, syncing, and account acknowledgement. Keep the tab
+  open when local saving fails; a refresh cannot recover unsaved memory.
+- A conflict preserves local answers and offers an explicit, confirmed replacement
+  with the account copy. There is no automatic merge/discard across independent tabs.
+  Previously queued writes from older clients cannot bypass the new revision RPC.
+
+### Verification boundaries and manual QA
+
+The automated tests exercise the coordinator, real fake-IndexedDB persistence,
+service requests, React bootstrap/player behavior, and static migration contracts.
+Static SQL tests are not a substitute for PostgreSQL execution or live concurrency
+testing. The API timeout cannot cancel an already-running database transaction;
+the shared row lock, revision checks and idempotent completion protect that boundary.
+
+Before rollout, test both pre-test and post-test: answer/Next on a throttled network;
+offline answer and refresh; offline Submit then reconnect; lost sync response followed
+by another edit; lost completion response; two conflicting tabs; IndexedDB quota
+failure; bootstrap Retry; account/route changes during loading. Confirm no correctness
+feedback appears, local warnings are honest, only the confirmed revision is cleared,
+and submitted server scores are unchanged. Test old cached-client update behavior as
+part of the coordinated database/frontend release.

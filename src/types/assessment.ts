@@ -35,6 +35,9 @@ export const assessmentAttemptSchema = z.object({
   contentVersion: z.number().int().positive(),
   expectedQuestionCount: z.number().int().positive(),
   answers: z.array(assessmentAnswerSchema),
+  acceptedRevision: z.number().int().nonnegative().optional(),
+  acceptedMutationId: z.string().uuid().nullable().optional(),
+  submittedRevision: z.number().int().nonnegative().nullable().optional(),
 });
 
 export type AssessmentKind = z.infer<typeof assessmentKindSchema>;
@@ -57,6 +60,8 @@ export interface AssessmentDraft {
   currentQuestionIndex: number;
   revision: number;
   syncedRevision: number;
+  mutationId?: string;
+  pendingSnapshot?: { revision: number; mutationId: string };
   updatedAt: number;
   syncStatus: AssessmentDraftSyncStatus;
 }

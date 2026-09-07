@@ -63,7 +63,6 @@ describe('page-level loading audit', () => {
       'src/features/lessons/LessonResultPage.tsx',
       'src/features/lessons/components/ContentState.tsx',
       'src/features/settings/SettingsPage.tsx',
-      'src/features/assessments/AssessmentPage.tsx',
       'src/features/assessments/AssessmentPage.async.tsx',
       'src/features/researcher/ResearcherDashboardPage.tsx',
       'src/features/researcher/ResearcherResultsPage.tsx',
@@ -89,5 +88,10 @@ describe('page-level loading audit', () => {
       'utf8',
     );
     expect(researcherLoadingSource).toContain('variant="page"');
+  });
+
+  it('forwards legacy assessment imports to the audited revision-aware page', () => {
+    const legacyPage = readFileSync(resolve('src/features/assessments/AssessmentPage.tsx'), 'utf8');
+    expect(legacyPage).toContain("export { AssessmentPage } from './AssessmentPage.async';");
   });
 });
