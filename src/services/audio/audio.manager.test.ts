@@ -181,6 +181,38 @@ describe('audio manager', () => {
     expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
   });
 
+  it('evicts a failed preloaded click and retries it on the next legitimate play', () => {
+    preloadSfx('click');
+    const failed = howlInstances[0];
+    const onLoadError = failed.options.onloaderror as () => void;
+
+    onLoadError();
+    expect(failed.unload).toHaveBeenCalledTimes(1);
+
+    playSfx('click');
+
+    expect(howlInstances).toHaveLength(2);
+    expect(howlInstances[1].options.src).toEqual(['/audio/sfx/click.wav']);
+    expect(howlInstances[1].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retain failed click instances across repeated retries', () => {
+    preloadSfx('click');
+    const first = howlInstances[0];
+    (first.options.onloaderror as () => void)();
+
+    playSfx('click');
+    const second = howlInstances[1];
+    (second.options.onloaderror as () => void)();
+
+    playSfx('click');
+
+    expect(first.unload).toHaveBeenCalledTimes(1);
+    expect(second.unload).toHaveBeenCalledTimes(1);
+    expect(howlInstances).toHaveLength(3);
+    expect(howlInstances[2].play).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects all SFX outside the confirmed student experience', () => {
     for (const scope of ['neutral', 'researcher'] as const) {
       document.documentElement.dataset.experience = scope;

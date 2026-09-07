@@ -76,12 +76,23 @@ function createSfx(name: SfxName) {
   const path = AUDIO_ASSETS.sfx[name];
   if (failedAssets.has(path)) return null;
 
-  return new Howl({
+  // SFX are optional and may be preloaded before the app's static assets are
+  // available (notably the startup click sound). Evict a failed instance so a
+  // later, user-initiated play can make one controlled retry. Without this,
+  // the failed Howl remained cached and failedAssets permanently blocked it.
+  const instance = new Howl({
     src: [path],
     volume: sfxOutputVolume(),
     preload: true,
-    onloaderror: () => markAssetFailed(path),
+    onloaderror: () => {
+      if (sfxInstances.get(name) === instance) {
+        sfxInstances.delete(name);
+      }
+      failedAssets.delete(path);
+      instance.unload();
+    },
   });
+  return instance;
 }
 
 function getOrCreateSfx(name: SfxName) {
