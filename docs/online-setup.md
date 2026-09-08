@@ -29,8 +29,12 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
     profile role after researcher authorization has moved to `researcher_users`.
 13. Run `supabase/migrations/202609080002_repair_handle_new_user_after_role_cleanup.sql` to
     restore the auth-user profile/settings trigger without the retired role field.
-14. Copy the project URL and publishable key from **Project Settings > API Keys**.
-15. Create `.env.local` from `.env.example` and add those two public values.
+14. Run `supabase/migrations/202609080003_support_manual_auth_user_provisioning.sql` to
+    support Dashboard-created Auth users that omit ALTRAS registration metadata.
+15. Run `supabase/migrations/202609080004_resolve_username_login_identity.sql` to let the
+    username-only login flow securely resolve manually provisioned Auth identities.
+16. Copy the project URL and publishable key from **Project Settings > API Keys**.
+17. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 
@@ -82,6 +86,16 @@ and the now-unused `app_role` enum. Researcher access is granted and revoked onl
 `supabase/migrations/202609080002_repair_handle_new_user_after_role_cleanup.sql` must follow
 the cleanup migration. It replaces the effective `handle_new_user()` trigger function so new
 Supabase Auth users create only a profile and default settings; it never assigns researcher access.
+
+`supabase/migrations/202609080003_support_manual_auth_user_provisioning.sql` must follow the
+trigger repair. Explicit ALTRAS registration metadata remains strictly validated. When a Dashboard
+created Auth user omits it, the trigger derives a normalized username from the email local-part,
+falls back to a neutral value when needed, and retries collisions with a UUID-based suffix.
+
+`supabase/migrations/202609080004_resolve_username_login_identity.sql` must follow the
+manual-provisioning migration. The login fallback returns an Auth email only after the supplied
+username and password validate against the matched Auth record; it returns no profile data and no
+username-existence signal for unknown or invalid credentials.
 
 ### Revision and recovery contract
 

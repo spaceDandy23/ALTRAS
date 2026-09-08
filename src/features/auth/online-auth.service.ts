@@ -51,6 +51,23 @@ function mapAuthFailure(message: string, fallback: string): AuthError {
   return new AuthError('INVALID_DATA', fallback);
 }
 
+function isInvalidCredentials(message: string): boolean {
+  return message.toLocaleLowerCase('en-US').includes('invalid login credentials');
+}
+
+async function resolveManualLoginEmail(username: string, password: string): Promise<string> {
+  const { data, error } = await getSupabaseClient().rpc('resolve_login_email', {
+    p_username: username,
+    p_password: password,
+  });
+
+  if (error || typeof data !== 'string' || !data) {
+    throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
+  }
+
+  return data;
+}
+
 export async function registerOnlineUser(input: RegistrationInput): Promise<PublicUser> {
   const result = registrationSchema.safeParse(input);
   if (!result.success) {
@@ -88,15 +105,27 @@ export async function loginOnlineUser(input: LoginInput): Promise<PublicUser> {
     throw new AuthError('INVALID_DATA', result.error.issues[0]?.message ?? 'Check your details.');
   }
 
-  const { data, error } = await getSupabaseClient().auth.signInWithPassword({
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: usernameToAuthEmail(result.data.username),
     password: result.data.password,
   });
 
-  if (error) {
+  if (!error) return toPublicUser(data.user);
+
+  if (!isInvalidCredentials(error.message)) {
     throw mapAuthFailure(error.message, 'Unable to sign in to the online account.');
   }
-  return toPublicUser(data.user);
+
+  const email = await resolveManualLoginEmail(result.data.username, result.data.password);
+  const fallback = await supabase.auth.signInWithPassword({
+    email,
+    password: result.data.password,
+  });
+  if (fallback.error || !fallback.data.user) {
+    throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
+  }
+  return toPublicUser(fallback.data.user);
 }
 
 export async function restoreOnlineSession(): Promise<PublicUser | null> {
