@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -13,15 +13,29 @@ import type { LearningLesson } from './domain/content.schemas';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { getLesson } from './content/content.service';
 import { getAttempt, startOrResumeAttempt } from './attempts/attempt.service';
-import {
-  getLessonHubData,
-  getLessonProgress,
-  type LessonHubEntry,
-} from './progress/progress.service';
+import { getLessonHubData, type LessonHubEntry } from './progress/progress.service';
+import { hasPendingLessonUnlock } from './progress/progress-transitions';
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
-import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
+import { playCompletion, playReward } from '@/services/audio/audio.manager';
+
+function LessonResultAudio({ attempt }: { attempt: LessonAttempt }) {
+  const playedAttemptRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (playedAttemptRef.current === attempt.id) return;
+    playedAttemptRef.current = attempt.id;
+    if (attempt.finalScore === 100) playReward(attempt.id);
+    else playCompletion(attempt.id);
+  }, [attempt]);
+
+  return null;
+}
 
 export function LessonResultPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -33,6 +47,7 @@ export function LessonResultPage() {
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
   const [nextEntry, setNextEntry] = useState<LessonHubEntry | null>(null);
+  const [newlyUnlocked, setNewlyUnlocked] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [loadRevision, setLoadRevision] = useState(0);
   const [loadedFor, setLoadedFor] = useState('');
@@ -43,14 +58,18 @@ export function LessonResultPage() {
     void Promise.all([
       getLesson(db, lessonId),
       getAttempt(db, user.id, attemptId),
-      getLessonProgress(db, user.id, lessonId),
       getLessonHubData(db, user.id),
     ])
-      .then(([loadedLesson, loadedAttempt, loadedProgress, hub]) => {
+      .then(([loadedLesson, loadedAttempt, hub]) => {
         if (!current) return;
+        const loadedProgress = hub.entries.find(
+          ({ lesson: candidate }) => candidate.id === loadedLesson.id,
+        )?.progress;
+        if (!loadedProgress) throw new Error('Lesson progress is unavailable.');
         setLesson(loadedLesson);
         setAttempt(loadedAttempt);
         setProgress(loadedProgress);
+        setNewlyUnlocked(hasPendingLessonUnlock(user.id, loadedLesson.id));
         setNextEntry(
           hub.entries.find(
             ({ lesson: candidate, progress: candidateProgress }) =>
@@ -84,7 +103,14 @@ export function LessonResultPage() {
     );
   }
 
-  if (loadedFor !== loadKey || !user || !lesson || !attempt || !progress || attempt.status !== 'completed') {
+  if (
+    loadedFor !== loadKey ||
+    !user ||
+    !lesson ||
+    !attempt ||
+    !progress ||
+    attempt.status !== 'completed'
+  ) {
     return (
       <ContentState>
         <LoadingState variant="page" message="Loading your result…" />
@@ -121,6 +147,7 @@ export function LessonResultPage() {
       <div
         className={`result-page result-page--${attempt.cleared ? 'cleared' : 'failed'} page-enter`}
       >
+        <LessonResultAudio attempt={attempt} />
         <main className="result-board" aria-live="polite">
           <div className="result-board__mark" aria-hidden="true">
             {attempt.cleared ? '✓' : '↻'}
@@ -128,7 +155,7 @@ export function LessonResultPage() {
           <h1>{attempt.cleared ? 'Lesson complete' : 'Try again'}</h1>
           <p>
             {attempt.cleared
-              ? nextEntry
+              ? nextEntry && newlyUnlocked
                 ? `${nextEntry.lesson.title} is now unlocked.`
                 : 'Your result has been saved.'
               : `A score of ${lesson.passingThreshold}% is required. Review operation words and order-sensitive phrases.`}
@@ -179,7 +206,12 @@ export function LessonResultPage() {
                 {attempt.cleared ? 'Review lesson' : 'Retry lesson'}
               </Button>
             )}
-            <Link className="button button--quiet" to="/lessons" onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown}>
+            <Link
+              className="button button--quiet"
+              to="/lessons"
+              onPointerDown={playNeutralClickOnPointerDown}
+              onKeyDown={playNeutralClickOnKeyDown}
+            >
               Lessons
             </Link>
           </div>

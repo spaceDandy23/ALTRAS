@@ -16,8 +16,12 @@ import { getLesson } from './content/content.service';
 import { getLessonProgress } from './progress/progress.service';
 import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { ContentState } from './components/ContentState';
+import { resolveLessonDisplayStatus } from './components/lesson-display-status';
 import { useLessonTransition } from './navigation/useLessonTransition';
-import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function LessonOverviewPage() {
   const { lessonId = '' } = useParams();
@@ -62,6 +66,7 @@ export function LessonOverviewPage() {
   }, [contentStatus, lessonId, loadKey, user]);
 
   if (!user) return null;
+  const displayStatus = progress ? resolveLessonDisplayStatus(progress, active !== null) : null;
   const begin = () => {
     if (progress?.status === 'locked' || transitionBusy) return;
     void startTransition({
@@ -132,10 +137,16 @@ export function LessonOverviewPage() {
                   </p>
                 ) : (
                   <div className="lesson-overview__actions lesson-summary">
-                    <Button onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown} onClick={begin} disabled={transitionBusy} aria-busy={transitionBusy}>
-                      {active
+                    <Button
+                      onPointerDown={playNeutralClickOnPointerDown}
+                      onKeyDown={playNeutralClickOnKeyDown}
+                      onClick={begin}
+                      disabled={transitionBusy}
+                      aria-busy={transitionBusy}
+                    >
+                      {displayStatus === 'in-progress'
                         ? 'Resume lesson'
-                        : progress.attemptCount > 0
+                        : displayStatus === 'needs-retry'
                           ? 'Try again'
                           : 'Start lesson'}
                     </Button>

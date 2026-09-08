@@ -21,7 +21,11 @@ import {
   syncAssessmentDraft,
 } from './assessment.service';
 
-const audio = vi.hoisted(() => ({ playCompletion: vi.fn(), playSfx: vi.fn() }));
+const audio = vi.hoisted(() => ({
+  playCompletion: vi.fn(),
+  playReward: vi.fn(),
+  playSfx: vi.fn(),
+}));
 vi.mock('./assessment.service', () => ({
   completeAssessment: vi.fn(),
   getAssessmentAttempt: vi.fn(),
@@ -65,6 +69,18 @@ function attempt(): AssessmentAttempt {
     acceptedRevision: 0,
     acceptedMutationId: null,
     submittedRevision: null,
+  };
+}
+function submittedAttempt(score = 80): AssessmentAttempt {
+  return {
+    ...attempt(),
+    status: 'submitted',
+    submittedAt: 2,
+    score,
+    completionSeconds: 60,
+    acceptedRevision: 1,
+    acceptedMutationId: '30000000-0000-4000-8000-000000000003',
+    submittedRevision: 1,
   };
 }
 function deferred<T>() {
@@ -136,6 +152,89 @@ afterEach(async () => {
 });
 
 describe('assessment UX and bootstrap', () => {
+  it('waits for result readiness before playing completion audio', async () => {
+    const delayedQuestions = deferred<AssessmentQuestion[]>();
+    server = submittedAttempt();
+    vi.mocked(getAssessmentQuestions).mockReturnValueOnce(delayedQuestions.promise);
+    vi.mocked(getAssessmentAttempt).mockResolvedValueOnce(server);
+    renderAssessment();
+
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+    expect(audio.playReward).not.toHaveBeenCalled();
+
+    await act(async () => delayedQuestions.resolve(questions));
+    await screen.findByText('Pre-test complete');
+    expect(audio.playCompletion).toHaveBeenCalledTimes(1);
+    expect(audio.playCompletion).toHaveBeenCalledWith(server.id);
+    expect(audio.playReward).not.toHaveBeenCalled();
+  });
+
+  it('fires completion audio only from the mounted final-result branch', async () => {
+    server = submittedAttempt();
+    audio.playCompletion.mockImplementationOnce(() => {
+      expect(document.querySelector('.assessment-result')).toBeInTheDocument();
+      expect(screen.getByText('Pre-test complete')).toBeInTheDocument();
+    });
+    renderAssessment();
+    await screen.findByText('Pre-test complete');
+    expect(audio.playCompletion).toHaveBeenCalledTimes(1);
+    expect(audio.playReward).not.toHaveBeenCalled();
+  });
+
+  it('plays reward instead of completion for a perfect assessment', async () => {
+    server = submittedAttempt(100);
+    renderAssessment();
+
+    await screen.findByText('Pre-test complete');
+    expect(audio.playReward).toHaveBeenCalledOnce();
+    expect(audio.playReward).toHaveBeenCalledWith(server.id);
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+  });
+
+  it('does not play completion audio when result bootstrap fails', async () => {
+    server = submittedAttempt();
+    vi.mocked(getAssessmentQuestions).mockRejectedValueOnce(new Error('network'));
+    vi.mocked(getAssessmentAttempt).mockResolvedValueOnce(server);
+    renderAssessment();
+
+    await screen.findByRole('heading', { name: 'We couldn’t load this test' });
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+    expect(audio.playReward).not.toHaveBeenCalled();
+  });
+
+  it('plays once after a failed result load is retried successfully', async () => {
+    server = submittedAttempt();
+    vi.mocked(getAssessmentQuestions)
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(questions);
+    vi.mocked(getAssessmentAttempt).mockResolvedValue(server);
+    const user = userEvent.setup();
+    renderAssessment();
+
+    await screen.findByRole('heading', { name: 'We couldn’t load this test' });
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    await screen.findByText('Pre-test complete');
+    expect(audio.playCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not replay completion audio on a result rerender', async () => {
+    server = submittedAttempt();
+    const view = renderAssessment();
+    await screen.findByText('Pre-test complete');
+    expect(audio.playCompletion).toHaveBeenCalledTimes(1);
+    view.rerender(
+      <MemoryRouter initialEntries={['/assessments/pre-test']}>
+        <Routes>
+          <Route path="/assessments/:kind" element={<AssessmentPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Pre-test complete')).toBeInTheDocument());
+    expect(audio.playCompletion).toHaveBeenCalledTimes(1);
+  });
+
   it('shows neutral introduction and completion guidance with unchanged result actions', async () => {
     server = null;
     const user = userEvent.setup();
@@ -157,7 +256,8 @@ describe('assessment UX and bootstrap', () => {
       screen.getByText('Correct answers are hidden while the research is in progress.')
         .parentElement,
     ).toHaveClass('result-actions', 'assessment-result__actions');
-    expect(audio.playCompletion).toHaveBeenCalledWith(attempt().id, false);
+    expect(audio.playReward).toHaveBeenCalledWith(attempt().id);
+    expect(audio.playCompletion).not.toHaveBeenCalled();
     expect(audio.playSfx).not.toHaveBeenCalledWith('correct');
     expect(audio.playSfx).not.toHaveBeenCalledWith('incorrect');
     await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toBeNull();

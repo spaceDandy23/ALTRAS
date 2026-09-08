@@ -46,6 +46,7 @@ import {
   getAudioVolumes,
   playMusic,
   playCompletion,
+  playReward,
   playSfx,
   preloadSfx,
   resetAudio,
@@ -234,12 +235,16 @@ describe('audio manager', () => {
 
   it('does not consume completion events outside the student experience', () => {
     document.documentElement.dataset.experience = 'researcher';
-    playCompletion('researcher-attempt', true);
+    playCompletion('researcher-attempt');
+    playReward('researcher-reward');
     expect(howlInstances).toHaveLength(0);
 
     document.documentElement.dataset.experience = 'student';
-    playCompletion('researcher-attempt', true);
-    expect(howlInstances).toHaveLength(1);
+    playCompletion('researcher-attempt');
+    playReward('researcher-reward');
+    expect(howlInstances).toHaveLength(2);
+    expect(howlInstances[0].options.src).toEqual(['/audio/sfx/complete.wav']);
+    expect(howlInstances[1].options.src).toEqual(['/audio/sfx/reward.wav']);
   });
 
   it('temporarily mutes active audio without replacing saved volume levels', () => {
@@ -263,18 +268,22 @@ describe('audio manager', () => {
     });
   });
 
-  it('plays a qualifying reward only after its completion sound finishes', () => {
-    playCompletion('lesson-attempt-1', true);
-    playCompletion('lesson-attempt-1', true);
+  it('plays exactly one chosen result sound per event', () => {
+    playCompletion('lesson-attempt-1');
+    playReward('lesson-attempt-1');
 
     expect(howlInstances).toHaveLength(1);
     expect(howlInstances[0].options.src).toEqual(['/audio/sfx/complete.wav']);
     expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
-    expect(howlInstances[0].once).toHaveBeenCalledWith('end', expect.any(Function), 1);
+    expect(howlInstances[0].once).not.toHaveBeenCalled();
+  });
 
-    howlInstances[0].endHandler?.();
-    expect(howlInstances).toHaveLength(2);
-    expect(howlInstances[1].options.src).toEqual(['/audio/sfx/reward.wav']);
-    expect(howlInstances[1].play).toHaveBeenCalledTimes(1);
+  it('plays reward by itself for a distinct perfect-result event', () => {
+    playReward('perfect-assessment');
+    playReward('perfect-assessment');
+
+    expect(howlInstances).toHaveLength(1);
+    expect(howlInstances[0].options.src).toEqual(['/audio/sfx/reward.wav']);
+    expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
   });
 });

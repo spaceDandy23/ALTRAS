@@ -25,7 +25,7 @@ let gestureUnlockAttempted = false;
 let muted = false;
 const sfxInstances = new Map<SfxName, Howl>();
 const failedAssets = new Set<string>();
-const completedEvents = new Set<string>();
+const resultEvents = new Set<string>();
 
 function normalizedVolume(value: number) {
   return Math.max(0, Math.min(100, value)) / 100;
@@ -220,21 +220,19 @@ export function playSfx(name: SfxName): number | null {
   }
 }
 
-export function playCompletion(eventId: string, withReward: boolean) {
+function playResultSfx(eventId: string, sound: 'complete' | 'reward') {
   if (!isStudentExperience()) return;
-  if (completedEvents.has(eventId)) return;
-  completedEvents.add(eventId);
+  if (resultEvents.has(eventId)) return;
+  resultEvents.add(eventId);
+  playSfx(sound);
+}
 
-  const completionSoundId = playSfx('complete');
-  if (!withReward || completionSoundId === null) return;
-  const completionSound = sfxInstances.get('complete');
-  completionSound?.once(
-    'end',
-    () => {
-      playSfx('reward');
-    },
-    completionSoundId,
-  );
+export function playCompletion(eventId: string) {
+  playResultSfx(eventId, 'complete');
+}
+
+export function playReward(eventId: string) {
+  playResultSfx(eventId, 'reward');
 }
 
 export function resetAudio() {
@@ -246,7 +244,7 @@ export function resetAudio() {
   sfxInstances.clear();
   volumes = { ...DEFAULT_VOLUMES };
   muted = false;
-  completedEvents.clear();
+  resultEvents.clear();
 }
 
 export function getAudioVolumes(): AudioVolumes {

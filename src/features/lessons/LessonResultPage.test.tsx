@@ -9,8 +9,9 @@ import { LessonResultPage } from './LessonResultPage';
 import { getAttempt } from './attempts/attempt.service';
 import { getLesson } from './content/content.service';
 import { packagedContent } from './content/packaged-content';
-import { getLessonHubData, getLessonProgress } from './progress/progress.service';
+import { getLessonHubData } from './progress/progress.service';
 import { resolveLessonResultReaction } from '@/features/characters/lesson-result-reaction';
+import { recordLessonUnlock, resetLessonUnlocks } from './progress/progress-transitions';
 
 vi.mock('./attempts/attempt.service', () => ({
   getAttempt: vi.fn(),
@@ -19,15 +20,199 @@ vi.mock('./attempts/attempt.service', () => ({
 vi.mock('./content/content.service', () => ({ getLesson: vi.fn() }));
 vi.mock('./progress/progress.service', () => ({
   getLessonHubData: vi.fn(),
-  getLessonProgress: vi.fn(),
 }));
-vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
+const audio = vi.hoisted(() => ({
+  playCompletion: vi.fn(),
+  playReward: vi.fn(),
+  playSfx: vi.fn(),
+}));
+vi.mock('@/services/audio/audio.manager', () => audio);
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 describe('final lesson result actions', () => {
   afterEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ status: 'guest', user: null });
     useContentStore.setState({ status: 'idle', error: null });
+    resetLessonUnlocks();
+  });
+
+  it('keeps completion and reward audio silent until the final result is rendered', async () => {
+    const lesson = packagedContent.lessons[0];
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000009';
+    const attempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'completed',
+      startedAt: 1,
+      lastUpdatedAt: 2,
+      completedAt: 2,
+      abandonedAt: null,
+      answers: [],
+      finalScore: 100,
+      starCount: 3,
+      cleared: true,
+      xpImprovement: 130,
+    };
+    const progress: LessonProgress = {
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'cleared',
+      bestScore: 100,
+      bestStarCount: 3,
+      attemptCount: 1,
+      xpAwarded: 130,
+      firstStartedAt: 1,
+      lastAttemptedAt: 2,
+      clearedAt: 2,
+    };
+    const delayedHub = deferred<Awaited<ReturnType<typeof getLessonHubData>>>();
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(attempt);
+    vi.mocked(getLessonHubData).mockReturnValue(delayedHub.promise);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'result_audio',
+        displayName: 'Result Audio',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+    audio.playReward.mockImplementationOnce(() => {
+      expect(document.querySelector('.result-board')).toBeInTheDocument();
+      expect(screen.queryByText('Loading your result…')).not.toBeInTheDocument();
+    });
+
+    const view = render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Loading your result…')).toBeInTheDocument();
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+    expect(audio.playReward).not.toHaveBeenCalled();
+
+    delayedHub.resolve({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [{ lesson, progress }],
+    });
+    expect(await screen.findByRole('heading', { name: 'Lesson complete' })).toBeVisible();
+    expect(audio.playReward).toHaveBeenCalledOnce();
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+
+    view.rerender(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Lesson complete' })).toBeVisible(),
+    );
+    expect(audio.playReward).toHaveBeenCalledOnce();
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+  });
+
+  it('shows the next lesson unlock from the same post-completion progress snapshot', async () => {
+    const [lesson, nextLesson] = packagedContent.lessons;
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000010';
+    const attempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'completed',
+      startedAt: 1,
+      lastUpdatedAt: 2,
+      completedAt: 2,
+      abandonedAt: null,
+      answers: [],
+      finalScore: 100,
+      starCount: 3,
+      cleared: true,
+      xpImprovement: 130,
+    };
+    const currentProgress: LessonProgress = {
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'cleared',
+      bestScore: 100,
+      bestStarCount: 3,
+      attemptCount: 1,
+      xpAwarded: 130,
+      firstStartedAt: 1,
+      lastAttemptedAt: 2,
+      clearedAt: 2,
+    };
+    const nextProgress: LessonProgress = {
+      ...currentProgress,
+      id: `${userId}:${nextLesson.id}`,
+      lessonId: nextLesson.id,
+      status: 'available',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 0,
+      xpAwarded: 0,
+      firstStartedAt: null,
+      lastAttemptedAt: null,
+      clearedAt: null,
+    };
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(attempt);
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [
+        { lesson, progress: currentProgress },
+        { lesson: nextLesson, progress: nextProgress },
+      ],
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'unlock',
+        displayName: 'Unlock',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+    recordLessonUnlock(userId, lesson.id);
+
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(`${nextLesson.title} is now unlocked.`)).toBeVisible();
+    expect(screen.getByRole('link', { name: 'View next lesson' })).toHaveAttribute(
+      'href',
+      `/lessons/${nextLesson.id}`,
+    );
   });
 
   it('does not offer a nonexistent next lesson after Order Matters', async () => {
@@ -74,11 +259,10 @@ describe('final lesson result actions', () => {
 
     vi.mocked(getLesson).mockResolvedValue(lesson);
     vi.mocked(getAttempt).mockResolvedValue(attempt);
-    vi.mocked(getLessonProgress).mockResolvedValue(progress);
     vi.mocked(getLessonHubData).mockResolvedValue({
       section: packagedContent.sections[0],
       unit: packagedContent.units[0],
-      entries: [],
+      entries: [{ lesson, progress }],
     });
     useAuthStore.setState({
       status: 'authenticated',
@@ -110,6 +294,10 @@ describe('final lesson result actions', () => {
       'data-character-state',
       'celebrating',
     );
+    expect(audio.playReward).toHaveBeenCalledOnce();
+    expect(audio.playReward).toHaveBeenCalledWith(attempt.id);
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+    expect(audio.playSfx).not.toHaveBeenCalledWith('reward');
   });
 
   it('maps passed and failed results to distinct non-scoring character reactions', () => {
@@ -127,19 +315,68 @@ describe('final lesson result actions', () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000005';
     const attemptId = '10000000-0000-4000-8000-000000000005';
-    const attempt: LessonAttempt = { id: attemptId, userId, lessonId: lesson.id, contentVersion: lesson.contentVersion, status: 'completed', startedAt: 1, lastUpdatedAt: 2, completedAt: 2, abandonedAt: null, answers: [], finalScore: 0, starCount: 0, cleared: false, xpImprovement: 0 };
-    const progress: LessonProgress = { id: `${userId}:${lesson.id}`, userId, lessonId: lesson.id, status: 'available', bestScore: 0, bestStarCount: 0, attemptCount: 1, xpAwarded: 0, firstStartedAt: 1, lastAttemptedAt: 2, clearedAt: null };
+    const attempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'completed',
+      startedAt: 1,
+      lastUpdatedAt: 2,
+      completedAt: 2,
+      abandonedAt: null,
+      answers: [],
+      finalScore: 0,
+      starCount: 0,
+      cleared: false,
+      xpImprovement: 0,
+    };
+    const progress: LessonProgress = {
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'available',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 1,
+      xpAwarded: 0,
+      firstStartedAt: 1,
+      lastAttemptedAt: 2,
+      clearedAt: null,
+    };
     vi.mocked(getLesson).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(lesson);
     vi.mocked(getAttempt).mockResolvedValue(attempt);
-    vi.mocked(getLessonProgress).mockResolvedValue(progress);
-    vi.mocked(getLessonHubData).mockResolvedValue({ section: packagedContent.sections[0], unit: packagedContent.units[0], entries: [] });
-    useAuthStore.setState({ status: 'authenticated', user: { id: userId, normalizedUsername: 'result_retry', displayName: 'Result Retry', createdAt: 1, lastLoginAt: 1 } });
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [{ lesson, progress }],
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'result_retry',
+        displayName: 'Result Retry',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
     useContentStore.setState({ status: 'ready', error: null });
     const user = userEvent.setup();
-    render(<MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}><Routes><Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} /></Routes></MemoryRouter>);
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'Result unavailable' })).toBeInTheDocument();
+    expect(audio.playCompletion).not.toHaveBeenCalled();
+    expect(audio.playReward).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Try again' })).toBeInTheDocument();
+    expect(audio.playCompletion).toHaveBeenCalledOnce();
+    expect(audio.playReward).not.toHaveBeenCalled();
   });
 });

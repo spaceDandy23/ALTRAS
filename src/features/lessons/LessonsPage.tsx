@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import { ContentState } from './components/ContentState';
 import { LessonStatusBadge } from './components/LessonStatusBadge';
+import { resolveLessonDisplayStatus } from './components/lesson-display-status';
 import { StarRating } from './components/StarRating';
 import { getLessonHubData, getTotalXp, type LessonHubData } from './progress/progress.service';
 
@@ -50,12 +51,13 @@ export function LessonsPage() {
             </section>
             <ol className="lesson-path" aria-label="Lesson sequence">
               {hub.entries.map(({ lesson, progress }, index) => {
+                const displayStatus = resolveLessonDisplayStatus(progress);
                 const destination =
                   lesson.contentStatus === 'preview'
                     ? `/lessons/${lesson.id}/preview`
                     : `/lessons/${lesson.id}`;
                 const body = (
-                  <article className={`lesson-node lesson-node--${progress.status}`}>
+                  <article className={`lesson-node lesson-node--${displayStatus}`}>
                     <div className="lesson-node__marker" aria-hidden="true">
                       {progress.status === 'locked'
                         ? '⌁'
@@ -66,7 +68,7 @@ export function LessonsPage() {
                     <div className="lesson-node__content">
                       <div className="lesson-node__title-line">
                         <span>Lesson {index + 1}</span>
-                        <LessonStatusBadge status={progress.status} />
+                        <LessonStatusBadge progress={progress} />
                       </div>
                       <h2>{lesson.title}</h2>
                       <p>{lesson.shortDescription}</p>
@@ -90,11 +92,13 @@ export function LessonsPage() {
                         <span className="lesson-node__action">
                           {lesson.contentStatus === 'preview'
                             ? 'View lesson'
-                            : progress.status === 'in-progress'
+                            : displayStatus === 'in-progress'
                               ? 'Resume lesson'
-                              : progress.status === 'cleared'
+                              : displayStatus === 'cleared'
                                 ? 'Review lesson'
-                                : 'Start lesson'}
+                                : displayStatus === 'needs-retry'
+                                  ? 'Try lesson again'
+                                  : 'Start lesson'}
                           <span aria-hidden="true">→</span>
                         </span>
                       )}

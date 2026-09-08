@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
 import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
-import { playCompletion } from '@/services/audio/audio.manager';
+import { playCompletion, playReward } from '@/services/audio/audio.manager';
 import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
@@ -133,6 +133,8 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         const server = attemptResult.status === 'fulfilled' ? attemptResult.value : null;
         if (server && (server.userId !== userId || server.assessment !== kind))
           throw new Error('The test belongs to another session.');
+        if (questionsResult.status === 'rejected' || loadedQuestions.length === 0)
+          throw new Error('Unable to load the assessment result. Please retry.');
         if (server?.status === 'submitted') {
           if (
             local &&
@@ -175,11 +177,7 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
           );
           setSyncNotice(navigator.onLine ? 'pending' : 'offline');
         } else {
-          if (
-            questionsResult.status === 'rejected' ||
-            attemptResult.status === 'rejected' ||
-            loadedQuestions.length === 0
-          )
+          if (attemptResult.status === 'rejected' || loadedQuestions.length === 0)
             throw new Error('Unable to load the test. Connect to the internet and try again.');
           for (const question of loadedQuestions) {
             assessmentQuestionSchema.parse(question);
@@ -279,7 +277,6 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         setAttempt(completed);
         setSubmitting(false);
         setSyncNotice('none');
-        playCompletion(completed.id, false);
       },
       onStatus: (status) => {
         if (!active) return;
@@ -644,6 +641,23 @@ function AssessmentResult({
   kind: 'pre-test' | 'post-test';
   attempt: AssessmentAttempt;
 }) {
+  const completionPlayedRef = useRef<string | null>(null);
+
+  // This component is mounted only by the final result-render branch. Keeping
+  // the trigger here means loading/error/retry branches cannot play it, while
+  // the attempt ref and audio manager guard make it one-shot across rerenders.
+  useEffect(() => {
+    if (
+      attempt.status === 'submitted' &&
+      attempt.score !== null &&
+      completionPlayedRef.current !== attempt.id
+    ) {
+      completionPlayedRef.current = attempt.id;
+      if (attempt.score === 100) playReward(attempt.id);
+      else playCompletion(attempt.id);
+    }
+  }, [attempt]);
+
   return (
     <section className="assessment-shell assessment-result panel page-enter">
       <p className="assessment-kicker">{title} complete</p>

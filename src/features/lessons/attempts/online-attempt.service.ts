@@ -10,7 +10,9 @@ import {
 import { getLesson } from '../content/content.service';
 import type { ActivityAnswer } from '../domain/evaluation';
 import { getOnlineLessonProgress } from '../progress/online-progress.service';
+import { recordLessonUnlock } from '../progress/progress-transitions';
 import { AttemptError } from './attempt.errors';
+import { classifyLessonAttemptLaunch, type LessonAttemptLaunchMode } from './attempt-launch';
 
 const remoteAnswerSchema = z.object({
   activity_id: z.string(),
@@ -109,18 +111,48 @@ async function createOnlineAttempt(
   database: AltrasDatabase,
   userId: string,
   lessonId: string,
-): Promise<LessonAttempt> {
+): Promise<{ attempt: LessonAttempt; created: boolean }> {
   await getLesson(database, lessonId);
   const { data, error } = await getSupabaseClient().rpc('start_lesson_attempt', {
     p_lesson_id: lessonId,
   });
   if (error) {
     const existing = await getOnlineActiveAttempt(userId, lessonId);
-    if (existing) return existing;
+    if (existing) return { attempt: existing, created: false };
     throw new AttemptError('Unable to start this online attempt.');
   }
   const id = z.object({ id: z.string().uuid() }).parse(data).id;
-  return readAttempt(id);
+  return { attempt: await readAttempt(id), created: true };
+}
+
+export interface LessonAttemptLaunch {
+  attempt: LessonAttempt;
+  mode: LessonAttemptLaunchMode;
+}
+
+export async function prepareOnlineAttempt(
+  database: AltrasDatabase,
+  userId: string,
+  lessonId: string,
+): Promise<LessonAttemptLaunch> {
+  assertParticipantLearningAccess();
+  const lesson = await getLesson(database, lessonId);
+  if (lesson.contentStatus !== 'playable') throw new AttemptError('This lesson is a preview.');
+  const progress = await getOnlineLessonProgress(database, userId, lessonId);
+  if (progress.status === 'locked') throw new AttemptError('Clear the prerequisite lesson first.');
+  const active = await getOnlineActiveAttempt(userId, lessonId);
+  if (active) {
+    return {
+      attempt: active,
+      mode: classifyLessonAttemptLaunch(active, progress.attemptCount),
+    };
+  }
+
+  const created = await createOnlineAttempt(database, userId, lessonId);
+  return {
+    attempt: created.attempt,
+    mode: created.created ? classifyLessonAttemptLaunch(null, progress.attemptCount) : 'resume',
+  };
 }
 
 export async function startOrResumeOnlineAttempt(
@@ -128,15 +160,7 @@ export async function startOrResumeOnlineAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
-  assertParticipantLearningAccess();
-  const lesson = await getLesson(database, lessonId);
-  if (lesson.contentStatus !== 'playable') throw new AttemptError('This lesson is a preview.');
-  const progress = await getOnlineLessonProgress(database, userId, lessonId);
-  if (progress.status === 'locked') throw new AttemptError('Clear the prerequisite lesson first.');
-  return (
-    (await getOnlineActiveAttempt(userId, lessonId)) ??
-    createOnlineAttempt(database, userId, lessonId)
-  );
+  return (await prepareOnlineAttempt(database, userId, lessonId)).attempt;
 }
 
 export async function restartOnlineAttempt(
@@ -154,7 +178,7 @@ export async function restartOnlineAttempt(
     });
     if (error) throw new AttemptError('Unable to restart this online attempt.');
   }
-  return createOnlineAttempt(database, userId, lessonId);
+  return (await createOnlineAttempt(database, userId, lessonId)).attempt;
 }
 
 export async function submitOnlineActivityAnswer(
@@ -202,11 +226,24 @@ export async function completeOnlineAttempt(
   if (attempt.answers.length !== lesson.activities.length) {
     throw new AttemptError('Complete every activity before finishing the lesson.');
   }
+  const progressBeforeCompletion = await getOnlineLessonProgress(
+    database,
+    attempt.userId,
+    attempt.lessonId,
+  ).catch(() => null);
   const { error } = await getSupabaseClient().rpc('complete_lesson_attempt', {
     p_attempt_id: attemptId,
   });
   if (error) throw new AttemptError('Unable to finish and score this lesson online.');
-  return readAttempt(attemptId);
+  const completedAttempt = await readAttempt(attemptId);
+  if (
+    completedAttempt.cleared === true &&
+    progressBeforeCompletion !== null &&
+    progressBeforeCompletion.status !== 'cleared'
+  ) {
+    recordLessonUnlock(completedAttempt.userId, completedAttempt.lessonId);
+  }
+  return completedAttempt;
 }
 
 export async function getOnlineAttempt(userId: string, attemptId: string): Promise<LessonAttempt> {

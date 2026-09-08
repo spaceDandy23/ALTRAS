@@ -1,18 +1,23 @@
 import type { AltrasDatabase } from '@/db/database';
 import type { LessonAttempt } from '@/types/learning';
 import type { ActivityAnswer } from '../domain/evaluation';
+import type { LessonAttemptLaunchMode } from './attempt-launch';
 import { ensureUserLessonProgress } from '../progress/progress.service';
 import {
   completeOnlineAttempt,
   getOnlineActiveAttempt,
   getOnlineAttempt,
+  prepareOnlineAttempt,
   recordOnlineActiveSeconds,
   restartOnlineAttempt,
-  startOrResumeOnlineAttempt,
   submitOnlineActivityAnswer,
 } from './online-attempt.service';
 
+export type { LessonAttemptLaunchMode } from './attempt-launch';
+
 export { AttemptError } from './attempt.errors';
+
+const pendingLaunchModes = new Map<string, LessonAttemptLaunchMode>();
 
 export async function getActiveAttempt(
   _database: AltrasDatabase,
@@ -27,7 +32,15 @@ export async function startOrResumeAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
-  return startOrResumeOnlineAttempt(database, userId, lessonId);
+  const launch = await prepareOnlineAttempt(database, userId, lessonId);
+  pendingLaunchModes.set(launch.attempt.id, launch.mode);
+  return launch.attempt;
+}
+
+export function consumeLessonAttemptLaunchMode(attemptId: string) {
+  const mode = pendingLaunchModes.get(attemptId) ?? 'resume';
+  pendingLaunchModes.delete(attemptId);
+  return mode;
 }
 
 export async function restartAttempt(
@@ -35,7 +48,9 @@ export async function restartAttempt(
   userId: string,
   lessonId: string,
 ): Promise<LessonAttempt> {
-  return restartOnlineAttempt(database, userId, lessonId);
+  const attempt = await restartOnlineAttempt(database, userId, lessonId);
+  pendingLaunchModes.set(attempt.id, 'retry');
+  return attempt;
 }
 
 export async function submitActivityAnswer(

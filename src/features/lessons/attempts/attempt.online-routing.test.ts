@@ -4,7 +4,7 @@ import type { LessonAttempt } from '@/types/learning';
 
 const mocks = vi.hoisted(() => ({
   getActive: vi.fn(),
-  start: vi.fn(),
+  prepare: vi.fn(),
   restart: vi.fn(),
   submit: vi.fn(),
   complete: vi.fn(),
@@ -17,9 +17,9 @@ vi.mock('./online-attempt.service', () => ({
   completeOnlineAttempt: mocks.complete,
   getOnlineActiveAttempt: mocks.getActive,
   getOnlineAttempt: mocks.get,
+  prepareOnlineAttempt: mocks.prepare,
   recordOnlineActiveSeconds: mocks.recordSeconds,
   restartOnlineAttempt: mocks.restart,
-  startOrResumeOnlineAttempt: mocks.start,
   submitOnlineActivityAnswer: mocks.submit,
 }));
 vi.mock('../progress/progress.service', () => ({
@@ -28,6 +28,7 @@ vi.mock('../progress/progress.service', () => ({
 
 import {
   completeAttempt,
+  consumeLessonAttemptLaunchMode,
   ensureLearningReady,
   getActiveAttempt,
   getAttempt,
@@ -62,7 +63,7 @@ describe('Supabase-only lesson attempt routing', () => {
 
   it('routes attempt reads and lifecycle writes only to online services', async () => {
     mocks.getActive.mockResolvedValue(attempt);
-    mocks.start.mockResolvedValue(attempt);
+    mocks.prepare.mockResolvedValue({ attempt, mode: 'resume' });
     mocks.restart.mockResolvedValue(attempt);
     mocks.complete.mockResolvedValue({ ...attempt, status: 'completed' });
     mocks.get.mockResolvedValue(attempt);
@@ -80,12 +81,36 @@ describe('Supabase-only lesson attempt routing', () => {
     await ensureLearningReady(database, attempt.userId);
 
     expect(mocks.getActive).toHaveBeenCalledWith(attempt.userId, attempt.lessonId);
-    expect(mocks.start).toHaveBeenCalledWith(database, attempt.userId, attempt.lessonId);
+    expect(mocks.prepare).toHaveBeenCalledWith(database, attempt.userId, attempt.lessonId);
     expect(mocks.restart).toHaveBeenCalledWith(database, attempt.userId, attempt.lessonId);
     expect(mocks.complete).toHaveBeenCalledWith(database, attempt.id);
     expect(mocks.get).toHaveBeenCalledWith(attempt.userId, attempt.id);
     expect(mocks.recordSeconds).toHaveBeenCalledWith(attempt.id, 12);
     expect(mocks.ensureProgress).toHaveBeenCalledWith(database, attempt.userId);
+  });
+
+  it.each([
+    ['first', 'first'],
+    ['retry', 'retry'],
+    ['resume', 'resume'],
+  ] as const)(
+    'preserves the actual %s launch mode for the player bootstrap',
+    async (_case, mode) => {
+      mocks.prepare.mockResolvedValue({ attempt, mode });
+
+      await startOrResumeAttempt(database, attempt.userId, attempt.lessonId);
+
+      expect(consumeLessonAttemptLaunchMode(attempt.id)).toBe(mode);
+      expect(consumeLessonAttemptLaunchMode(attempt.id)).toBe('resume');
+    },
+  );
+
+  it('marks an explicit restart as a new attempt instead of a restore', async () => {
+    mocks.restart.mockResolvedValue(attempt);
+
+    await restartAttempt(database, attempt.userId, attempt.lessonId);
+
+    expect(consumeLessonAttemptLaunchMode(attempt.id)).toBe('retry');
   });
 
   it('forwards the already-loaded attempt for a single-request answer save', async () => {

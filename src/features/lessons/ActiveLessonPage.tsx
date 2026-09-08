@@ -13,6 +13,7 @@ import type { LessonAttempt } from '@/types/learning';
 import { getLesson } from './content/content.service';
 import {
   completeAttempt,
+  consumeLessonAttemptLaunchMode,
   getAttempt,
   recordAttemptActiveSeconds,
   submitActivityAnswer,
@@ -22,8 +23,11 @@ import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateAct
 import type { ActivityAnswer } from './domain/evaluation';
 import { ContentState } from './components/ContentState';
 import { useLessonTransition } from './navigation/useLessonTransition';
-import { playCompletion, playSfx } from '@/services/audio/audio.manager';
-import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
+import { playSfx } from '@/services/audio/audio.manager';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function ActiveLessonPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -42,6 +46,7 @@ export function ActiveLessonPage() {
   const [loadRevision, setLoadRevision] = useState(0);
   const [loadedFor, setLoadedFor] = useState('');
   const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${attemptId}:${loadRevision}`;
+  const [launchMode] = useState(() => consumeLessonAttemptLaunchMode(attemptId));
   const activeSegmentStartedAt = useRef<number | null>(null);
 
   const flushActiveTime = useCallback(async () => {
@@ -64,12 +69,8 @@ export function ActiveLessonPage() {
           return;
         }
         if (loadedAttempt.answers.length >= loadedLesson.activities.length) {
-          const completedAttempt = await completeAttempt(db, loadedAttempt.id);
+          await completeAttempt(db, loadedAttempt.id);
           if (!current) return;
-          playCompletion(
-            completedAttempt.id,
-            completedAttempt.cleared === true && completedAttempt.xpImprovement > 0,
-          );
           navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
           return;
         }
@@ -135,9 +136,15 @@ export function ActiveLessonPage() {
   }
 
   if (loadedFor !== loadKey || !user || !lesson || !attempt) {
+    const launchMessage =
+      launchMode === 'first'
+        ? 'Starting your lesson…'
+        : launchMode === 'retry'
+          ? 'Starting a new attempt…'
+          : 'Restoring your attempt…';
     return (
       <ContentState>
-        <LoadingState variant="page" message="Restoring your attempt…" />
+        <LoadingState variant="page" message={launchMessage} />
       </ContentState>
     );
   }
@@ -176,11 +183,7 @@ export function ActiveLessonPage() {
         loadingMessage: 'Preparing your results…',
         run: async () => {
           await flushActiveTime().catch(() => undefined);
-          const completedAttempt = await completeAttempt(db, attempt.id);
-          playCompletion(
-            completedAttempt.id,
-            completedAttempt.cleared === true && completedAttempt.xpImprovement > 0,
-          );
+          await completeAttempt(db, attempt.id);
           return `/lessons/${lesson.id}/result/${attempt.id}`;
         },
         fallbackError: 'Unable to prepare your lesson result.',
@@ -266,7 +269,13 @@ export function ActiveLessonPage() {
                 <h2>{activity.explanation.title}</h2>
                 <p>{activity.explanation.body}</p>
               </div>
-              <Button onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown} onClick={continueLesson} disabled={transitionBusy} aria-busy={transitionBusy}>
+              <Button
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
+                onClick={continueLesson}
+                disabled={transitionBusy}
+                aria-busy={transitionBusy}
+              >
                 {activityIndex === lesson.activities.length - 1 ? 'See results' : 'Continue'}
               </Button>
               {transitionError && (
