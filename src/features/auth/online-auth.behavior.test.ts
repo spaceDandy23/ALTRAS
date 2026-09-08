@@ -12,12 +12,16 @@ const mocks = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithPassword: vi.fn(),
   rpc: vi.fn(),
+  from: vi.fn(),
+  select: vi.fn(),
+  eq: vi.fn(),
+  single: vi.fn(),
   getSession: vi.fn(),
   signOut: vi.fn(),
 }));
 
 vi.mock('@/services/supabase.client', () => ({
-  getSupabaseClient: () => ({ auth: mocks, rpc: mocks.rpc }),
+  getSupabaseClient: () => ({ auth: mocks, rpc: mocks.rpc, from: mocks.from }),
 }));
 
 const registration = {
@@ -39,9 +43,17 @@ const manualRemoteUser = {
   user_metadata: { username: 'researchertest', display_name: 'researchertest' },
 } as unknown as User;
 
+const metadataFreeManualUser = {
+  ...remoteUser,
+  user_metadata: { email_verified: true },
+} as unknown as User;
+
 describe('Supabase authentication behavior', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
+    mocks.from.mockReturnValue({ select: mocks.select });
+    mocks.select.mockReturnValue({ eq: mocks.eq });
+    mocks.eq.mockReturnValue({ single: mocks.single });
   });
 
   it('registers through Supabase and maps the authenticated user', async () => {
@@ -104,6 +116,47 @@ describe('Supabase authentication behavior', () => {
       email: 'researchertest@test.com',
       password: registration.password,
     });
+  });
+
+  it('maps a manually provisioned user from the authenticated user profile when Auth metadata is absent', async () => {
+    mocks.signInWithPassword
+      .mockResolvedValueOnce({
+        data: { user: null },
+        error: { message: 'Invalid login credentials' },
+      })
+      .mockResolvedValueOnce({ data: { user: metadataFreeManualUser }, error: null });
+    mocks.rpc.mockResolvedValue({ data: 'testresearcher@test.com', error: null });
+    mocks.single.mockResolvedValue({
+      data: { username: 'testresearcher', display_name: 'testresearcher' },
+      error: null,
+    });
+
+    await expect(
+      loginOnlineUser({ username: 'testresearcher', password: registration.password }),
+    ).resolves.toMatchObject({
+      id: remoteUser.id,
+      normalizedUsername: 'testresearcher',
+      displayName: 'testresearcher',
+    });
+
+    expect(mocks.from).toHaveBeenCalledWith('profiles');
+    expect(mocks.select).toHaveBeenCalledWith('username, display_name');
+    expect(mocks.eq).toHaveBeenCalledWith('user_id', remoteUser.id);
+  });
+
+  it('keeps the required-profile error for a signed-in account without a usable own profile', async () => {
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      data: { user: metadataFreeManualUser },
+      error: null,
+    });
+    mocks.single.mockResolvedValue({ data: null, error: { message: 'No rows found' } });
+
+    await expect(
+      loginOnlineUser({ username: 'testresearcher', password: registration.password }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_DATA',
+      message: 'This account is missing required profile information.',
+    } satisfies Partial<AuthError>);
   });
 
   it.each(['unknown_user', 'researchertest'])(

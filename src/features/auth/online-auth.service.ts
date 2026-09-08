@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { getSupabaseClient } from '@/services/supabase.client';
 import type { PublicUser } from '@/types/models';
 import {
@@ -16,14 +17,16 @@ export function usernameToAuthEmail(username: string): string {
   return `${normalizeUsername(username)}@${AUTH_DOMAIN}`;
 }
 
-function toPublicUser(user: User): PublicUser {
-  const normalizedUsername = String(user.user_metadata.username ?? '').trim();
-  const displayName = String(user.user_metadata.display_name ?? '').trim();
+const profileIdentitySchema = z.object({
+  username: z.string().trim().min(1),
+  display_name: z.string().trim().min(2).max(40),
+});
 
-  if (!normalizedUsername || !displayName) {
-    throw new AuthError('INVALID_DATA', 'This account is missing required profile information.');
-  }
-
+function publicUserFromIdentity(
+  user: User,
+  normalizedUsername: string,
+  displayName: string,
+): PublicUser {
   return {
     id: user.id,
     normalizedUsername,
@@ -31,6 +34,28 @@ function toPublicUser(user: User): PublicUser {
     createdAt: Date.parse(user.created_at),
     lastLoginAt: user.last_sign_in_at ? Date.parse(user.last_sign_in_at) : null,
   };
+}
+
+async function toPublicUser(user: User): Promise<PublicUser> {
+  const normalizedUsername = String(user.user_metadata.username ?? '').trim();
+  const displayName = String(user.user_metadata.display_name ?? '').trim();
+
+  if (normalizedUsername && displayName) {
+    return publicUserFromIdentity(user, normalizedUsername, displayName);
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .from('profiles')
+    .select('username, display_name')
+    .eq('user_id', user.id)
+    .single();
+  const profile = error ? null : profileIdentitySchema.safeParse(data);
+
+  if (!profile || !profile.success) {
+    throw new AuthError('INVALID_DATA', 'This account is missing required profile information.');
+  }
+
+  return publicUserFromIdentity(user, profile.data.username, profile.data.display_name);
 }
 
 function mapAuthFailure(message: string, fallback: string): AuthError {
@@ -111,7 +136,11 @@ export async function loginOnlineUser(input: LoginInput): Promise<PublicUser> {
     password: result.data.password,
   });
 
-  if (!error) return toPublicUser(data.user);
+  if (!error && data.user) return toPublicUser(data.user);
+
+  if (!error) {
+    throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
+  }
 
   if (!isInvalidCredentials(error.message)) {
     throw mapAuthFailure(error.message, 'Unable to sign in to the online account.');
@@ -138,11 +167,12 @@ export function subscribeToOnlineAuthChanges(
   listener: (user: PublicUser | null) => void,
 ): () => void {
   const { data } = getSupabaseClient().auth.onAuthStateChange((_event, session) => {
-    try {
-      listener(session ? toPublicUser(session.user) : null);
-    } catch {
+    if (!session) {
       listener(null);
+      return;
     }
+
+    void toPublicUser(session.user).then(listener).catch(() => listener(null));
   });
   return () => data.subscription.unsubscribe();
 }
