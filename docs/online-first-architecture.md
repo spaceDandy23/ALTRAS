@@ -4,6 +4,11 @@ Supabase is authoritative for authentication, profiles, student settings, lesson
 lesson attempts and history, assessments, and researcher results. Failed online writes are
 reported to the interface and are never replaced with a browser-only success path.
 
+Researcher authorization has one source of truth: membership in `public.researcher_users`.
+The secured `public.is_researcher()` function is shared by RLS and researcher RPCs, while the
+frontend resolves the same authority before selecting the student or researcher experience.
+Profiles contain identity/display data only and do not carry an authorization role.
+
 Research outcomes are database-derived. Students submit only validated lesson identities and raw
 answers through RPCs; private server-side lesson definitions determine activity type, correctness,
 passing thresholds, scores, stars, XP, and unlock targets. Authenticated clients have no direct

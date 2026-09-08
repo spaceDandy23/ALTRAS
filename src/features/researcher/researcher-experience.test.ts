@@ -1,14 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyExperienceScope, getExperienceScope, isResearcherPath, isStudentExperience } from './researcher-experience';
+import {
+  applyExperienceScope,
+  getExperienceScope,
+  isStudentExperience,
+} from './researcher-experience';
 
 describe('researcher typography experience scope', () => {
   afterEach(() => delete document.documentElement.dataset.experience);
-
-  it('recognizes the researcher root and every researcher child route', () => {
-    expect(isResearcherPath('/researcher')).toBe(true);
-    expect(isResearcherPath('/researcher/participants')).toBe(true);
-    expect(isResearcherPath('/lessons')).toBe(false);
-  });
 
   it('changes only the experience scope and preserves the saved readability preference', () => {
     document.documentElement.style.setProperty('--readability-scale', '1.3');

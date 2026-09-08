@@ -1,7 +1,3 @@
-export function isResearcherPath(pathname: string): boolean {
-  return pathname === '/researcher' || pathname.startsWith('/researcher/');
-}
-
 export type ExperienceScope = 'neutral' | 'student' | 'researcher';
 
 export function getExperienceScope(): ExperienceScope {

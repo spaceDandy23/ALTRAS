@@ -22,16 +22,22 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
    assessment answer mutation, and non-destructive progress initialization.
 10. Run `supabase/migrations/202609050002_assessment_answer_conflict_fix.sql` to apply the
     PostgreSQL-safe assessment answer upsert conflict target.
-11. Copy the project URL and publishable key from **Project Settings > API Keys**.
-12. Create `.env.local` from `.env.example` and add those two public values.
+11. Run `supabase/migrations/202609060001_assessment_revision_sync.sql` together with the
+    revision-aware frontend. This disables legacy unversioned mutation access and installs
+    revision-based draft synchronization and completion.
+12. Run `supabase/migrations/202609080001_researcher_role_cleanup.sql` to remove the obsolete
+    profile role after researcher authorization has moved to `researcher_users`.
+13. Copy the project URL and publishable key from **Project Settings > API Keys**.
+14. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 
 ## Vercel
 
 Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the Vercel project environment variables.
-Apply every migration, including the assessment answer upsert, research-data integrity, and
-assessment conflict-fix migrations, before deploying this frontend. The integrity migration changes
+Apply every migration, including the assessment answer upsert, research-data integrity,
+assessment conflict-fix, revision-sync, and researcher-role cleanup migrations, before deploying
+this frontend. The integrity migration changes
 RPC signatures and removes the old direct-write grants, so the new frontend and migrations must be
 released together, database first. Redeploy only after the database migrations and application tests
 pass.
@@ -56,15 +62,20 @@ where user_id = 'PASTE-USER-UUID-HERE';
 Researcher access is view-only and research-only. Editing lessons, managing users,
 exports, and advanced analytics require a separately scoped admin system.
 
-## Batch 2 assessment revision sync (pending migration)
+## Batch 2 assessment revision sync
 
-`supabase/migrations/202609060001_assessment_revision_sync.sql` is additive and has
-not been applied remotely by this change. Validate it in a disposable/local database
-before a coordinated release. It revokes the legacy unversioned answer/completion
+`supabase/migrations/202609060001_assessment_revision_sync.sql` must be validated in a
+disposable/local database before a coordinated release. It revokes the legacy unversioned answer/completion
 RPC grants, so old cached clients must refresh/update; do not deploy it independently
 of the revision-aware frontend. Apply the database migration before releasing the
 new frontend during the coordinated rollout. The new client deliberately fails
 closed if the revision columns/RPCs are unavailable.
+
+## Researcher authorization cleanup
+
+`supabase/migrations/202609080001_researcher_role_cleanup.sql` removes `profiles.role`
+and the now-unused `app_role` enum. Researcher access is granted and revoked only through
+`researcher_users`; the migration deliberately fails if that authoritative table is missing.
 
 ### Revision and recovery contract
 

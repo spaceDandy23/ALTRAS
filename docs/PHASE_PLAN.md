@@ -13,7 +13,7 @@
 ## Phase 1 foundation retained
 
 - React, TypeScript, Vite, React Router, Tailwind CSS, custom CSS, and installable PWA
-- Content-only Dexie/IndexedDB cache with Zod validation
+- Non-authoritative Dexie/IndexedDB content cache and user-scoped assessment recovery drafts with Zod validation
 - Supabase authentication and session restoration
 - Protected routes and user-ID-isolated visual-preference caching
 - Main menu, student profile, per-user settings, and reusable UI components
@@ -25,7 +25,7 @@
 - Safe instructional paragraphs, examples, and warnings with no HTML payloads
 - Discriminated `find-word` and `organize-translate` activity union
 - Zod-validated, versioned, idempotent local content initialization
-- Content-only Dexie schema; progress and attempts are authoritative in Supabase
+- Dexie content/recovery schema; progress, attempts, and final assessment results are authoritative in Supabase
 - One six-activity introductory lesson and one prerequisite-gated five-activity `Order Matters` lesson
 - Lesson hub, overview/instruction board, active player, and result page; the legacy preview URL redirects to the normal lesson overview
 - Immediate answer persistence, session recovery, resume, confirmed restart, and preserved abandoned history
@@ -47,7 +47,7 @@
 
 ### Phase 2.2 content expansion
 
-- `PACKAGED_CONTENT_VERSION` is 2 and is independent from the content-only Dexie schema.
+- `PACKAGED_CONTENT_VERSION` is 2 and is independent from the Dexie schema version.
 - Lesson 2 retains the stable `lesson-order-matters` ID and its Lesson 1 prerequisite, so existing unlock progress remains valid.
 - Its learning objective is to translate phrases where spoken order affects mathematical order: “less than,” “subtracted from,” “more than,” and “the difference of A and B.”
 - The lesson contains two Find-the-Word activities and three Organize-and-Translate activities, for five activities total.
@@ -103,8 +103,16 @@
 **Local caches:**
 
 - Lesson content (packaged and cached)
+- User-scoped, revisioned assessment drafts used only for recovery and pending synchronization
 - App shell and static assets
 - User-ID-keyed theme, readability, and motion preferences
+
+**Researcher authorization:**
+
+- `researcher_users` is the single researcher allow-list.
+- `is_researcher()` applies that authority to RLS and secured RPC access.
+- Profiles contain participant identity/display data, not authorization roles.
+- Researcher accounts remain view-only and cannot enter participant learning or Settings flows.
 
 **Limitations without internet:**
 
@@ -121,17 +129,17 @@
 
 ## Deferred Canva ideas
 
-The following remain recorded but intentionally unimplemented: review of mistakes, flashcards, additional quiz types, pre/post-tests, researcher results, CSV/Excel export, backup/import, achievements, badges, profile borders, friends, characters and mechanics, themes, progress-reactive backgrounds, final music/sound, adaptive practice, Easter eggs, cross-computer sync, and automatic question generation.
+The following remain recorded but intentionally unimplemented: review of mistakes, flashcards, additional quiz types, CSV/Excel export, backup/import, achievements, badges, profile borders, friends, additional character mechanics, progress-reactive backgrounds, adaptive practice, Easter eggs, and automatic question generation.
 
-## Recommended Phase 3
+## Recommended next validation work
 
-Phase 3 should begin with research readiness rather than broad gamification:
+Before expanding the product beyond the implemented student and researcher workflows:
 
-1. Confirm grade level, educational content sequence, scoring/XP rules, accessibility accommodations, and research consent fields with the students.
-2. Add validated backup/export/import before any classroom or research testing.
-3. Add more reviewed lessons using the existing two activity types and introduce attempt-history/review summaries.
-4. Add pre/post-assessment only after content and research requirements are approved.
-5. Consider badges, achievements, or additional activity types only after the core learning loop is evaluated with students.
+1. Complete formal UAT for authentication, lessons, revisioned pre/post-assessments, settings, audio, and the view-only researcher workspace.
+2. Validate all migrations in a disposable Supabase project, including old-client/PWA update behavior around the revision-sync release.
+3. Confirm grade level, educational content sequence, scoring/XP rules, accessibility accommodations, and research consent requirements.
+4. Scope validated backup/export/import separately before relying on the application for irreplaceable research data.
+5. Add more reviewed lessons or optional engagement features only after the current learning loop is evaluated.
 
 ## Questions still awaiting answers
 

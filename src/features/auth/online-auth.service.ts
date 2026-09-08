@@ -21,7 +21,7 @@ function toPublicUser(user: User): PublicUser {
   const displayName = String(user.user_metadata.display_name ?? '').trim();
 
   if (!normalizedUsername || !displayName) {
-    throw new AuthError('INVALID_DATA', 'This account is missing its student profile.');
+    throw new AuthError('INVALID_DATA', 'This account is missing required profile information.');
   }
 
   return {

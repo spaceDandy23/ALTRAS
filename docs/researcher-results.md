@@ -1,6 +1,8 @@
 # Researcher results access
 
-Phase 4 exposes anonymized, view-only participant results at /researcher/results.
+Phase 4 exposes the researcher workspace at `/researcher`, with anonymized, view-only
+participant results at `/researcher/participants`. The former `/researcher/results`
+address remains only as a compatibility redirect to the participant page.
 It uses the signed-in user's Supabase JWT and database Row Level Security; the
 browser never receives a Supabase service-role or secret key.
 
@@ -9,11 +11,13 @@ Supabase CLI) after the existing online migrations:
 
 1. `supabase/migrations/202608310001_researcher_results.sql`
 2. `supabase/migrations/202608310002_researcher_student_separation.sql`
+3. `supabase/migrations/202609080001_researcher_role_cleanup.sql`
 
 The follow-up migration fixes anonymous participant-code generation for the
 RPC's locked-down `search_path`, excludes researcher accounts from participant
 results, and blocks researchers from participant learning writes at the database
-level.
+level. The cleanup migration then removes the superseded `profiles.role` field and
+`app_role` enum; `researcher_users` remains the only researcher authorization source.
 
 ## Grant access
 
@@ -46,8 +50,9 @@ researcher_users inside the database and returns only anonymous participant
 codes, scored assessment summaries, and lesson progress. It does not return
 email addresses, display names, authentication UUIDs, answers, or answer keys.
 Direct researcher reads of participant profile, progress, attempt, and answer
-tables are removed by the migrations. Researcher accounts can use Settings, but
-student routes redirect them to the results dashboard and database triggers
+tables are removed by the migrations. Researcher accounts do not enter student
+Profile, Settings, lesson, or assessment routes; those routes redirect them to the
+researcher workspace, and database triggers
 reject attempts, progress, assessment, XP, and star updates.
 
 The Phase 4 dashboard receives one secure anonymized result set because its

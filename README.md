@@ -65,12 +65,15 @@ Initialization uses `bulkPut`, so repeated runs are idempotent. Student progress
 
 ## Browser storage
 
-Dexie remains only as a cache for validated, bundled educational content:
+Dexie remains non-authoritative browser storage for validated bundled content and assessment recovery:
 
 - `sections`, `units`, `lessons`, and `lessonItems`
 - `contentVersions`, which records the packaged educational release
+- `assessmentDrafts`, which keeps user-scoped, revisioned recovery snapshots while Supabase synchronization is pending
 
 Authentication, profiles, settings, progress, attempts, assessments, and researcher results are never stored authoritatively in Dexie. Supabase is the source of truth. A small user-ID-keyed `localStorage` cache applies theme, readability, and motion preferences before authenticated settings load, then reconciles with Supabase.
+
+Researcher authorization is not stored on profiles. Membership in `researcher_users`, queried through the secured `is_researcher()` function, is the single authorization source used by RLS, RPCs, route resolution, and the researcher workspace.
 
 ## Attempts, scoring, and unlocking
 

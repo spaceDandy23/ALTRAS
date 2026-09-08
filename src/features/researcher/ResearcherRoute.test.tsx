@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -5,6 +7,8 @@ import { ProtectedRoute } from '@/app/route-guards';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { ResearcherRoute } from './ResearcherRoute';
+
+const styles = readFileSync(resolve('src/styles/index.css'), 'utf8');
 
 const user = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -57,6 +61,8 @@ describe('researcher route protection', () => {
     );
 
     expect(screen.getByText('Researcher access required')).toBeInTheDocument();
+    expect(document.querySelector('.researcher-access-state')).toBeInTheDocument();
+    expect(document.querySelector('.researcher-access-state > .researcher-state')).toBeInTheDocument();
     expect(screen.queryByText('Protected participant data')).not.toBeInTheDocument();
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
   });
@@ -74,5 +80,14 @@ describe('researcher route protection', () => {
 
     expect(screen.getByText('Protected participant data')).toBeInTheDocument();
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
+  });
+
+  it('defines a viewport-centered access state with mobile edge spacing', () => {
+    expect(styles).toMatch(
+      /\.researcher-access-state \{[\s\S]*?min-height: 100svh;[\s\S]*?place-items: center;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 480px\) \{[\s\S]*?\.researcher-access-state \{[\s\S]*?padding: 0\.75rem;/,
+    );
   });
 });
