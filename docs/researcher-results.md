@@ -12,12 +12,15 @@ Supabase CLI) after the existing online migrations:
 1. `supabase/migrations/202608310001_researcher_results.sql`
 2. `supabase/migrations/202608310002_researcher_student_separation.sql`
 3. `supabase/migrations/202609080001_researcher_role_cleanup.sql`
+4. `supabase/migrations/202609080002_repair_handle_new_user_after_role_cleanup.sql`
 
 The follow-up migration fixes anonymous participant-code generation for the
 RPC's locked-down `search_path`, excludes researcher accounts from participant
 results, and blocks researchers from participant learning writes at the database
 level. The cleanup migration then removes the superseded `profiles.role` field and
 `app_role` enum; `researcher_users` remains the only researcher authorization source.
+The follow-up trigger repair preserves normal profile/settings creation for new Auth users
+without adding anyone to `researcher_users`.
 
 ## Grant access
 

@@ -27,8 +27,10 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
     revision-based draft synchronization and completion.
 12. Run `supabase/migrations/202609080001_researcher_role_cleanup.sql` to remove the obsolete
     profile role after researcher authorization has moved to `researcher_users`.
-13. Copy the project URL and publishable key from **Project Settings > API Keys**.
-14. Create `.env.local` from `.env.example` and add those two public values.
+13. Run `supabase/migrations/202609080002_repair_handle_new_user_after_role_cleanup.sql` to
+    restore the auth-user profile/settings trigger without the retired role field.
+14. Copy the project URL and publishable key from **Project Settings > API Keys**.
+15. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 
@@ -76,6 +78,10 @@ closed if the revision columns/RPCs are unavailable.
 `supabase/migrations/202609080001_researcher_role_cleanup.sql` removes `profiles.role`
 and the now-unused `app_role` enum. Researcher access is granted and revoked only through
 `researcher_users`; the migration deliberately fails if that authoritative table is missing.
+
+`supabase/migrations/202609080002_repair_handle_new_user_after_role_cleanup.sql` must follow
+the cleanup migration. It replaces the effective `handle_new_user()` trigger function so new
+Supabase Auth users create only a profile and default settings; it never assigns researcher access.
 
 ### Revision and recovery contract
 
