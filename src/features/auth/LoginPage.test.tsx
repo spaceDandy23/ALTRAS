@@ -17,10 +17,27 @@ afterEach(() => {
 });
 
 describe('post-login routing', () => {
-  it('sends an authorized researcher to researcher results', () => {
-    expect(resolvePostLoginDestination('authorized', '/lessons/lesson-one')).toBe(
-      '/researcher',
+  it('shows and hides a typed password without changing its value', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
     );
+
+    const password = screen.getByLabelText('Password');
+    await user.type(password, 'password1');
+    expect(password).toHaveAttribute('type', 'password');
+    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(password).toHaveAttribute('type', 'text');
+    expect(password).toHaveValue('password1');
+    await user.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(password).toHaveAttribute('type', 'password');
+    expect(password).toHaveValue('password1');
+  });
+
+  it('sends an authorized researcher to researcher results', () => {
+    expect(resolvePostLoginDestination('authorized', '/lessons/lesson-one')).toBe('/researcher');
   });
 
   it('sends a normal student to the requested student route', () => {

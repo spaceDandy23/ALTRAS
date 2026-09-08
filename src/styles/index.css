@@ -290,6 +290,39 @@ h3 {
     background 140ms ease;
 }
 
+.form-field__input-wrap {
+  position: relative;
+}
+
+.form-field__input-wrap--password .form-field__input {
+  padding-right: 4.7rem;
+}
+
+.form-field__password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  min-height: 32px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 4px;
+  padding: 0.2rem 0.45rem;
+  color: var(--yellow);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.form-field__password-toggle:hover {
+  color: var(--yellow-hover);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-field__password-toggle:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
 .form-field__input:hover,
 .form-field__input:focus {
   border-color: var(--yellow);
@@ -4801,7 +4834,7 @@ a.almanac-option:hover {
   }
 
   .modal-backdrop {
-    align-items: end;
+    place-items: center;
     padding: 0.75rem;
   }
 

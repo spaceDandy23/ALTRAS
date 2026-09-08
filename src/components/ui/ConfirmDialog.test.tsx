@@ -31,6 +31,8 @@ describe('ConfirmDialog accessibility', () => {
 
     const cancel = screen.getByRole('button', { name: 'Cancel' });
     const confirm = screen.getByRole('button', { name: 'Delete' });
+    expect(screen.getByRole('alertdialog').parentElement).toHaveClass('modal-backdrop');
+    expect(screen.getByRole('alertdialog').parentElement?.parentElement).toBe(document.body);
     expect(cancel).toHaveFocus();
     await user.tab({ shift: true });
     expect(confirm).toHaveFocus();
