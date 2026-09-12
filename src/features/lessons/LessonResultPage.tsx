@@ -23,6 +23,7 @@ import {
   playNeutralClickOnPointerDown,
 } from '@/services/audio/click.handlers';
 import { playCompletion, playReward } from '@/services/audio/audio.manager';
+import { StudentStreak } from '@/features/streaks/StudentStreak';
 
 function LessonResultAudio({ attempt }: { attempt: LessonAttempt }) {
   const playedAttemptRef = useRef<string | null>(null);
@@ -167,6 +168,7 @@ export function LessonResultPage() {
             </span>
           </div>
           <StarRating count={attempt.starCount ?? 0} />
+          <StudentStreak key={attempt.id} attemptId={attempt.id} />
           <div className="result-metrics">
             {attempt.xpImprovement > 0 && <span>+{attempt.xpImprovement} XP</span>}
             <span>Best score {progress.bestScore}%</span>

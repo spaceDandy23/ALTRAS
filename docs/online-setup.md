@@ -33,8 +33,10 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
     support Dashboard-created Auth users that omit ALTRAS registration metadata.
 15. Run `supabase/migrations/202609080004_resolve_username_login_identity.sql` to let the
     username-only login flow securely resolve manually provisioned Auth identities.
-16. Copy the project URL and publishable key from **Project Settings > API Keys**.
-17. Create `.env.local` from `.env.example` and add those two public values.
+16. Run `supabase/migrations/202609120001_student_streaks.sql` to record server-confirmed
+    lesson activity days. See [student streak rules and deployment QA](student-streaks.md).
+17. Copy the project URL and publishable key from **Project Settings > API Keys**.
+18. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 

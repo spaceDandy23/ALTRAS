@@ -23,6 +23,7 @@ import {
 import { selectHomeLesson } from './home-lesson-selection';
 import { consumeLessonUnlock } from '@/features/lessons/progress/progress-transitions';
 import { resolveLessonDisplayStatus } from '@/features/lessons/components/lesson-display-status';
+import { StudentStreak } from '@/features/streaks/StudentStreak';
 
 export function MainMenuPage() {
   const user = useAuthStore((state) => state.user);
@@ -190,6 +191,7 @@ export function MainMenuPage() {
               <span>{totalXp} XP</span>
               <StarRating count={earnedStarCount} />
             </div>
+            <StudentStreak />
             <div className="home-assessments" aria-label="Assessments">
               <Link to="/assessments/pre-test">
                 <span>Before the lessons</span>
