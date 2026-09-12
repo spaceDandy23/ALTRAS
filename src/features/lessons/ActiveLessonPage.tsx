@@ -1,50 +1,96 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageLoadError } from '@/components/ui/PageLoadError';
+import { ActivityCharacterAssistant } from '@/features/characters/components/ActivityCharacterAssistant';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import type { LearningLesson } from './domain/content.schemas';
 import type { LessonAttempt } from '@/types/learning';
 import { getLesson } from './content/content.service';
-import { completeAttempt, getAttempt, submitActivityAnswer } from './attempts/attempt.service';
+import {
+  completeAttempt,
+  consumeLessonAttemptLaunchMode,
+  getAttempt,
+  recordAttemptActiveSeconds,
+  submitActivityAnswer,
+} from './attempts/attempt.service';
 import { FindWordActivityView } from './activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateActivityView';
 import type { ActivityAnswer } from './domain/evaluation';
 import { ContentState } from './components/ContentState';
+import { useLessonTransition } from './navigation/useLessonTransition';
+import { playSfx } from '@/services/audio/audio.manager';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function ActiveLessonPage() {
   const { lessonId = '', attemptId = '' } = useParams();
   const user = useAuthStore((state) => state.user);
   const contentStatus = useContentStore((state) => state.status);
   const navigate = useNavigate();
+  const { loadingMessage, transitionError, transitionBusy, startTransition } =
+    useLessonTransition();
   const [lesson, setLesson] = useState<LearningLesson | null>(null);
   const [attempt, setAttempt] = useState<LessonAttempt | null>(null);
   const [activityIndex, setActivityIndex] = useState(0);
   const [confirmExit, setConfirmExit] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [hintActivityId, setHintActivityId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');
+  const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${attemptId}:${loadRevision}`;
+  const [launchMode] = useState(() => consumeLessonAttemptLaunchMode(attemptId));
+  const activeSegmentStartedAt = useRef<number | null>(null);
+
+  const flushActiveTime = useCallback(async () => {
+    if (!attempt || activeSegmentStartedAt.current === null) return;
+    const now = Date.now();
+    const seconds = Math.floor((now - activeSegmentStartedAt.current) / 1000);
+    if (seconds <= 0) return;
+    activeSegmentStartedAt.current += seconds * 1000;
+    await recordAttemptActiveSeconds(db, attempt.id, seconds);
+  }, [attempt]);
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
-    void Promise.all([getLesson(db, lessonId), getAttempt(db, user.id, attemptId)]).then(
-      async ([loadedLesson, loadedAttempt]) => {
+    let current = true;
+    void Promise.all([getLesson(db, lessonId, attemptId), getAttempt(db, user.id, attemptId)])
+      .then(async ([loadedLesson, loadedAttempt]) => {
         if (loadedAttempt.lessonId !== loadedLesson.id) throw new Error('Attempt mismatch.');
         if (loadedAttempt.status === 'completed') {
-          navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
+          if (current) navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
           return;
         }
         if (loadedAttempt.answers.length >= loadedLesson.activities.length) {
           await completeAttempt(db, loadedAttempt.id);
+          if (!current) return;
           navigate(`/lessons/${lessonId}/result/${attemptId}`, { replace: true });
           return;
         }
+        if (!current) return;
         setLesson(loadedLesson);
         setAttempt(loadedAttempt);
         setActivityIndex(loadedAttempt.answers.length);
-      },
-    );
-  }, [attemptId, contentStatus, lessonId, navigate, user]);
+        setLoadError('');
+        setLoadedFor(loadKey);
+      })
+      .catch(() => {
+        if (current) {
+          setLoadError('Your lesson attempt could not be restored.');
+          setLoadedFor(loadKey);
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [attemptId, contentStatus, lessonId, loadKey, navigate, user]);
 
   useEffect(() => {
     if (saveState !== 'saved') return;
@@ -52,14 +98,61 @@ export function ActiveLessonPage() {
     return () => window.clearTimeout(timeout);
   }, [saveState]);
 
-  if (!user || !lesson || !attempt) {
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'active') return;
+    activeSegmentStartedAt.current = document.visibilityState === 'visible' ? Date.now() : null;
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        void flushActiveTime().catch(() => undefined);
+        activeSegmentStartedAt.current = null;
+      } else {
+        activeSegmentStartedAt.current = Date.now();
+      }
+    };
+    const interval = window.setInterval(
+      () => void flushActiveTime().catch(() => undefined),
+      30_000,
+    );
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(interval);
+      void flushActiveTime().catch(() => undefined);
+      activeSegmentStartedAt.current = null;
+    };
+  }, [attempt, flushActiveTime]);
+
+  if (loadedFor === loadKey && loadError) {
     return (
       <ContentState>
-        {
-          <div className="lesson-player lesson-player--loading">
-            <p>Restoring your attempt…</p>
-          </div>
-        }
+        <PageLoadError
+          title="Lesson attempt unavailable"
+          message={loadError}
+          onRetry={() => setLoadRevision((revision) => revision + 1)}
+        />
+      </ContentState>
+    );
+  }
+
+  if (loadedFor !== loadKey || !user || !lesson || !attempt) {
+    const launchMessage =
+      launchMode === 'first'
+        ? 'Starting your lesson…'
+        : launchMode === 'retry'
+          ? 'Starting a new attempt…'
+          : 'Restoring your attempt…';
+    return (
+      <ContentState>
+        <LoadingState variant="page" message={launchMessage} />
+      </ContentState>
+    );
+  }
+
+  if (loadingMessage) {
+    return (
+      <ContentState>
+        <LoadingState variant="page" message={loadingMessage} />
       </ContentState>
     );
   }
@@ -73,19 +166,30 @@ export function ActiveLessonPage() {
   const submit = async (answer: ActivityAnswer) => {
     setSaveState('saving');
     try {
-      const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer);
+      const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer, attempt);
+      const content = await getLesson(db, lessonId, attempt.id);
+      setLesson(content);
       setAttempt(updated);
+      const submittedAnswer = updated.answers.find((item) => item.activityId === activity.id);
+      if (submittedAnswer) playSfx(submittedAnswer.isCorrect ? 'correct' : 'incorrect');
       setSaveState('saved');
     } catch {
       setSaveState('error');
     }
   };
 
-  const continueLesson = async () => {
-    if (!submitted) return;
+  const continueLesson = () => {
+    if (!submitted || transitionBusy) return;
     if (activityIndex === lesson.activities.length - 1) {
-      await completeAttempt(db, attempt.id);
-      navigate(`/lessons/${lesson.id}/result/${attempt.id}`);
+      void startTransition({
+        loadingMessage: 'Preparing your results…',
+        run: async () => {
+          await flushActiveTime().catch(() => undefined);
+          await completeAttempt(db, attempt.id);
+          return `/lessons/${lesson.id}/result/${attempt.id}`;
+        },
+        fallbackError: 'Unable to prepare your lesson result.',
+      });
       return;
     }
     setActivityIndex((index) => index + 1);
@@ -123,21 +227,35 @@ export function ActiveLessonPage() {
           <span style={{ width: `${progressPercent}%` }} />
         </div>
         <main className="lesson-player__stage">
-          {activity.type === 'find-word' ? (
-            <FindWordActivityView
-              key={activity.id}
+          <div className="lesson-player__activity-column">
+            <ActivityCharacterAssistant
               activity={activity}
               submitted={submitted}
-              onSubmit={submit}
+              hintVisible={hintActivityId === activity.id}
+              characterId={lesson.characterId}
             />
-          ) : (
-            <OrganizeTranslateActivityView
-              key={activity.id}
-              activity={activity}
-              submitted={submitted}
-              onSubmit={submit}
-            />
-          )}
+            {activity.type === 'find-word' ? (
+              <FindWordActivityView
+                key={activity.id}
+                activity={activity}
+                submitted={submitted}
+                onSubmit={submit}
+                onHintVisibilityChange={(visible) =>
+                  setHintActivityId(visible ? activity.id : null)
+                }
+              />
+            ) : (
+              <OrganizeTranslateActivityView
+                key={activity.id}
+                activity={activity}
+                submitted={submitted}
+                onSubmit={submit}
+                onHintVisibilityChange={(visible) =>
+                  setHintActivityId(visible ? activity.id : null)
+                }
+              />
+            )}
+          </div>
           {submitted && (
             <aside
               className={`answer-feedback answer-feedback--${submitted.isCorrect ? 'correct' : 'incorrect'}`}
@@ -153,9 +271,20 @@ export function ActiveLessonPage() {
                 <h2>{activity.explanation.title}</h2>
                 <p>{activity.explanation.body}</p>
               </div>
-              <Button onClick={() => void continueLesson()}>
+              <Button
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
+                onClick={continueLesson}
+                disabled={transitionBusy}
+                aria-busy={transitionBusy}
+              >
                 {activityIndex === lesson.activities.length - 1 ? 'See results' : 'Continue'}
               </Button>
+              {transitionError && (
+                <p className="form-error" role="alert">
+                  {transitionError}
+                </p>
+              )}
             </aside>
           )}
         </main>
@@ -164,9 +293,12 @@ export function ActiveLessonPage() {
           title="Exit and resume later?"
           confirmLabel="Exit lesson"
           onCancel={() => setConfirmExit(false)}
-          onConfirm={() => navigate(`/lessons/${lesson.id}`)}
+          onConfirm={() => {
+            void flushActiveTime().catch(() => undefined);
+            navigate(`/lessons/${lesson.id}`);
+          }}
         >
-          Your submitted answers are saved on this device. The lesson overview will offer Resume or
+          Your submitted answers are saved to your account. The lesson overview will offer Resume or
           Restart when you return.
         </ConfirmDialog>
       </div>

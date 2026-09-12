@@ -19,12 +19,26 @@ export const activityTokenSchema = z.object({
   label: z.string().min(1),
 });
 
+export const activityCharacterDialogueSchema = z.object({
+  introduction: z.string().trim().min(1).optional(),
+  hint: z.string().trim().min(1).optional(),
+  correct: z.string().trim().min(1).optional(),
+  incorrect: z.string().trim().min(1).optional(),
+  encouragement: z.string().trim().min(1).optional(),
+});
+
+export const lessonCharacterDialogueSchema = z.object({
+  introduction: z.string().trim().min(1).optional(),
+  completion: z.string().trim().min(1).optional(),
+});
+
 const activityBaseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   prompt: z.string().min(1),
   hint: hintSchema.optional(),
   explanation: explanationSchema,
+  characterDialogue: activityCharacterDialogueSchema.optional(),
 });
 
 export const findWordActivitySchema = activityBaseSchema
@@ -114,21 +128,26 @@ export const unitSchema = z.object({
   contentVersion: z.number().int().positive(),
 });
 
-export const lessonSchema = z
-  .object({
-    id: z.string().min(1),
-    sectionId: z.string().min(1),
-    unitId: z.string().min(1),
-    title: z.string().min(1),
-    shortDescription: z.string().min(1),
-    concepts: z.array(z.string().min(1)).min(1),
-    displayOrder: z.number().int().nonnegative(),
-    prerequisiteLessonId: z.string().min(1).optional(),
-    contentStatus: z.enum(['playable', 'preview']),
+export const lessonMetadataSchema = z.object({
+  id: z.string().min(1),
+  sectionId: z.string().min(1),
+  unitId: z.string().min(1),
+  title: z.string().min(1),
+  shortDescription: z.string().min(1),
+  concepts: z.array(z.string().min(1)).min(1),
+  displayOrder: z.number().int().nonnegative(),
+  prerequisiteLessonId: z.string().min(1).optional(),
+  contentStatus: z.enum(['playable', 'preview']),
+  passingThreshold: z.number().int().min(0).max(100),
+  contentVersion: z.number().int().positive(),
+  characterId: z.string().trim().min(1).optional(),
+  characterDialogue: lessonCharacterDialogueSchema.optional(),
+});
+
+export const lessonSchema = lessonMetadataSchema
+  .extend({
     instructionalContent: z.array(instructionalContentBlockSchema),
     activities: z.array(activitySchema),
-    passingThreshold: z.number().int().min(0).max(100),
-    contentVersion: z.number().int().positive(),
   })
   .superRefine((lesson, context) => {
     if (lesson.contentStatus === 'playable' && lesson.activities.length === 0) {
@@ -175,11 +194,27 @@ export const packagedContentSchema = z
 
 export type ActivityChoice = z.infer<typeof activityChoiceSchema>;
 export type ActivityToken = z.infer<typeof activityTokenSchema>;
-export type FindWordActivity = z.infer<typeof findWordActivitySchema>;
-export type OrganizeTranslateActivity = z.infer<typeof organizeTranslateActivitySchema>;
-export type LessonActivity = z.infer<typeof activitySchema>;
+// Public player content omits private keys; post-answer feedback may reveal one choice.
+export const publicActivitySchema = z.discriminatedUnion('type', [
+  z.object({ ...findWordActivitySchema.shape, correctChoiceId: z.string().optional() }),
+  z.object({
+    ...organizeTranslateActivitySchema.shape,
+    correctTokenSequence: z.array(z.string()).optional(),
+  }),
+]);
+export const publicLessonSchema = lessonMetadataSchema.extend({
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(publicActivitySchema).min(1).max(10),
+});
+export type FindWordActivity = Extract<z.infer<typeof publicActivitySchema>, { type: 'find-word' }>;
+export type OrganizeTranslateActivity = Extract<
+  z.infer<typeof publicActivitySchema>,
+  { type: 'organize-translate' }
+>;
+export type LessonActivity = z.infer<typeof publicActivitySchema>;
 export type InstructionalContentBlock = z.infer<typeof instructionalContentBlockSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
-export type LearningLesson = z.infer<typeof lessonSchema>;
+export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
+export type LearningLesson = z.infer<typeof publicLessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

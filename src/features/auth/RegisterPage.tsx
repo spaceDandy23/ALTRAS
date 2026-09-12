@@ -5,6 +5,7 @@ import { FormField } from '@/components/ui/FormField';
 import { useAuthStore } from '@/stores/auth.store';
 import { registrationSchema } from './auth.schemas';
 import { AuthFrame } from './AuthFrame';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function RegisterPage() {
   const [form, setForm] = useState({
@@ -51,7 +52,7 @@ export function RegisterPage() {
     <AuthFrame>
       <div className="auth-card__heading auth-card__heading--compact">
         <h1>Create an account</h1>
-        <p>Each student gets separate progress and settings on this computer.</p>
+        <p>Your student profile and settings will follow you across supported devices.</p>
       </div>
       <form
         className="auth-form auth-form--grid"
@@ -97,12 +98,12 @@ export function RegisterPage() {
           autoComplete="new-password"
           required
         />
-        <Button type="submit" fullWidth disabled={submitting} className="auth-form__submit">
+        <Button type="submit" fullWidth disabled={submitting} className="auth-form__submit" onPointerDown={playNeutralClickOnPointerDown} onKeyDown={playNeutralClickOnKeyDown}>
           {submitting ? 'Creating account…' : 'Create account'}
         </Button>
       </form>
       <p className="auth-switch">
-        Already have a local account? <Link to="/login">Sign in</Link>
+        Already have an account? <Link to="/login">Sign in</Link>
       </p>
     </AuthFrame>
   );

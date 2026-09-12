@@ -1,18 +1,30 @@
-import { render, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
-import { db } from '@/db/database';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
+import {
+  activateVisualPreferencesForUser,
+  cacheVisualPreferences,
+  deactivateVisualPreferences,
+} from '@/features/settings/visual-preferences.cache';
+
+vi.mock('@/services/audio/audio.manager', () => ({
+  getAudioMuted: () => false,
+  playMusic: vi.fn(),
+  playSfx: vi.fn(),
+  setAudioMuted: vi.fn(),
+  stopMusic: vi.fn(),
+}));
 import { AppShell } from './AppShell';
 
 describe('stored motion preference', () => {
-  afterEach(async () => {
-    delete document.documentElement.dataset.motion;
-    await db.settings.clear();
+  afterEach(() => {
+    deactivateVisualPreferences();
+    localStorage.clear();
     useAuthStore.setState({ status: 'guest', user: null });
   });
 
-  it('applies a stored disabled-animation preference to the application shell', async () => {
+  it('applies a stored disabled-animation preference before the application shell renders', async () => {
     const userId = crypto.randomUUID();
     useAuthStore.setState({
       status: 'authenticated',
@@ -24,15 +36,14 @@ describe('stored motion preference', () => {
         lastLoginAt: Date.now(),
       },
     });
-    await db.settings.put({
-      id: crypto.randomUUID(),
-      userId,
-      masterVolume: 80,
-      soundEffectsVolume: 80,
-      musicVolume: 60,
+    cacheVisualPreferences(userId, {
+      theme: 'dark',
+      readabilityScale: 1,
       animationsEnabled: false,
-      updatedAt: Date.now(),
     });
+
+    activateVisualPreferencesForUser(userId);
+    expect(document.documentElement.dataset.motion).toBe('off');
 
     render(
       <MemoryRouter>
@@ -44,6 +55,6 @@ describe('stored motion preference', () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(document.documentElement.dataset.motion).toBe('off'));
+    expect(document.documentElement.dataset.motion).toBe('off');
   });
 });

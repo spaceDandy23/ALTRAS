@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { OrganizeTranslateActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
+import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
 
 export function OrganizeTranslateActivityView({
   activity,
   submitted,
   onSubmit,
+  onHintVisibilityChange,
 }: {
   activity: OrganizeTranslateActivity;
   submitted?: SubmittedActivityAnswer;
   onSubmit: (answer: string[]) => Promise<void>;
+  onHintVisibilityChange?: (visible: boolean) => void;
 }) {
   const submittedSequence = Array.isArray(submitted?.answer) ? submitted.answer : null;
   const [sequence, setSequence] = useState<string[]>(submittedSequence ?? []);
@@ -26,6 +29,14 @@ export function OrganizeTranslateActivityView({
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleHint = () => {
+    setHintVisible((visible) => {
+      const next = !visible;
+      onHintVisibilityChange?.(next);
+      return next;
+    });
   };
 
   return (
@@ -72,6 +83,8 @@ export function OrganizeTranslateActivityView({
               <button
                 key={token.id}
                 className="available-token"
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
                 onClick={() => setSequence((current) => [...current, token.id])}
               >
                 <span aria-hidden="true">+</span> {token.label}
@@ -91,12 +104,14 @@ export function OrganizeTranslateActivityView({
           </div>
           <div className="activity-actions">
             {activity.hint && (
-              <Button variant="quiet" onClick={() => setHintVisible((visible) => !visible)}>
+              <Button variant="quiet" onClick={toggleHint}>
                 {hintVisible ? 'Hide hint' : 'Show hint'}
               </Button>
             )}
             <Button
               disabled={sequence.length !== activity.tokens.length || saving}
+              onPointerDown={playNeutralClickOnPointerDown}
+              onKeyDown={playNeutralClickOnKeyDown}
               onClick={() => void submit()}
             >
               {saving ? 'Checking…' : 'Submit translation'}

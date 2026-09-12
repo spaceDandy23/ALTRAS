@@ -11,7 +11,10 @@ import {
   storedLessonSchema,
   type StoredLessonItem,
 } from '@/types/learning';
-import { packagedContent } from './packaged-content';
+import { z } from 'zod';
+import { getSupabaseClient } from '@/services/supabase.client';
+import { publicLessonSchema } from '../domain/content.schemas';
+import { catalogShell } from './catalog-shell';
 
 export class ContentInitializationError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -22,7 +25,7 @@ export class ContentInitializationError extends Error {
 
 export async function initializePackagedContent(
   database: AltrasDatabase,
-  input: unknown = packagedContent,
+  input: unknown,
 ): Promise<PackagedContent> {
   const parsed = packagedContentSchema.safeParse(input);
   if (!parsed.success) {
@@ -32,21 +35,7 @@ export async function initializePackagedContent(
   }
 
   const validated = parsed.data;
-  const lessons = validated.lessons.map((lesson) =>
-    storedLessonSchema.parse({
-      id: lesson.id,
-      sectionId: lesson.sectionId,
-      unitId: lesson.unitId,
-      title: lesson.title,
-      shortDescription: lesson.shortDescription,
-      concepts: lesson.concepts,
-      displayOrder: lesson.displayOrder,
-      prerequisiteLessonId: lesson.prerequisiteLessonId,
-      contentStatus: lesson.contentStatus,
-      passingThreshold: lesson.passingThreshold,
-      contentVersion: lesson.contentVersion,
-    }),
-  );
+  const lessons = validated.lessons.map((lesson) => storedLessonSchema.parse(lesson));
   const items: StoredLessonItem[] = validated.lessons.flatMap((lesson) => [
     ...lesson.instructionalContent.map((block, index) =>
       storedLessonItemSchema.parse({
@@ -102,7 +91,7 @@ export async function initializePackagedContent(
   return validated;
 }
 
-export async function getLesson(
+export async function getCachedLesson(
   database: AltrasDatabase,
   lessonId: string,
 ): Promise<LearningLesson> {
@@ -122,7 +111,35 @@ export async function getLesson(
   });
 }
 
-export async function getAllLessons(database: AltrasDatabase): Promise<LearningLesson[]> {
-  const metadata = await database.lessons.orderBy('[unitId+displayOrder]').toArray();
-  return Promise.all(metadata.map((lesson) => getLesson(database, lesson.id)));
+export async function initializeContent(database: AltrasDatabase): Promise<void> {
+  await database.transaction(
+    'rw',
+    [database.sections, database.units, database.lessons, database.lessonItems],
+    async () => {
+      // Remove the old packaged key cache; attempts, progress and assessment drafts are untouched.
+      await database.lessons.clear();
+      await database.lessonItems.clear();
+      await database.sections.bulkPut(catalogShell.sections);
+      await database.units.bulkPut(catalogShell.units);
+    },
+  );
+}
+
+export async function getLesson(
+  _database: AltrasDatabase,
+  lessonId: string,
+  attemptId?: string,
+): Promise<LearningLesson> {
+  const { data, error } = await getSupabaseClient().rpc('get_lesson_content', {
+    p_lesson_id: lessonId,
+    p_attempt_id: attemptId ?? null,
+  });
+  if (error) throw new Error('This lesson is unavailable.');
+  return publicLessonSchema.parse(data);
+}
+
+export async function getAllLessons(_database: AltrasDatabase): Promise<LearningLesson[]> {
+  const { data, error } = await getSupabaseClient().rpc('get_lesson_catalog');
+  if (error) throw new Error('The lesson catalog could not be loaded.');
+  return z.array(publicLessonSchema).parse(data);
 }
