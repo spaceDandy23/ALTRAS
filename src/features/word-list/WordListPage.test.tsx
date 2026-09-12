@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AltrasDatabase } from '@/db/database';
 import { initializePackagedContent } from '@/features/lessons/content/content.service';
+import { packagedContent } from '@/features/lessons/content/packaged-content';
 import { AlmanacPage } from './AlmanacPage';
 import { WordListPage } from './WordListPage';
 import { mathWordGroups, wordListSchema } from './word-list.data';
@@ -122,7 +123,7 @@ describe('Math word list', () => {
 
   it('does not mutate the bundled lesson-content cache', async () => {
     database = new AltrasDatabase(`altras-word-list-${crypto.randomUUID()}`);
-    await initializePackagedContent(database);
+    await initializePackagedContent(database, packagedContent);
     const before = await Promise.all([
       database.sections.toArray(),
       database.units.toArray(),

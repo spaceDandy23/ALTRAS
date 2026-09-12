@@ -194,12 +194,27 @@ export const packagedContentSchema = z
 
 export type ActivityChoice = z.infer<typeof activityChoiceSchema>;
 export type ActivityToken = z.infer<typeof activityTokenSchema>;
-export type FindWordActivity = z.infer<typeof findWordActivitySchema>;
-export type OrganizeTranslateActivity = z.infer<typeof organizeTranslateActivitySchema>;
-export type LessonActivity = z.infer<typeof activitySchema>;
+// Public player content omits private keys; post-answer feedback may reveal one choice.
+export const publicActivitySchema = z.discriminatedUnion('type', [
+  z.object({ ...findWordActivitySchema.shape, correctChoiceId: z.string().optional() }),
+  z.object({
+    ...organizeTranslateActivitySchema.shape,
+    correctTokenSequence: z.array(z.string()).optional(),
+  }),
+]);
+export const publicLessonSchema = lessonMetadataSchema.extend({
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(publicActivitySchema).min(1).max(10),
+});
+export type FindWordActivity = Extract<z.infer<typeof publicActivitySchema>, { type: 'find-word' }>;
+export type OrganizeTranslateActivity = Extract<
+  z.infer<typeof publicActivitySchema>,
+  { type: 'organize-translate' }
+>;
+export type LessonActivity = z.infer<typeof publicActivitySchema>;
 export type InstructionalContentBlock = z.infer<typeof instructionalContentBlockSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
 export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
-export type LearningLesson = z.infer<typeof lessonSchema>;
+export type LearningLesson = z.infer<typeof publicLessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

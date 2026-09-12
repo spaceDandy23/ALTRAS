@@ -32,6 +32,7 @@ export function LessonOverviewPage() {
   const [lesson, setLesson] = useState<LearningLesson | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
   const [active, setActive] = useState<LessonAttempt | null>(null);
+  const [prerequisiteTitle, setPrerequisiteTitle] = useState('the prerequisite lesson');
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [loadRevision, setLoadRevision] = useState(0);
@@ -46,9 +47,17 @@ export function LessonOverviewPage() {
       getLessonProgress(db, user.id, lessonId),
       getActiveAttempt(db, user.id, lessonId),
     ])
-      .then(([nextLesson, nextProgress, nextActive]) => {
+      .then(async ([nextLesson, nextProgress, nextActive]) => {
+        const prerequisite =
+          nextProgress.status === 'locked' && nextLesson.prerequisiteLessonId
+            ? await getLesson(db, nextLesson.prerequisiteLessonId)
+            : null;
+        const visibleLesson = nextActive
+          ? await getLesson(db, lessonId, nextActive.id)
+          : nextLesson;
         if (!current) return;
-        setLesson(nextLesson);
+        setLesson(visibleLesson);
+        setPrerequisiteTitle(prerequisite?.title ?? 'the prerequisite lesson');
         setProgress(nextProgress);
         setActive(nextActive);
         setLoadError('');
@@ -133,7 +142,7 @@ export function LessonOverviewPage() {
                 />
                 {progress.status === 'locked' ? (
                   <p className="lesson-overview__actions lesson-summary">
-                    Clear Words That Signal Operations to unlock this lesson.
+                    Clear {prerequisiteTitle} to unlock this lesson.
                   </p>
                 ) : (
                   <div className="lesson-overview__actions lesson-summary">

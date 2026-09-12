@@ -122,6 +122,12 @@ export function MainMenuPage() {
           message={loadError}
           onRetry={() => setLoadRevision((revision) => revision + 1)}
         />
+      ) : hub && !nextEntry ? (
+        <section className="standard-page">
+          <h1>No published lessons yet</h1>
+          <p>Your saved progress is still available when lessons return.</p>
+          <Link to="/lessons/almanac">Open Almanac</Link>
+        </section>
       ) : !hub || !nextEntry ? (
         <LoadingState variant="page" message="Preparing your lesson…" />
       ) : (

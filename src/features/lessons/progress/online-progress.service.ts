@@ -53,23 +53,17 @@ async function readProgress(userId: string): Promise<LessonProgress[]> {
 }
 
 export async function ensureOnlineLessonProgress(
-  database: AltrasDatabase,
+  _database: AltrasDatabase,
   _userId: string,
 ): Promise<LessonProgress[]> {
   assertParticipantLearningAccess();
-  const lessons = await database.lessons.orderBy('[unitId+displayOrder]').toArray();
   const { data, error } = await getSupabaseClient().rpc('initialize_lesson_progress');
   if (error) throw new Error('Unable to initialize online lesson progress.');
   const existing = z
     .array(remoteProgressSchema)
     .parse(data ?? [])
     .map(toLessonProgress);
-  const byLessonId = new Map(existing.map((progress) => [progress.lessonId, progress]));
-
-  return lessons.flatMap((lesson) => {
-    const progress = byLessonId.get(lesson.id);
-    return progress ? [progress] : [];
-  });
+  return existing;
 }
 
 export async function getOnlineLessonProgress(
@@ -88,11 +82,11 @@ export async function getOnlineLessonHubData(
   database: AltrasDatabase,
   userId: string,
 ): Promise<LessonHubData> {
+  const lessons = await getAllLessons(database);
   const progressRecords = await ensureOnlineLessonProgress(database, userId);
-  const [section, unit, lessons] = await Promise.all([
+  const [section, unit] = await Promise.all([
     database.sections.orderBy('displayOrder').first(),
     database.units.orderBy('[sectionId+displayOrder]').first(),
-    getAllLessons(database),
   ]);
   if (!section || !unit) throw new Error('The lesson catalog is unavailable.');
   const progressByLesson = new Map(progressRecords.map((record) => [record.lessonId, record]));

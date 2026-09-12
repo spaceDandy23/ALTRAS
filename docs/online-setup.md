@@ -1,7 +1,8 @@
 # ALTRAS online setup
 
 The production app uses Vercel for the React frontend and Supabase for accounts and student data.
-Lesson content stays packaged in the application; a lesson-editing CMS is outside the agreed scope.
+Published lesson content comes from Supabase. The separately authorized, lightweight
+[Basic Lesson Management](basic-lesson-management.md) editor manages drafts and immutable publications.
 
 ## Create the Supabase project
 
@@ -35,8 +36,10 @@ Lesson content stays packaged in the application; a lesson-editing CMS is outsid
     username-only login flow securely resolve manually provisioned Auth identities.
 16. Run `supabase/migrations/202609120001_student_streaks.sql` to record server-confirmed
     lesson activity days. See [student streak rules and deployment QA](student-streaks.md).
-17. Copy the project URL and publishable key from **Project Settings > API Keys**.
-18. Create `.env.local` from `.env.example` and add those two public values.
+17. Run `supabase/migrations/202609120002_basic_lesson_management.sql` before deploying the
+    database-catalog frontend. Follow the admin grant and QA instructions in the management guide.
+18. Copy the project URL and publishable key from **Project Settings > API Keys**.
+19. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 
@@ -67,8 +70,8 @@ delete from public.researcher_users
 where user_id = 'PASTE-USER-UUID-HERE';
 ```
 
-Researcher access is view-only and research-only. Editing lessons, managing users,
-exports, and advanced analytics require a separately scoped admin system.
+Researcher access remains view-only and research-only. Lesson editing requires a separate explicit
+`admin_users` grant and `/admin/lessons`; researcher membership never grants it automatically.
 
 ## Batch 2 assessment revision sync
 

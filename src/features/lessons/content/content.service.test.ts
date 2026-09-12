@@ -3,7 +3,7 @@ import { AltrasDatabase } from '@/db/database';
 import { packagedContent } from './packaged-content';
 import {
   ContentInitializationError,
-  getLesson,
+  getCachedLesson as getLesson,
   initializePackagedContent,
 } from './content.service';
 
@@ -16,14 +16,14 @@ describe('packaged content initialization', () => {
   afterEach(async () => database.delete());
 
   it('is idempotent and records content version independently', async () => {
-    await initializePackagedContent(database);
+    await initializePackagedContent(database, packagedContent);
     const firstCounts = await Promise.all([
       database.sections.count(),
       database.units.count(),
       database.lessons.count(),
       database.lessonItems.count(),
     ]);
-    await initializePackagedContent(database);
+    await initializePackagedContent(database, packagedContent);
 
     await expect(
       Promise.all([
@@ -74,14 +74,14 @@ describe('packaged content initialization', () => {
   });
 
   it('refreshes packaged lesson metadata and items idempotently', async () => {
-    await initializePackagedContent(database);
+    await initializePackagedContent(database, packagedContent);
     const lessonTwo = await database.lessons.get('lesson-order-matters');
     if (!lessonTwo) throw new Error('Missing Lesson 2 metadata.');
     await database.lessons.put({ ...lessonTwo, contentStatus: 'preview', contentVersion: 1 });
     await database.lessonItems.where('lessonId').equals('lesson-order-matters').delete();
 
-    await initializePackagedContent(database);
-    await initializePackagedContent(database);
+    await initializePackagedContent(database, packagedContent);
+    await initializePackagedContent(database, packagedContent);
 
     const upgradedLesson = await getLesson(database, 'lesson-order-matters');
     expect(upgradedLesson).toMatchObject({

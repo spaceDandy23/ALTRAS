@@ -195,7 +195,7 @@ export async function submitOnlineActivityAnswer(
   const attempt = currentAttempt ?? (await readAttempt(attemptId));
   if (attempt.status !== 'active') throw new AttemptError('This attempt is already closed.');
   if (attempt.answers.some((item) => item.activityId === activityId)) return attempt;
-  const lesson = await getLesson(database, attempt.lessonId);
+  const lesson = await getLesson(database, attempt.lessonId, attempt.id);
   const activity = lesson.activities.find((item) => item.id === activityId);
   if (!activity) throw new AttemptError('This activity is not part of the lesson.');
 
@@ -222,7 +222,7 @@ export async function completeOnlineAttempt(
   assertParticipantLearningAccess();
   const attempt = await readAttempt(attemptId);
   if (attempt.status === 'completed') return attempt;
-  const lesson = await getLesson(database, attempt.lessonId);
+  const lesson = await getLesson(database, attempt.lessonId, attempt.id);
   if (attempt.answers.length !== lesson.activities.length) {
     throw new AttemptError('Complete every activity before finishing the lesson.');
   }

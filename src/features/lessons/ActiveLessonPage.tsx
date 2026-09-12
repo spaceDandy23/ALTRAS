@@ -61,7 +61,7 @@ export function ActiveLessonPage() {
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
     let current = true;
-    void Promise.all([getLesson(db, lessonId), getAttempt(db, user.id, attemptId)])
+    void Promise.all([getLesson(db, lessonId, attemptId), getAttempt(db, user.id, attemptId)])
       .then(async ([loadedLesson, loadedAttempt]) => {
         if (loadedAttempt.lessonId !== loadedLesson.id) throw new Error('Attempt mismatch.');
         if (loadedAttempt.status === 'completed') {
@@ -167,6 +167,8 @@ export function ActiveLessonPage() {
     setSaveState('saving');
     try {
       const updated = await submitActivityAnswer(db, attempt.id, activity.id, answer, attempt);
+      const content = await getLesson(db, lessonId, attempt.id);
+      setLesson(content);
       setAttempt(updated);
       const submittedAnswer = updated.answers.find((item) => item.activityId === activity.id);
       if (submittedAnswer) playSfx(submittedAnswer.isCorrect ? 'correct' : 'incorrect');

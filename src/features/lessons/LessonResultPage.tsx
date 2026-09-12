@@ -13,7 +13,11 @@ import type { LearningLesson } from './domain/content.schemas';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { getLesson } from './content/content.service';
 import { getAttempt, startOrResumeAttempt } from './attempts/attempt.service';
-import { getLessonHubData, type LessonHubEntry } from './progress/progress.service';
+import {
+  getLessonHubData,
+  getLessonProgress,
+  type LessonHubEntry,
+} from './progress/progress.service';
 import { hasPendingLessonUnlock } from './progress/progress-transitions';
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
@@ -57,15 +61,16 @@ export function LessonResultPage() {
     if (!user || contentStatus !== 'ready') return;
     let current = true;
     void Promise.all([
-      getLesson(db, lessonId),
+      getLesson(db, lessonId, attemptId),
       getAttempt(db, user.id, attemptId),
       getLessonHubData(db, user.id),
     ])
-      .then(([loadedLesson, loadedAttempt, hub]) => {
+      .then(async ([loadedLesson, loadedAttempt, hub]) => {
         if (!current) return;
-        const loadedProgress = hub.entries.find(
-          ({ lesson: candidate }) => candidate.id === loadedLesson.id,
-        )?.progress;
+        const loadedProgress =
+          hub.entries.find(({ lesson: candidate }) => candidate.id === loadedLesson.id)?.progress ??
+          (await getLessonProgress(db, user.id, lessonId));
+        if (!current) return;
         if (!loadedProgress) throw new Error('Lesson progress is unavailable.');
         setLesson(loadedLesson);
         setAttempt(loadedAttempt);

@@ -26,8 +26,15 @@ import { useContentStore } from '@/stores/content.store';
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { PwaUpdatePrompt } from '@/components/status/PwaUpdatePrompt';
 import { AppShell } from './AppShell';
+import { AdminRoute } from '@/features/admin/AdminRoute';
+import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
 import { NotFoundPage } from './NotFoundPage';
-import { GuestOnlyRoute, ProtectedRoute, ResolvedExperienceRoute, StudentRoute } from './route-guards';
+import {
+  GuestOnlyRoute,
+  ProtectedRoute,
+  ResolvedExperienceRoute,
+  StudentRoute,
+} from './route-guards';
 
 export function App() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -46,61 +53,79 @@ export function App() {
       <PwaUpdatePrompt />
       <BrowserRouter>
         <Routes>
-        <Route
-          path="/login"
-          element={
-            <GuestOnlyRoute>
-              <LoginPage />
-            </GuestOnlyRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <GuestOnlyRoute>
-              <RegisterPage />
-            </GuestOnlyRoute>
-          }
-        />
-        <Route
-          element={
-            <ProtectedRoute>
-              <ResolvedExperienceRoute>
-                <Outlet />
-              </ResolvedExperienceRoute>
-            </ProtectedRoute>
-          }
-        >
+          <Route path="/admin" element={<Navigate to="/admin/lessons" replace />} />
+          <Route
+            path="/admin/lessons"
+            element={
+              <ProtectedRoute>
+                <AdminRoute>
+                  <LessonManagementPage />
+                </AdminRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <GuestOnlyRoute>
+                <LoginPage />
+              </GuestOnlyRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <GuestOnlyRoute>
+                <RegisterPage />
+              </GuestOnlyRoute>
+            }
+          />
           <Route
             element={
-              <StudentRoute>
-                <AppShell />
-              </StudentRoute>
+              <ProtectedRoute>
+                <ResolvedExperienceRoute>
+                  <Outlet />
+                </ResolvedExperienceRoute>
+              </ProtectedRoute>
             }
           >
-            <Route index element={<MainMenuPage />} />
-            <Route path="assessments/:kind" element={<AssessmentPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="lessons" element={<LessonsPage />} />
-            <Route path="lessons/almanac" element={<AlmanacPage />} />
-            <Route path="lessons/almanac/word-list" element={<WordListPage />} />
-            <Route path="lessons/almanac/review" element={<AlmanacReviewPlaceholder />} />
-            <Route path="lessons/:lessonId" element={<LessonOverviewPage />} />
-            <Route path="lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
-            <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
-            <Route path="lessons/:lessonId/preview" element={<LessonPreviewPage />} />
+            <Route
+              element={
+                <StudentRoute>
+                  <AppShell />
+                </StudentRoute>
+              }
+            >
+              <Route index element={<MainMenuPage />} />
+              <Route path="assessments/:kind" element={<AssessmentPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="lessons" element={<LessonsPage />} />
+              <Route path="lessons/almanac" element={<AlmanacPage />} />
+              <Route path="lessons/almanac/word-list" element={<WordListPage />} />
+              <Route path="lessons/almanac/review" element={<AlmanacReviewPlaceholder />} />
+              <Route path="lessons/:lessonId" element={<LessonOverviewPage />} />
+              <Route path="lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+              <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+              <Route path="lessons/:lessonId/preview" element={<LessonPreviewPage />} />
+            </Route>
+            <Route
+              path="researcher"
+              element={
+                <ResearcherRoute>
+                  <ResearcherLayout />
+                </ResearcherRoute>
+              }
+            >
+              <Route index element={<ResearcherDashboardPage />} />
+              <Route path="participants" element={<ResearcherResultsPage />} />
+              <Route path="assessments" element={<ResearcherAssessmentsPage />} />
+              <Route path="lessons" element={<ResearcherLessonsPage />} />
+              <Route path="reports" element={<ResearcherReportsPage />} />
+              <Route path="results" element={<Navigate to="/researcher/participants" replace />} />
+            </Route>
           </Route>
-          <Route path="researcher" element={<ResearcherRoute><ResearcherLayout /></ResearcherRoute>}>
-            <Route index element={<ResearcherDashboardPage />} />
-            <Route path="participants" element={<ResearcherResultsPage />} />
-            <Route path="assessments" element={<ResearcherAssessmentsPage />} />
-            <Route path="lessons" element={<ResearcherLessonsPage />} />
-            <Route path="reports" element={<ResearcherReportsPage />} />
-            <Route path="results" element={<Navigate to="/researcher/participants" replace />} />
-          </Route>
-        </Route>
-        <Route path="*" element={<NotFoundPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </AppErrorBoundary>

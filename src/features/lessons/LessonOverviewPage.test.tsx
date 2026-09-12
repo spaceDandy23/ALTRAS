@@ -101,6 +101,55 @@ describe('lesson overview transitions', () => {
 
     expect(await screen.findByText('Lesson player destination')).toBeVisible();
     expect(startOrResumeAttempt).not.toHaveBeenCalled();
+    expect(getLesson).toHaveBeenCalledWith(expect.anything(), lesson.id, attempt.id);
+  });
+
+  it('names the configured prerequisite instead of hardcoding Lesson 1', async () => {
+    const lesson = {
+      ...packagedContent.lessons[1],
+      id: 'lesson-future',
+      prerequisiteLessonId: packagedContent.lessons[1].id,
+    };
+    const userId = '20000000-0000-4000-8000-000000000007';
+    vi.mocked(getLesson).mockImplementation(async (_db, id) =>
+      id === lesson.id ? lesson : packagedContent.lessons[1],
+    );
+    vi.mocked(getLessonProgress).mockResolvedValue({
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'locked',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 0,
+      xpAwarded: 0,
+      firstStartedAt: null,
+      lastAttemptedAt: null,
+      clearedAt: null,
+    });
+    vi.mocked(getActiveAttempt).mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'prerequisite',
+        displayName: 'Learner',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByText('Clear Order Matters to unlock this lesson.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start lesson' })).not.toBeInTheDocument();
   });
 
   it('shows reusable lesson-introduction guidance without page-owned asset paths', async () => {
@@ -152,12 +201,39 @@ describe('lesson overview transitions', () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000004';
     vi.mocked(getLesson).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(lesson);
-    vi.mocked(getLessonProgress).mockResolvedValue({ id: `${userId}:${lesson.id}`, userId, lessonId: lesson.id, status: 'available', bestScore: 0, bestStarCount: 0, attemptCount: 0, xpAwarded: 0, firstStartedAt: null, lastAttemptedAt: null, clearedAt: null });
+    vi.mocked(getLessonProgress).mockResolvedValue({
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'available',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 0,
+      xpAwarded: 0,
+      firstStartedAt: null,
+      lastAttemptedAt: null,
+      clearedAt: null,
+    });
     vi.mocked(getActiveAttempt).mockResolvedValue(null);
-    useAuthStore.setState({ status: 'authenticated', user: { id: userId, normalizedUsername: 'retry', displayName: 'Retry', createdAt: 1, lastLoginAt: 1 } });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'retry',
+        displayName: 'Retry',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
     useContentStore.setState({ status: 'ready', error: null });
     const user = userEvent.setup();
-    render(<MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}><Routes><Route path="/lessons/:lessonId" element={<LessonOverviewPage />} /></Routes></MemoryRouter>);
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole('heading', { name: 'Lesson unavailable' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
@@ -170,22 +246,43 @@ describe('lesson overview transitions', () => {
     let resolveFirst!: (lesson: typeof firstLesson) => void;
     vi.mocked(getLesson).mockImplementation((_database, lessonId) =>
       lessonId === firstLesson.id
-        ? new Promise((resolve) => { resolveFirst = resolve; })
+        ? new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
         : Promise.resolve(secondLesson),
     );
     vi.mocked(getLessonProgress).mockImplementation(async (_database, _userId, lessonId) => ({
-      id: `${userId}:${lessonId}`, userId, lessonId, status: 'available', bestScore: 0,
-      bestStarCount: 0, attemptCount: 0, xpAwarded: 0, firstStartedAt: null,
-      lastAttemptedAt: null, clearedAt: null,
+      id: `${userId}:${lessonId}`,
+      userId,
+      lessonId,
+      status: 'available',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 0,
+      xpAwarded: 0,
+      firstStartedAt: null,
+      lastAttemptedAt: null,
+      clearedAt: null,
     }));
     vi.mocked(getActiveAttempt).mockResolvedValue(null);
-    useAuthStore.setState({ status: 'authenticated', user: { id: userId, normalizedUsername: 'route_change', displayName: 'Route Change', createdAt: 1, lastLoginAt: 1 } });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'route_change',
+        displayName: 'Route Change',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
     useContentStore.setState({ status: 'ready', error: null });
 
     const renderTree = (destination: string) => (
       <MemoryRouter initialEntries={[`/lessons/${firstLesson.id}`]}>
         <RouteDriver destination={destination} />
-        <Routes><Route path="/lessons/:lessonId" element={<LessonOverviewPage />} /></Routes>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
       </MemoryRouter>
     );
     const view = render(renderTree(`/lessons/${firstLesson.id}`));

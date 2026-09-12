@@ -1,0 +1,105 @@
+.admin-shell {
+  min-height: 100dvh;
+  color: var(--paper);
+  background: var(--board);
+}
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+  border-bottom: 1px solid var(--line);
+}
+.admin-header nav,
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+.admin-content {
+  max-width: 1120px;
+  margin: auto;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+.admin-actions {
+  margin-block: 1rem;
+}
+.admin-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.admin-fields label {
+  display: grid;
+  gap: 0.5rem;
+}
+.admin-fields select {
+  color: var(--paper);
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+  padding: 0.65rem;
+  border-radius: var(--radius);
+  max-width: 100%;
+}
+.admin-editor,
+.admin-activity,
+.admin-options {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-block: 1rem;
+}
+.admin-options {
+  grid-column: 1/-1;
+}
+.admin-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem;
+  margin-block: 0.7rem;
+}
+.admin-option .form-field {
+  flex: 1 1 180px;
+}
+.admin-content button:not(.button),
+.admin-header button {
+  cursor: pointer;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.admin-content button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.admin-table {
+  overflow-x: auto;
+}
+.admin-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.admin-table th,
+.admin-table td {
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.admin-preview {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+@media (max-width: 650px) {
+  .admin-fields {
+    grid-template-columns: 1fr;
+  }
+  .admin-header {
+    flex-wrap: wrap;
+  }
+}
