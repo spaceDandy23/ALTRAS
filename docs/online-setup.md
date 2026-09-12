@@ -38,8 +38,10 @@ Published lesson content comes from Supabase. The separately authorized, lightwe
     lesson activity days. See [student streak rules and deployment QA](student-streaks.md).
 17. Run `supabase/migrations/202609120002_basic_lesson_management.sql` before deploying the
     database-catalog frontend. Follow the admin grant and QA instructions in the management guide.
-18. Copy the project URL and publishable key from **Project Settings > API Keys**.
-19. Create `.env.local` from `.env.example` and add those two public values.
+18. Run `supabase/migrations/202609120003_admin_user_management.sql`, then deploy the authenticated
+    `admin-users` Edge Function. Follow [Admin User Management deployment and QA](admin-user-management.md).
+19. Copy the project URL and publishable key from **Project Settings > API Keys**.
+20. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 

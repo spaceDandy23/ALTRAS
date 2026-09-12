@@ -27,7 +27,9 @@ import { AppErrorBoundary } from './AppErrorBoundary';
 import { PwaUpdatePrompt } from '@/components/status/PwaUpdatePrompt';
 import { AppShell } from './AppShell';
 import { AdminRoute } from '@/features/admin/AdminRoute';
+import { AdminLayout } from '@/features/admin/AdminLayout';
 import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
+import { UserManagementPage } from '@/features/admin/UserManagementPage';
 import { NotFoundPage } from './NotFoundPage';
 import {
   GuestOnlyRoute,
@@ -53,17 +55,20 @@ export function App() {
       <PwaUpdatePrompt />
       <BrowserRouter>
         <Routes>
-          <Route path="/admin" element={<Navigate to="/admin/lessons" replace />} />
           <Route
-            path="/admin/lessons"
+            path="/admin"
             element={
               <ProtectedRoute>
                 <AdminRoute>
-                  <LessonManagementPage />
+                  <AdminLayout />
                 </AdminRoute>
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<Navigate to="/admin/users" replace />} />
+            <Route path="users" element={<UserManagementPage />} />
+            <Route path="lessons" element={<LessonManagementPage />} />
+          </Route>
           <Route
             path="/login"
             element={

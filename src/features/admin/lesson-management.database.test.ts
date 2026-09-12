@@ -62,13 +62,13 @@ async function completeLesson(id: string) {
 beforeAll(async () => {
   pg = new PGlite();
   await pg.exec(`create role anon; create role authenticated; create schema auth;
-    create table auth.users(id uuid primary key,email text,encrypted_password text,raw_user_meta_data jsonb default '{}');
+    create table auth.users(id uuid primary key,email text,encrypted_password text,raw_user_meta_data jsonb default '{}',
+      created_at timestamptz not null default now(), last_sign_in_at timestamptz, banned_until timestamptz);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid; $$;
     grant usage on schema public,auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;`);
   for (const file of readdirSync(resolve('supabase/migrations'))
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') && f < migration)
     .sort()) {
-    if (file === migration) continue;
     await pg.exec(
       readFileSync(resolve('supabase/migrations', file), 'utf8').replace(
         'create extension if not exists pgcrypto;',
