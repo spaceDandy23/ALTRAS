@@ -166,24 +166,27 @@ export function AssessmentManagementPage() {
       ) : (
         <>
           <div className="admin-actions admin-assessment-toolbar">
-            <button
-              className="button button--quiet"
-              disabled={busy}
-              onClick={() => (dirty ? setDiscarding(true) : close())}
-            >
-              Back to assessments
-            </button>
-            <button
-              className="button button--quiet"
-              type="button"
-              onClick={() => setPreview((value) => !value)}
-            >
-              {preview ? 'Return to editor' : 'Preview assessment'}
-            </button>
-            <span>
-              {dirty ? 'Unsaved draft changes' : 'Saved draft'} · Published version{' '}
-              {current.published_version}
-            </span>
+            <div className="lesson-actions">
+              <button
+                className="button button--quiet"
+                disabled={busy}
+                onClick={() => (dirty ? setDiscarding(true) : close())}
+              >
+                Back to assessments
+              </button>
+              <button
+                className="button button--quiet"
+                type="button"
+                onClick={() => setPreview((value) => !value)}
+              >
+                {preview ? 'Return to editor' : 'Preview assessment'}
+              </button>
+              <span>
+                {dirty ? 'Unsaved draft changes' : 'Saved draft'} · Published version{' '}
+                {current.published_version}
+              </span>
+            </div>
+
           </div>
           <p className="assessment-version-note">
             Publishing always creates a new immutable version. Existing attempts remain on their
@@ -383,12 +386,14 @@ export function AssessmentManagementPage() {
                   </button>
                 </div>
                 <div className="admin-actions">
-                  <button className="button" type="submit">
-                    {busy ? 'Saving…' : 'Save draft'}
-                  </button>
-                  <button className="button" type="button" onClick={() => void save(true)}>
-                    Publish new version
-                  </button>
+                  <div className="lesson-actions">
+                    <button className="button" type="submit">
+                      {busy ? 'Saving…' : 'Save draft'}
+                    </button>
+                    <button className="button" type="button" onClick={() => void save(true)}>
+                      Publish new version
+                    </button>
+                  </div>
                 </div>
               </fieldset>
             </form>

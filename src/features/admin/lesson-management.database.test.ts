@@ -12,7 +12,7 @@ let pg: PGlite;
 const adminId = randomUUID(),
   studentId = randomUUID(),
   researcherId = randomUUID();
-const migration = '202609120002_basic_lesson_management.sql';
+const migration = '202609150002_limit_admin_lessons.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -121,6 +121,13 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('enforces the eight-lesson limit at the database boundary', async () => {
+    for (let index = 0; index < 6; index += 1) await save(draft({ displayOrder: index + 3 }));
+    await pg.exec('savepoint lesson_limit');
+    await expect(save(draft({ displayOrder: 9 }))).rejects.toThrow('maximum of 8 lessons');
+    await pg.exec('rollback to savepoint lesson_limit');
+    expect((await pg.query('select count(*)::int as count from public.get_admin_lessons()')).rows[0].count).toBe(8);
+  });
   it('seeds exact original authoring content and scoring versions without remapping IDs', async () => {
     const rows = (await pg.query<ManagedLesson>('select * from public.get_admin_lessons()')).rows;
     expect(rows.map((row) => row.draft)).toEqual(packagedContent.lessons);

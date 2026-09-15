@@ -12,6 +12,7 @@ import {
   newActivity,
   moveItem,
   MAX_ACTIVITIES,
+  MAX_LESSONS,
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
@@ -123,7 +124,10 @@ export function LessonManagementPage() {
     <>
       <p className="researcher-kicker">Administrator workspace</p>
       <h1>Basic Lesson Management</h1>
-      <p>Create and publish lessons in Operation Words. Maximum 10 activities per lesson.</p>
+      <p>
+        Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} lessons and 10
+        activities per lesson.
+      </p>
       {error && (
         <p className="form-alert" role="alert">
           {error}
@@ -136,6 +140,7 @@ export function LessonManagementPage() {
             <div className="lesson-actions">
               <button
                 className="button"
+                disabled={items.length >= MAX_LESSONS}
                 onClick={() => {
                   setDraft(newLesson(Math.max(0, ...items.map((i) => i.draft.displayOrder)) + 1));
                   setRevision(0);
@@ -145,6 +150,9 @@ export function LessonManagementPage() {
               >
                 Create lesson
               </button>
+              {items.length >= MAX_LESSONS && (
+                <span role="status">Maximum {MAX_LESSONS} lessons reached.</span>
+              )}
               <button className="button button--quiet" onClick={() => setReload(reload + 1)}>
                 Refresh list
               </button>

@@ -5,6 +5,7 @@ import { getSupabaseClient } from '@/services/supabase.client';
 
 export type AuthoredLesson = z.infer<typeof lessonSchema>;
 export const MAX_ACTIVITIES = 10;
+export const MAX_LESSONS = 8;
 export const publishableLessonSchema = lessonSchema.superRefine((lesson, ctx) => {
   if (!lesson.title.trim() || !lesson.shortDescription.trim())
     ctx.addIssue({ code: 'custom', message: 'Title and description are required.' });

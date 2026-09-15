@@ -113,7 +113,6 @@ body {
 .lesson-actions {
   display: flex;
   gap: 12px;
-  margin-top: 12px;
 }
 
 body::before {

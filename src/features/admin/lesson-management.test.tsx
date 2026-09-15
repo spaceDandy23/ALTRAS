@@ -12,6 +12,7 @@ import { LessonManagementPage } from './LessonManagementPage';
 import { LessonContentPreview } from './LessonContentPreview';
 import {
   MAX_ACTIVITIES,
+  MAX_LESSONS,
   newActivity,
   publishManagedLesson,
   saveManagedLesson,
@@ -57,6 +58,17 @@ const page = () =>
   );
 
 describe('Basic Lesson Management editor and preview', () => {
+  it('disables creating a ninth lesson and explains the limit', async () => {
+    const rows = Array.from({ length: MAX_LESSONS }, (_, index) => ({
+      ...item(),
+      lesson_id: `lesson-${index}`,
+      draft: { ...item().draft, id: `lesson-${index}`, title: `Lesson ${index + 1}` },
+    }));
+    client.rpc.mockResolvedValue({ data: rows, error: null });
+    page();
+    expect(await screen.findByText(`Maximum ${MAX_LESSONS} lessons reached.`)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create lesson' })).toBeDisabled();
+  });
   it('shows only the centered admin loader until lesson data is ready', async () => {
     let resolve!: (value: unknown) => void;
     client.rpc.mockReturnValueOnce(
