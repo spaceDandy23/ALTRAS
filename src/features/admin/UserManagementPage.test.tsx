@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserManagementPage } from './UserManagementPage';
@@ -43,11 +43,45 @@ beforeEach(() => {
   service.setUserBanned.mockResolvedValue(undefined);
 });
 describe('User Management page', () => {
+  it('shows only the centered admin loader until the account directory is ready', async () => {
+    let resolve!: (value: { users: typeof users; page: number; pageSize: number; total: number }) => void;
+    service.listAdminUsers.mockReturnValue(
+      new Promise((complete) => {
+        resolve = complete;
+      }),
+    );
+
+    render(<UserManagementPage />);
+
+    expect(screen.getByRole('status')).toHaveClass(
+      'loading-state--page',
+      'admin-content-loading',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Loading users…');
+    expect(screen.queryByRole('heading', { name: 'User Management' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Provision account' })).not.toBeInTheDocument();
+
+    await act(async () => resolve({ users, page: 1, pageSize: 20, total: 22 }));
+    expect(await screen.findByRole('heading', { name: 'User Management' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: /Loading users/ })).not.toBeInTheDocument();
+  });
+
   it('shows safe account fields, statuses and server pagination', async () => {
     render(<UserManagementPage />);
     expect(await screen.findByText('Student Learner')).toBeInTheDocument();
     expect(screen.getByText('learner@example.test')).toBeInTheDocument();
+    const directory = screen.getByRole('region', { name: 'Account directory' });
+    expect(within(directory).getByText('learner@example.test').closest('td')).toHaveAttribute(
+      'data-label',
+      'Auth email',
+    );
+    expect(within(directory).getByRole('button', { name: 'Revoke researcher' }).closest('td')).toHaveAttribute(
+      'data-label',
+      'Actions',
+    );
     expect(screen.getByText('Banned')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deactivate' })).toHaveClass('admin-action--danger');
+    expect(screen.getByRole('button', { name: 'Reactivate' })).toHaveClass('admin-action--restore');
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(service.listAdminUsers).toHaveBeenLastCalledWith('', 2));
   });

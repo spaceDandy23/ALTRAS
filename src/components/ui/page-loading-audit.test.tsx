@@ -68,7 +68,6 @@ describe('page-level loading audit', () => {
       'src/features/researcher/ResearcherResultsPage.tsx',
       'src/features/researcher/ResearcherAssessmentsPage.tsx',
       'src/features/researcher/ResearcherLessonsPage.tsx',
-      'src/features/researcher/ResearcherRoute.tsx',
     ];
 
     for (const routeFile of routeFiles) {
@@ -88,6 +87,10 @@ describe('page-level loading audit', () => {
       'utf8',
     );
     expect(researcherLoadingSource).toContain('variant="page"');
+    expect(readFileSync(resolve('src/features/researcher/ResearcherRoute.tsx'), 'utf8'))
+      .toContain('variant="screen"');
+    expect(readFileSync(resolve('src/features/admin/AdminContentLoading.tsx'), 'utf8'))
+      .toContain('variant="page"');
   });
 
   it('forwards legacy assessment imports to the audited revision-aware page', () => {

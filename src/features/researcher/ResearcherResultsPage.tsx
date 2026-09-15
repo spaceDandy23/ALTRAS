@@ -1,12 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import {
-  calculateScoreDistribution,
-  type ResearcherParticipantResult,
-} from './researcher.service';
+import { calculateScoreDistribution, type ResearcherParticipantResult } from './researcher.service';
 import { useResearcherData } from './ResearcherDataContext';
 import { ResearcherContentLoading } from './ResearcherContentLoading';
+import { formatResearchPercent, formatResearchPoints } from './researcher-format';
 
 type ParticipantFilter =
   'all' | 'pre-completed' | 'post-completed' | 'both-completed' | 'incomplete';
@@ -39,13 +37,12 @@ const sortLabels: Record<SortKey, string> = {
 const PARTICIPANTS_PER_PAGE = 15;
 
 function formatScore(score: number | null): string {
-  return score === null ? '—' : String(score) + '%';
+  return formatResearchPercent(score, '—');
 }
 
 function formatChange(participant: ResearcherParticipantResult): string {
   if (participant.preTestScore === null || participant.postTestScore === null) return '—';
-  const change = participant.postTestScore - participant.preTestScore;
-  return (change > 0 ? '+' : '') + String(change) + ' pts';
+  return formatResearchPoints(participant.postTestScore - participant.preTestScore, '—');
 }
 
 function formatDate(value: number | null): string {
@@ -403,7 +400,7 @@ export function ResearcherResultsPage() {
                   <li key={lesson.lessonId}>
                     <strong>{lesson.lessonId}</strong>
                     <span>{lesson.status.replace('-', ' ')}</span>
-                    <span>Best {lesson.bestScore}%</span>
+                    <span>Best {formatResearchPercent(lesson.bestScore)}</span>
                     <span>Latest {formatScore(lesson.latestScore)}</span>
                     <span>{lesson.attemptCount} attempt(s)</span>
                     <span>Completed {formatDate(lesson.completedAt)}</span>
@@ -437,7 +434,11 @@ export function ScoreComparisonChart({
         <span className="researcher-chart__note">Completed assessments only</span>
       </div>
       {hasScores ? (
-        <div className="score-comparison" role="img" aria-label={`Average pre-test score ${formatScore(preTestAverage)}. Average post-test score ${formatScore(postTestAverage)}.`}>
+        <div
+          className="score-comparison"
+          role="img"
+          aria-label={`Average pre-test score ${formatScore(preTestAverage)}. Average post-test score ${formatScore(postTestAverage)}.`}
+        >
           <ScoreBar label="Pre-test" value={preTestAverage} tone="pre" />
           <ScoreBar label="Post-test" value={postTestAverage} tone="post" />
         </div>
@@ -448,19 +449,40 @@ export function ScoreComparisonChart({
   );
 }
 
-function ScoreBar({ label, value, tone }: { label: string; value: number | null; tone: 'pre' | 'post' }) {
+function ScoreBar({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | null;
+  tone: 'pre' | 'post';
+}) {
   return (
     <div className="score-comparison__row">
-      <div className="score-comparison__label"><span>{label}</span><strong>{formatScore(value)}</strong></div>
+      <div className="score-comparison__label">
+        <span>{label}</span>
+        <strong>{formatScore(value)}</strong>
+      </div>
       <div className="score-comparison__track" aria-hidden="true">
-        <span className={`score-comparison__bar score-comparison__bar--${tone}`} style={{ width: `${value ?? 0}%` }} />
+        <span
+          className={`score-comparison__bar score-comparison__bar--${tone}`}
+          style={{ width: `${value ?? 0}%` }}
+        />
       </div>
     </div>
   );
 }
 
-export function ScoreDistributionChart({ distribution }: { distribution: ReturnType<typeof calculateScoreDistribution> }) {
-  const highestCount = Math.max(1, ...distribution.flatMap((bin) => [bin.preTestCount, bin.postTestCount]));
+export function ScoreDistributionChart({
+  distribution,
+}: {
+  distribution: ReturnType<typeof calculateScoreDistribution>;
+}) {
+  const highestCount = Math.max(
+    1,
+    ...distribution.flatMap((bin) => [bin.preTestCount, bin.postTestCount]),
+  );
   const hasScores = distribution.some((bin) => bin.preTestCount > 0 || bin.postTestCount > 0);
   return (
     <section className="researcher-chart panel" aria-labelledby="score-distribution-title">
@@ -469,7 +491,11 @@ export function ScoreDistributionChart({ distribution }: { distribution: ReturnT
           <p className="researcher-kicker">Score distribution</p>
           <h2 id="score-distribution-title">Completed assessment scores</h2>
         </div>
-        <span className="researcher-chart__legend"><i className="is-pre" />Pre-test <i className="is-post" />Post-test</span>
+        <span className="researcher-chart__legend">
+          <i className="is-pre" />
+          Pre-test <i className="is-post" />
+          Post-test
+        </span>
       </div>
       {hasScores ? (
         <dl className="score-distribution">
@@ -477,8 +503,19 @@ export function ScoreDistributionChart({ distribution }: { distribution: ReturnT
             <div key={bin.label}>
               <dt>{bin.label}</dt>
               <dd>
-                <span className="score-distribution__track" aria-hidden="true"><i className="is-pre" style={{ width: `${(bin.preTestCount / highestCount) * 100}%` }} /><i className="is-post" style={{ width: `${(bin.postTestCount / highestCount) * 100}%` }} /></span>
-                <span>Pre {bin.preTestCount}, post {bin.postTestCount}</span>
+                <span className="score-distribution__track" aria-hidden="true">
+                  <i
+                    className="is-pre"
+                    style={{ width: `${(bin.preTestCount / highestCount) * 100}%` }}
+                  />
+                  <i
+                    className="is-post"
+                    style={{ width: `${(bin.postTestCount / highestCount) * 100}%` }}
+                  />
+                </span>
+                <span>
+                  Pre {bin.preTestCount}, post {bin.postTestCount}
+                </span>
               </dd>
             </div>
           ))}

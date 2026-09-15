@@ -15,7 +15,7 @@ export function ResearcherRoute({ children }: { children: ReactNode }) {
   }, [checkAccess, user]);
 
   if (!user || status === 'idle' || status === 'loading') {
-    return <LoadingState variant="page" />;
+    return <LoadingState variant="screen" />;
   }
 
   if (status === 'denied') {

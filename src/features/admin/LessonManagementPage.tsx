@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FormField } from '@/components/ui/FormField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AdminContentLoading } from './AdminContentLoading';
 import { ActivityEditor } from './ActivityEditor';
 import { LessonContentPreview } from './LessonContentPreview';
 import {
@@ -94,6 +95,30 @@ export function LessonManagementPage() {
     setNotice('');
     setLeaving(false);
   };
+
+  if (!loaded) return <AdminContentLoading message="Loading lessons…" />;
+
+  if (error && items.length === 0 && !draft) {
+    return (
+      <section className="admin-state panel" aria-labelledby="admin-lessons-error-title">
+        <p className="researcher-kicker">Administrator workspace</p>
+        <h1 id="admin-lessons-error-title">Lessons unavailable</h1>
+        <p>{error}</p>
+        <button
+          className="button"
+          type="button"
+          onClick={() => {
+            setLoaded(false);
+            setError('');
+            setReload((value) => value + 1);
+          }}
+        >
+          Try again
+        </button>
+      </section>
+    );
+  }
+
   return (
     <>
       <p className="researcher-kicker">Administrator workspace</p>
@@ -105,25 +130,25 @@ export function LessonManagementPage() {
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
-      {!loaded ? (
-        <p role="status">Loading lessons…</p>
-      ) : !draft ? (
+      {!draft ? (
         <>
           <div className="admin-actions">
-            <button
-              className="button"
-              onClick={() => {
-                setDraft(newLesson(Math.max(0, ...items.map((i) => i.draft.displayOrder)) + 1));
-                setRevision(0);
-                setDirty(true);
-                setNotice('');
-              }}
-            >
-              Create lesson
-            </button>
-            <button className="button button--quiet" onClick={() => setReload(reload + 1)}>
-              Refresh list
-            </button>
+            <div className="lesson-actions">
+              <button
+                className="button"
+                onClick={() => {
+                  setDraft(newLesson(Math.max(0, ...items.map((i) => i.draft.displayOrder)) + 1));
+                  setRevision(0);
+                  setDirty(true);
+                  setNotice('');
+                }}
+              >
+                Create lesson
+              </button>
+              <button className="button button--quiet" onClick={() => setReload(reload + 1)}>
+                Refresh list
+              </button>
+            </div>
           </div>
           <div className="admin-table">
             <table>
@@ -177,16 +202,18 @@ export function LessonManagementPage() {
       ) : (
         <>
           <div className="admin-actions">
-            <button
-              className="button button--quiet"
-              disabled={busy}
-              onClick={() => (dirty ? setLeaving(true) : (setDraft(null), setPreview(false)))}
-            >
-              Back to lessons
-            </button>
-            <button className="button button--quiet" onClick={() => setPreview(!preview)}>
-              {preview ? 'Return to editor' : 'Preview lesson'}
-            </button>
+            <div className="lesson-actions">
+              <button
+                className="button button--quiet"
+                disabled={busy}
+                onClick={() => (dirty ? setLeaving(true) : (setDraft(null), setPreview(false)))}
+              >
+                Back to lessons
+              </button>
+              <button className="button button--quiet" onClick={() => setPreview(!preview)}>
+                {preview ? 'Return to editor' : 'Preview lesson'}
+              </button>
+            </div>
             <span>
               {dirty ? 'Unsaved changes' : 'Saved draft'} ·{' '}
               {current?.published
@@ -259,24 +286,27 @@ export function LessonManagementPage() {
                   <fieldset key={activity.id} className="admin-activity">
                     <legend>Activity {index + 1}</legend>
                     <div className="admin-actions">
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() =>
-                          change({ ...draft, activities: moveItem(draft.activities, index, -1) })
-                        }
-                      >
-                        Move activity {index + 1} up
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === draft.activities.length - 1}
-                        onClick={() =>
-                          change({ ...draft, activities: moveItem(draft.activities, index, 1) })
-                        }
-                      >
-                        Move activity {index + 1} down
-                      </button>
+
+                      <div className="lesson-actions">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() =>
+                            change({ ...draft, activities: moveItem(draft.activities, index, -1) })
+                          }
+                        >
+                          Move activity {index + 1} up
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === draft.activities.length - 1}
+                          onClick={() =>
+                            change({ ...draft, activities: moveItem(draft.activities, index, 1) })
+                          }
+                        >
+                          Move activity {index + 1} down
+                        </button>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -288,6 +318,8 @@ export function LessonManagementPage() {
                       >
                         Delete activity {index + 1}
                       </button>
+
+                      </div>
                     </div>
                     <ActivityEditor
                       activity={activity}
@@ -318,21 +350,23 @@ export function LessonManagementPage() {
                   )}
                 </div>
                 <div className="admin-actions">
-                  <button className="button" type="submit">
-                    {busy ? 'Saving…' : 'Save draft'}
-                  </button>
-                  <button className="button" type="button" onClick={() => void save(true)}>
-                    Publish lesson
-                  </button>
-                  {current?.published && (
-                    <button
-                      className="button button--quiet"
-                      type="button"
-                      onClick={() => void save(false)}
-                    >
-                      Unpublish lesson
+                  <div className="lesson-actions">
+                    <button className="button" type="submit">
+                      {busy ? 'Saving…' : 'Save draft'}
                     </button>
-                  )}
+                    <button className="button" type="button" onClick={() => void save(true)}>
+                      Publish lesson
+                    </button>
+                    {current?.published && (
+                      <button
+                        className="button button--quiet"
+                        type="button"
+                        onClick={() => void save(false)}
+                      >
+                        Unpublish lesson
+                      </button>
+                    )}
+                  </div>
                 </div>
               </fieldset>
             </form>

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
@@ -9,6 +9,9 @@ import {
   ResolvedExperienceRoute,
   StudentRoute,
 } from './route-guards';
+
+const adminService = vi.hoisted(() => ({ isCurrentUserAdmin: vi.fn() }));
+vi.mock('@/features/admin/lesson-management.service', () => adminService);
 
 const user = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -21,6 +24,7 @@ const originalCheckAccess = useResearcherAccessStore.getState().checkAccess;
 
 describe('route guards', () => {
   beforeEach(() => {
+    adminService.isCurrentUserAdmin.mockResolvedValue(false);
     useAuthStore.setState({ status: 'guest', user: null });
     useResearcherAccessStore.setState({
       status: 'idle',
@@ -265,7 +269,7 @@ describe('route guards', () => {
     expect(screen.queryByText('Private Math word list')).not.toBeInTheDocument();
   });
 
-  it('redirects an authorized researcher away from a direct lesson route', () => {
+  it('redirects an authorized researcher away from a direct lesson route', async () => {
     useAuthStore.setState({ status: 'authenticated', user });
     useResearcherAccessStore.setState({ status: 'authorized', userId: user.id });
 
@@ -285,22 +289,83 @@ describe('route guards', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Researcher results destination')).toBeInTheDocument();
+    expect(await screen.findByText('Researcher results destination')).toBeInTheDocument();
     expect(screen.queryByText('Student lesson activity')).not.toBeInTheDocument();
   });
 
-  it('keeps normal students in the student application', () => {
+  it('redirects an administrator from direct student learning routes before they mount', async () => {
+    adminService.isCurrentUserAdmin.mockResolvedValue(true);
+    useAuthStore.setState({ status: 'authenticated', user });
+    useResearcherAccessStore.setState({ status: 'denied', userId: user.id });
+
+    render(
+      <MemoryRouter initialEntries={['/lessons/lesson-one/play/attempt-one']}>
+        <Routes>
+          <Route path="/admin/users" element={<p>Administrator workspace destination</p>} />
+          <Route
+            path="/lessons/:lessonId/play/:attemptId"
+            element={
+              <StudentRoute>
+                <p>Student mutation-producing lesson player</p>
+              </StudentRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText('Student mutation-producing lesson player')).not.toBeInTheDocument();
+    expect(await screen.findByText('Administrator workspace destination')).toBeInTheDocument();
+  });
+
+  it('keeps student content behind the screen loader until admin access resolves', async () => {
+    let resolveAdminAccess!: (allowed: boolean) => void;
+    adminService.isCurrentUserAdmin.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveAdminAccess = resolve;
+      }),
+    );
     useAuthStore.setState({ status: 'authenticated', user });
     useResearcherAccessStore.setState({ status: 'denied', userId: user.id });
 
     render(
       <MemoryRouter>
         <StudentRoute>
-          <p>Student application</p>
+          <p>Student Home application</p>
         </StudentRoute>
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('Student application')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveClass('loading-state--screen');
+    expect(screen.queryByText('Student Home application')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveAdminAccess(false);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Student Home application')).toBeInTheDocument();
+  });
+
+  it('keeps normal students in the student application', async () => {
+    useAuthStore.setState({ status: 'authenticated', user });
+    useResearcherAccessStore.setState({ status: 'denied', userId: user.id });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <StudentRoute>
+                <p>Student Home application</p>
+              </StudentRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText('Student Home application')).toBeInTheDocument());
   });
 });

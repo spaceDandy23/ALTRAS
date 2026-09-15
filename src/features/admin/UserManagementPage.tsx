@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
+import { AdminContentLoading } from './AdminContentLoading';
 import {
   ADMIN_USER_PAGE_SIZE,
   listAdminUsers,
@@ -142,6 +143,25 @@ export function UserManagementPage() {
     : ['', '', ''];
   const lastPage = result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1;
 
+  if (loading) return <AdminContentLoading message="Loading users…" />;
+
+  if (error && !result) {
+    return (
+      <section className="admin-state panel" aria-labelledby="admin-users-error-title">
+        <p className="researcher-kicker">Administrator workspace</p>
+        <h1 id="admin-users-error-title">Accounts unavailable</h1>
+        <p>{error}</p>
+        <button
+          className="button"
+          type="button"
+          onClick={() => setRevision((value) => value + 1)}
+        >
+          Try again
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby="admin-users-title">
       <p className="researcher-kicker">Administrator workspace</p>
@@ -252,10 +272,13 @@ export function UserManagementPage() {
             </button>
           </form>
         </div>
-        {loading ? (
-          <p role="status">Loading users…</p>
-        ) : result && result.users.length ? (
-          <div className="admin-table admin-user-table">
+        {result && result.users.length ? (
+          <div
+            className="admin-table admin-user-table"
+            role="region"
+            aria-label="Account directory"
+            tabIndex={0}
+          >
             <table>
               <caption>
                 Authorized account directory, page {result.page} of {lastPage}
@@ -274,28 +297,29 @@ export function UserManagementPage() {
               <tbody>
                 {result.users.map((user) => (
                   <tr key={user.id}>
-                    <td>
+                    <td data-label="Account">
                       <strong>{user.displayName ?? 'Profile incomplete'}</strong>
                       <span>@{user.username ?? 'unavailable'}</span>
                     </td>
-                    <td>{user.email ?? 'No email'}</td>
-                    <td>{date(user.createdAt)}</td>
-                    <td>{date(user.lastSignInAt)}</td>
-                    <td>
+                    <td data-label="Auth email">{user.email ?? 'No email'}</td>
+                    <td data-label="Created">{date(user.createdAt)}</td>
+                    <td data-label="Last sign-in">{date(user.lastSignInAt)}</td>
+                    <td data-label="Status">
                       <span
                         className={`admin-status admin-status--${user.banned ? 'banned' : 'active'}`}
                       >
                         {user.banned ? 'Banned' : 'Active'}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Access">
                       <span>Researcher: {user.researcher ? 'Yes' : 'No'}</span>
                       <span>Admin: {user.admin ? 'Yes' : 'No'}</span>
                     </td>
-                    <td>
+                    <td data-label="Actions">
                       <div className="admin-user-actions">
                         <button
                           type="button"
+                          className={user.banned ? 'admin-action--restore' : 'admin-action--danger'}
                           onClick={() => setPending({ kind: 'ban', enabled: !user.banned, user })}
                         >
                           {user.banned ? 'Reactivate' : 'Deactivate'}

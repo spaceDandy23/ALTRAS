@@ -15,13 +15,31 @@ vi.mock('./researcher.service', async (importOriginal) => {
 describe('researcher workspace layout', () => {
   beforeEach(() => {
     vi.mocked(getResearcherResults).mockResolvedValue([]);
-    useAuthStore.setState({ status: 'authenticated', user: { id: 'researcher-id', normalizedUsername: 'researcher', displayName: 'Research Lead', createdAt: 1, lastLoginAt: 1 } });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: 'researcher-id',
+        normalizedUsername: 'researcher',
+        displayName: 'Research Lead',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
   });
 
   it('renders all dedicated navigation with the current page marked active', () => {
-    render(<MemoryRouter initialEntries={['/researcher/assessments']}><Routes><Route path="researcher" element={<ResearcherLayout />}><Route path="assessments" element={<p>Assessment content</p>} /></Route></Routes></MemoryRouter>);
+    render(
+      <MemoryRouter initialEntries={['/researcher/assessments']}>
+        <Routes>
+          <Route path="researcher" element={<ResearcherLayout />}>
+            <Route path="assessments" element={<p>Assessment content</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
     const desktop = screen.getByRole('navigation', { name: 'Researcher pages' });
-    expect(desktop).toHaveTextContent('DashboardParticipantsAssessmentsLessonsReports');
+    expect(desktop).toHaveTextContent('DashboardParticipantsAssessmentsLessons');
+    expect(desktop).not.toHaveTextContent('Reports');
     expect(desktop.querySelector('a.is-active')).toHaveTextContent('Assessments');
     expect(screen.getAllByText('Research Lead')).toHaveLength(2);
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
@@ -51,13 +69,23 @@ describe('researcher workspace layout', () => {
 
   it('exposes the existing logout confirmation from mobile navigation', async () => {
     const user = userEvent.setup();
-    render(<MemoryRouter initialEntries={['/researcher']}><Routes><Route path="researcher" element={<ResearcherLayout />}><Route index element={<p>Dashboard</p>} /></Route></Routes></MemoryRouter>);
+    render(
+      <MemoryRouter initialEntries={['/researcher']}>
+        <Routes>
+          <Route path="researcher" element={<ResearcherLayout />}>
+            <Route index element={<p>Dashboard</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
 
     const mobileNavigation = screen.getByRole('navigation', { name: 'Researcher pages mobile' });
     const mobileLogout = mobileNavigation.parentElement?.querySelector('button');
     expect(mobileLogout).toHaveTextContent('Log out');
     await user.click(mobileLogout as HTMLButtonElement);
-    expect(screen.getByRole('alertdialog', { name: 'Leave the research workspace?' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('alertdialog', { name: 'Leave the research workspace?' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
   });
 });

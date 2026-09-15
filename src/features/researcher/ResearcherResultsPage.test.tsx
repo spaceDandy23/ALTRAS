@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResearcherParticipantResult } from './researcher.service';
-import { ResearcherResultsPage } from './ResearcherResultsPage';
+import { ResearcherResultsPage, ScoreComparisonChart } from './ResearcherResultsPage';
 import { getResearcherResults } from './researcher.service';
 import { ResearcherDataProvider } from './ResearcherDataContext';
 
@@ -51,11 +51,29 @@ const results: ResearcherParticipantResult[] = [
 ];
 
 function renderPage() {
-  return render(<ResearcherDataProvider><ResearcherResultsPage /></ResearcherDataProvider>);
+  return render(
+    <ResearcherDataProvider>
+      <ResearcherResultsPage />
+    </ResearcherDataProvider>,
+  );
 }
 
 describe('researcher results dashboard', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('formats displayed averages while retaining precise chart geometry', () => {
+    const { container } = render(
+      <ScoreComparisonChart
+        preTestAverage={85.22222222222223}
+        postTestAverage={55.666666666666664}
+      />,
+    );
+    expect(screen.getByText('85.2%')).toBeInTheDocument();
+    expect(screen.getByText('55.7%')).toBeInTheDocument();
+    const bars = container.querySelectorAll<HTMLElement>('.score-comparison__bar');
+    expect(bars[0].style.width).toBe('85.22222222222223%');
+    expect(bars[1].style.width).toBe('55.666666666666664%');
+  });
 
   it('renders an accessible centered loading state while results are requested', () => {
     vi.mocked(getResearcherResults).mockReturnValue(new Promise(() => undefined));

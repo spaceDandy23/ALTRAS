@@ -16,7 +16,6 @@ import { ResearcherLayout } from '@/features/researcher/ResearcherLayout';
 import { ResearcherDashboardPage } from '@/features/researcher/ResearcherDashboardPage';
 import { ResearcherAssessmentsPage } from '@/features/researcher/ResearcherAssessmentsPage';
 import { ResearcherLessonsPage } from '@/features/researcher/ResearcherLessonsPage';
-import { ResearcherReportsPage } from '@/features/researcher/ResearcherReportsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { AlmanacPage, AlmanacReviewPlaceholder } from '@/features/word-list/AlmanacPage';
 import { WordListPage } from '@/features/word-list/WordListPage';
@@ -30,6 +29,7 @@ import { AdminRoute } from '@/features/admin/AdminRoute';
 import { AdminLayout } from '@/features/admin/AdminLayout';
 import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
 import { UserManagementPage } from '@/features/admin/UserManagementPage';
+import { AssessmentManagementPage } from '@/features/admin/AssessmentManagementPage';
 import { NotFoundPage } from './NotFoundPage';
 import {
   GuestOnlyRoute,
@@ -68,6 +68,7 @@ export function App() {
             <Route index element={<Navigate to="/admin/users" replace />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="lessons" element={<LessonManagementPage />} />
+            <Route path="assessments" element={<AssessmentManagementPage />} />
           </Route>
           <Route
             path="/login"
@@ -126,7 +127,7 @@ export function App() {
               <Route path="participants" element={<ResearcherResultsPage />} />
               <Route path="assessments" element={<ResearcherAssessmentsPage />} />
               <Route path="lessons" element={<ResearcherLessonsPage />} />
-              <Route path="reports" element={<ResearcherReportsPage />} />
+              <Route path="reports" element={<Navigate to="/researcher" replace />} />
               <Route path="results" element={<Navigate to="/researcher/participants" replace />} />
             </Route>
           </Route>

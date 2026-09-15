@@ -145,36 +145,40 @@ export function ActivityEditor({
       ) : (
         <fieldset className="admin-options">
           <legend>Correct token order</legend>
-          <ol>
+          <ol className="admin-token-order">
             {activity.correctTokenSequence.map((id, index) => (
-              <li key={id}>
-                {options.find((o) => o.id === id)?.label || '(empty token)'}
-                <button
-                  type="button"
-                  disabled={index === 0}
-                  aria-label={`Move correct token ${index + 1} up`}
-                  onClick={() =>
-                    onChange({
-                      ...activity,
-                      correctTokenSequence: moveItem(activity.correctTokenSequence, index, -1),
-                    })
-                  }
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  disabled={index === options.length - 1}
-                  aria-label={`Move correct token ${index + 1} down`}
-                  onClick={() =>
-                    onChange({
-                      ...activity,
-                      correctTokenSequence: moveItem(activity.correctTokenSequence, index, 1),
-                    })
-                  }
-                >
-                  ↓
-                </button>
+              <li key={id} className="admin-token-order__item">
+                <span className="admin-token-order__label">
+                  {options.find((o) => o.id === id)?.label || '(empty token)'}
+                </span>
+                <span className="admin-token-order__controls">
+                  <button
+                    type="button"
+                    disabled={index === 0}
+                    aria-label={`Move correct token ${index + 1} up`}
+                    onClick={() =>
+                      onChange({
+                        ...activity,
+                        correctTokenSequence: moveItem(activity.correctTokenSequence, index, -1),
+                      })
+                    }
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === options.length - 1}
+                    aria-label={`Move correct token ${index + 1} down`}
+                    onClick={() =>
+                      onChange({
+                        ...activity,
+                        correctTokenSequence: moveItem(activity.correctTokenSequence, index, 1),
+                      })
+                    }
+                  >
+                    ↓
+                  </button>
+                </span>
               </li>
             ))}
           </ol>

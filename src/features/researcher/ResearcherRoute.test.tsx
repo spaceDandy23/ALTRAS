@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProtectedRoute } from '@/app/route-guards';
@@ -80,6 +80,28 @@ describe('researcher route protection', () => {
 
     expect(screen.getByText('Protected participant data')).toBeInTheDocument();
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
+  });
+
+  it('keeps unresolved researcher content behind the screen-level bootstrap loader', () => {
+    useAuthStore.setState({ status: 'authenticated', user });
+    useResearcherAccessStore.setState({ status: 'loading', userId: user.id });
+
+    render(
+      <MemoryRouter>
+        <ResearcherRoute>
+          <p>Protected participant data</p>
+        </ResearcherRoute>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('status')).toHaveClass('loading-state--screen');
+    expect(screen.queryByText('Protected participant data')).not.toBeInTheDocument();
+
+    act(() => {
+      useResearcherAccessStore.setState({ status: 'authorized', userId: user.id });
+    });
+
+    expect(screen.getByText('Protected participant data')).toBeInTheDocument();
   });
 
   it('defines a viewport-centered access state with mobile edge spacing', () => {

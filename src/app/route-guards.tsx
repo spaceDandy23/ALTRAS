@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import { applyExperienceScope } from '@/features/researcher/researcher-experience';
+import { isCurrentUserAdmin } from '@/features/admin/lesson-management.service';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const status = useAuthStore((state) => state.status);
@@ -57,13 +58,54 @@ export function StudentRoute({ children }: { children: ReactNode }) {
   const status = useResearcherAccessStore((state) => state.status);
   const checkedUserId = useResearcherAccessStore((state) => state.userId);
   const checkAccess = useResearcherAccessStore((state) => state.checkAccess);
+  const [adminAccess, setAdminAccess] = useState<{
+    userId: string;
+    status: 'allowed' | 'denied' | 'error';
+  } | null>(null);
+  const [adminRetry, setAdminRetry] = useState(0);
 
   useEffect(() => {
     if (user) void checkAccess(user.id);
   }, [checkAccess, user]);
 
-  if (!user || checkedUserId !== user.id || status === 'idle' || status === 'loading') {
-    return <LoadingState variant="page" />;
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void isCurrentUserAdmin()
+      .then((allowed) => {
+        if (active) setAdminAccess({ userId: user.id, status: allowed ? 'allowed' : 'denied' });
+      })
+      .catch(() => {
+        if (active) setAdminAccess({ userId: user.id, status: 'error' });
+      });
+    return () => {
+      active = false;
+    };
+  }, [adminRetry, user]);
+
+  if (
+    !user ||
+    checkedUserId !== user.id ||
+    status === 'idle' ||
+    status === 'loading' ||
+    adminAccess?.userId !== user.id
+  ) {
+    return <AppLoading />;
+  }
+
+  if (adminAccess.status === 'allowed') return <Navigate to="/admin/users" replace />;
+
+  if (adminAccess.status === 'error') {
+    return (
+      <section className="researcher-state panel" aria-labelledby="admin-access-error-title">
+        <p className="researcher-kicker">Account access check</p>
+        <h1 id="admin-access-error-title">We couldn’t verify this account</h1>
+        <p>
+          Learning activities stay locked until ALTRAS can confirm this is not an admin account.
+        </p>
+        <Button onClick={() => setAdminRetry((attempt) => attempt + 1)}>Try again</Button>
+      </section>
+    );
   }
 
   if (status === 'authorized') return <Navigate to="/researcher" replace />;

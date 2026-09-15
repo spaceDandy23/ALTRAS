@@ -7,6 +7,7 @@ import { packagedContent } from '@/features/lessons/content/packaged-content';
 import { applyExperienceScope } from '@/features/researcher/researcher-experience';
 import { db } from '@/db/database';
 import { AdminRoute } from './AdminRoute';
+import { ActivityEditor } from './ActivityEditor';
 import { LessonManagementPage } from './LessonManagementPage';
 import { LessonContentPreview } from './LessonContentPreview';
 import {
@@ -14,6 +15,7 @@ import {
   newActivity,
   publishManagedLesson,
   saveManagedLesson,
+  type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
 
@@ -55,6 +57,29 @@ const page = () =>
   );
 
 describe('Basic Lesson Management editor and preview', () => {
+  it('shows only the centered admin loader until lesson data is ready', async () => {
+    let resolve!: (value: unknown) => void;
+    client.rpc.mockReturnValueOnce(
+      new Promise((complete) => {
+        resolve = complete;
+      }),
+    );
+
+    page();
+
+    expect(screen.getByRole('status')).toHaveClass(
+      'loading-state--page',
+      'admin-content-loading',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Loading lessons…');
+    expect(screen.queryByRole('heading', { name: 'Basic Lesson Management' })).not.toBeInTheDocument();
+
+    await act(async () => resolve({ data: [item()], error: null }));
+    expect(
+      await screen.findByRole('heading', { name: 'Basic Lesson Management' }),
+    ).toBeInTheDocument();
+  });
+
   it('lists metadata and saves a changed draft without publishing it', async () => {
     const user = userEvent.setup();
     page();
@@ -103,6 +128,30 @@ describe('Basic Lesson Management editor and preview', () => {
       target: { value: 'organize-translate' },
     });
     expect(screen.getByRole('group', { name: 'Correct token order' })).toBeInTheDocument();
+  });
+  it('keeps correct-token rows distinct while preserving token reordering', async () => {
+    const activity = newActivity('organize-translate') as Extract<
+      AuthoredLesson['activities'][number],
+      { type: 'organize-translate' }
+    >;
+    activity.tokens = [
+      {
+        id: 'first',
+        label: 'A long token label that needs room to wrap without covering controls',
+      },
+      { id: 'second', label: 'second token' },
+    ];
+    activity.correctTokenSequence = ['first', 'second'];
+    const onChange = vi.fn();
+    render(<ActivityEditor activity={activity} onChange={onChange} />);
+
+    const order = screen.getByRole('group', { name: 'Correct token order' });
+    expect(order.querySelectorAll('.admin-token-order__item')).toHaveLength(2);
+    expect(order.querySelector('.admin-token-order__controls')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Move correct token 1 down' }));
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ correctTokenSequence: ['second', 'first'] }),
+    );
   });
   it('rejects eleven activities in the service before any RPC', async () => {
     const draft = {
@@ -170,6 +219,7 @@ describe('Basic Lesson Management editor and preview', () => {
         </MemoryRouter>,
       );
       expect(screen.queryByText('Private editor')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveClass('loading-state--screen');
       expect(document.documentElement.dataset.experience).toBe('neutral');
       await act(async () => resolve({ data: allowed, error: null }));
       await waitFor(() =>
