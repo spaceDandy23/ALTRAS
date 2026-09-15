@@ -126,7 +126,10 @@ describe('Basic Lesson Management SQL and RLS', () => {
     await pg.exec('savepoint lesson_limit');
     await expect(save(draft({ displayOrder: 9 }))).rejects.toThrow('maximum of 8 lessons');
     await pg.exec('rollback to savepoint lesson_limit');
-    expect((await pg.query('select count(*)::int as count from public.get_admin_lessons()')).rows[0].count).toBe(8);
+    const lessonCount = await pg.query<{ count: number }>(
+      'select count(*)::int as count from public.get_admin_lessons()',
+    );
+    expect(lessonCount.rows[0].count).toBe(8);
   });
   it('seeds exact original authoring content and scoring versions without remapping IDs', async () => {
     const rows = (await pg.query<ManagedLesson>('select * from public.get_admin_lessons()')).rows;
