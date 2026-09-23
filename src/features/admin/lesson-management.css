@@ -5,6 +5,7 @@
   min-height: 100svh;
   grid-template-columns: 230px minmax(0, 1fr);
   overflow-x: clip;
+  overflow-y: visible;
   color: var(--paper);
   background: var(--board);
 }
@@ -90,6 +91,7 @@
   min-width: 0;
   flex-direction: column;
   overflow-x: clip;
+  overflow-y: visible;
   padding: clamp(1rem, 4vw, 3rem);
 }
 .admin-content > * {

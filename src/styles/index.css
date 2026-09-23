@@ -87,6 +87,7 @@ body {
 html {
   background: var(--board-deep);
   font-size: calc(16px * var(--readability-scale));
+  overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
@@ -98,6 +99,7 @@ html[data-experience='researcher'] {
 body {
   min-height: 100svh;
   margin: 0;
+  overflow-y: visible;
   background-color: var(--board);
   background-image:
     linear-gradient(rgba(226, 226, 220, 0.05) 1px, transparent 1px),
@@ -109,6 +111,7 @@ body {
 
 #root {
   min-height: 100svh;
+  overflow-y: visible;
 }
 .lesson-actions {
   display: flex;
@@ -420,7 +423,8 @@ h3 {
   display: grid;
   min-height: 100svh;
   grid-template-columns: minmax(380px, 0.8fr) minmax(610px, 1.2fr);
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .auth-screen__visual {
@@ -611,6 +615,7 @@ h3 {
   min-height: 100svh;
   flex-direction: column;
   overflow-x: clip;
+  overflow-y: visible;
   isolation: isolate;
 }
 
@@ -933,6 +938,7 @@ h3 {
   max-width: var(--content-wide);
   flex: 1;
   align-self: center;
+  overflow-y: visible;
   padding: 1.6rem clamp(2rem, 4vw, 4.5rem) 2rem;
 }
 
@@ -3120,6 +3126,7 @@ a.almanac-option:hover {
   min-height: 100svh;
   grid-template-columns: 230px minmax(0, 1fr);
   overflow-x: clip;
+  overflow-y: visible;
   color: var(--paper);
   background: var(--board);
 }
@@ -3300,6 +3307,7 @@ a.almanac-option:hover {
   min-width: 0;
   flex-direction: column;
   overflow-x: clip;
+  overflow-y: visible;
   padding: clamp(1.25rem, 3vw, 3rem);
 }
 
@@ -4505,7 +4513,8 @@ a.almanac-option:hover {
   .auth-screen {
     min-height: 100svh;
     grid-template-columns: 1fr;
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .auth-screen__visual {
