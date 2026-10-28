@@ -26,7 +26,11 @@ import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
 } from '@/services/audio/click.handlers';
-import { playCompletion, playReward } from '@/services/audio/audio.manager';
+import {
+  cancelPendingResultSfx,
+  playCompletion,
+  playReward,
+} from '@/services/audio/audio.manager';
 import { StudentStreak } from '@/features/streaks/StudentStreak';
 
 function LessonResultAudio({ attempt }: { attempt: LessonAttempt }) {
@@ -34,10 +38,14 @@ function LessonResultAudio({ attempt }: { attempt: LessonAttempt }) {
 
   useEffect(() => {
     if (playedAttemptRef.current === attempt.id) return;
-    playedAttemptRef.current = attempt.id;
-    if (attempt.finalScore === 100) playReward(attempt.id);
-    else playCompletion(attempt.id);
-  }, [attempt]);
+    const status =
+      attempt.finalScore === 100 ? playReward(attempt.id) : playCompletion(attempt.id);
+    const pending = status === 'pending';
+    if (!pending) playedAttemptRef.current = attempt.id;
+    return () => {
+      if (pending) cancelPendingResultSfx(attempt.id);
+    };
+  }, [attempt.finalScore, attempt.id]);
 
   return null;
 }

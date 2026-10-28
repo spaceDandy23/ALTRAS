@@ -22,6 +22,7 @@ import {
 } from './assessment.service';
 
 const audio = vi.hoisted(() => ({
+  cancelPendingResultSfx: vi.fn(),
   playCompletion: vi.fn(),
   playReward: vi.fn(),
   playSfx: vi.fn(),
@@ -380,6 +381,27 @@ describe('assessment UX and bootstrap', () => {
     act(() => window.dispatchEvent(new Event('online')));
     await screen.findByText('Pre-test complete');
   });
+  it('continues from a durable local draft when assessment requests fail offline', async () => {
+    const local = updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q1', 'b');
+    await saveAssessmentDraft(local);
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    vi.mocked(getAssessmentQuestions).mockRejectedValueOnce(new Error('offline'));
+    vi.mocked(getAssessmentAttempt).mockRejectedValueOnce(new Error('offline'));
+    vi.mocked(syncAssessmentDraft).mockRejectedValue(new Error('offline'));
+
+    renderAssessment();
+
+    expect(
+      await screen.findByRole('radio', { name: 'The quotient of two values' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(
+      await screen.findByText('Saved on this device. Account sync is pending.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'We couldn’t load this test' })).not.toBeInTheDocument();
+    await expect(getAssessmentDraft(userId, 'pre-test')).resolves.toMatchObject({
+      answers: [expect.objectContaining({ questionId: 'q1', selectedChoiceId: 'b' })],
+    });
+  });
   it('recovers an already submitted attempt before replaying a pending local snapshot', async () => {
     const local = markDraftPendingSubmission(
       updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q1', 'a'),
@@ -476,6 +498,25 @@ describe('assessment UX and bootstrap', () => {
     expect(
       await screen.findByRole('radio', { name: 'The quotient of two values' }),
     ).toHaveAttribute('aria-checked', 'true');
+  });
+  it('visibly restores the persisted selected choice after the assessment is reopened', async () => {
+    const local = updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q1', 'b');
+    await saveAssessmentDraft(local);
+
+    const firstView = renderAssessment();
+    expect(
+      await screen.findByRole('radio', { name: 'The quotient of two values' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    firstView.unmount();
+
+    renderAssessment();
+    expect(
+      await screen.findByRole('radio', { name: 'The quotient of two values' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'The sum of two values' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
   });
   it('disposes reconnect/focus/visibility handlers after leaving the attempt', async () => {
     const removeWindow = vi.spyOn(window, 'removeEventListener');

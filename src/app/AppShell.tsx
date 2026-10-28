@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { AlgebraicBackdrop } from '@/components/decorative/AlgebraicBackdrop';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
@@ -17,12 +17,15 @@ import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/serv
 
 export function AppShell() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
+  const [confirmingHome, setConfirmingHome] = useState(false);
   const [audioMuted, setAudioMutedState] = useState(getAudioMuted);
   const menuRef = useRef<HTMLDetailsElement>(null);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const researcherStatus = useResearcherAccessStore((state) => state.status);
   const navigate = useNavigate();
+  const location = useLocation();
+  const activeLesson = /^\/lessons\/[^/]+\/play\/[^/]+\/?$/.test(location.pathname);
   useEffect(() => {
     const colorScheme =
       typeof window.matchMedia === 'function'
@@ -67,8 +70,21 @@ export function AppShell() {
     <div className="app-shell">
       <AlgebraicBackdrop />
       <header className="app-header">
-        <AltrasLogo />
+        <AltrasLogo linked={!activeLesson} />
         <div className="app-header__tools">
+          <Link
+            className="app-home-link"
+            to="/"
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+            onClick={(event) => {
+              if (!activeLesson) return;
+              event.preventDefault();
+              setConfirmingHome(true);
+            }}
+          >
+            Home
+          </Link>
           <OfflineStatus />
           <button
             className="audio-mute-button"
@@ -131,6 +147,18 @@ export function AppShell() {
       <main className="app-content">
         <Outlet />
       </main>
+      <ConfirmDialog
+        open={confirmingHome}
+        title="Leave active lesson?"
+        confirmLabel="Go home"
+        onCancel={() => setConfirmingHome(false)}
+        onConfirm={() => {
+          setConfirmingHome(false);
+          navigate('/');
+        }}
+      >
+        Your submitted answers are saved. You can resume this lesson from Home or Lessons.
+      </ConfirmDialog>
       <ConfirmDialog
         open={confirmingLogout}
         title="Leave this session?"

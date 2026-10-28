@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
 import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
-import { playCompletion, playReward } from '@/services/audio/audio.manager';
+import {
+  cancelPendingResultSfx,
+  playCompletion,
+  playReward,
+} from '@/services/audio/audio.manager';
 import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
@@ -133,7 +137,10 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         const server = attemptResult.status === 'fulfilled' ? attemptResult.value : null;
         if (server && (server.userId !== userId || server.assessment !== kind))
           throw new Error('The test belongs to another session.');
-        if (questionsResult.status === 'rejected' || loadedQuestions.length === 0)
+        // A validated local draft carries the immutable question snapshot for
+        // this attempt. Remote question loading may legitimately fail while
+        // offline, so only fail when neither source supplied usable content.
+        if (loadedQuestions.length === 0)
           throw new Error('Unable to load the assessment result. Please retry.');
         if (server?.status === 'submitted') {
           if (
@@ -644,19 +651,25 @@ function AssessmentResult({
   const completionPlayedRef = useRef<string | null>(null);
 
   // This component is mounted only by the final result-render branch. Keeping
-  // the trigger here means loading/error/retry branches cannot play it, while
-  // the attempt ref and audio manager guard make it one-shot across rerenders.
+  // the trigger here means loading/error/retry branches cannot play it. The
+  // audio manager owns the cross-mount one-shot guard and can hold this event
+  // until saved audio settings finish hydrating.
   useEffect(() => {
+    let pending = false;
     if (
       attempt.status === 'submitted' &&
       attempt.score !== null &&
       completionPlayedRef.current !== attempt.id
     ) {
-      completionPlayedRef.current = attempt.id;
-      if (attempt.score === 100) playReward(attempt.id);
-      else playCompletion(attempt.id);
+      const status =
+        attempt.score === 100 ? playReward(attempt.id) : playCompletion(attempt.id);
+      pending = status === 'pending';
+      if (!pending) completionPlayedRef.current = attempt.id;
     }
-  }, [attempt]);
+    return () => {
+      if (pending) cancelPendingResultSfx(attempt.id);
+    };
+  }, [attempt.id, attempt.score, attempt.status]);
 
   return (
     <section className="assessment-shell assessment-result panel page-enter">

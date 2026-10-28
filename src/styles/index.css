@@ -769,6 +769,27 @@ h3 {
   gap: var(--space-3);
 }
 
+.app-home-link {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.55rem 0.8rem;
+  color: var(--paper);
+  background: var(--control-bg);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.app-home-link:hover,
+.app-home-link:focus-visible {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
 .researcher-header__tools {
   display: flex;
   align-items: center;
@@ -4548,6 +4569,11 @@ a.almanac-option:hover {
 
   .app-header__tools {
     gap: 0.45rem;
+  }
+
+  .app-home-link {
+    min-height: 44px;
+    padding-inline: 0.65rem;
   }
 
   .app-header .logo {

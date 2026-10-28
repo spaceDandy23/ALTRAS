@@ -23,9 +23,11 @@ let musicPlaybackRequested = false;
 let gestureListenersAttached = false;
 let gestureUnlockAttempted = false;
 let muted = false;
+let audioSettingsResolved = false;
 const sfxInstances = new Map<SfxName, Howl>();
 const failedAssets = new Set<string>();
 const resultEvents = new Set<string>();
+const pendingResultEvents = new Map<string, 'complete' | 'reward'>();
 
 function normalizedVolume(value: number) {
   return Math.max(0, Math.min(100, value)) / 100;
@@ -157,9 +159,11 @@ function requestMusicPlayback() {
 
 export function setAudioVolumes(next: Partial<AudioVolumes>) {
   volumes = { ...volumes, ...next };
+  audioSettingsResolved = true;
   musicInstance?.volume(musicOutputVolume());
   for (const instance of sfxInstances.values()) instance.volume(sfxOutputVolume());
   requestMusicPlayback();
+  flushPendingResultSfx();
 }
 
 export function setAudioMuted(nextMuted: boolean) {
@@ -221,18 +225,40 @@ export function playSfx(name: SfxName): number | null {
 }
 
 function playResultSfx(eventId: string, sound: 'complete' | 'reward') {
-  if (!isStudentExperience()) return;
-  if (resultEvents.has(eventId)) return;
-  resultEvents.add(eventId);
-  playSfx(sound);
+  if (!isStudentExperience()) return 'ignored' as const;
+  if (resultEvents.has(eventId)) return 'accepted' as const;
+  if (pendingResultEvents.has(eventId)) return 'pending' as const;
+  if (!audioSettingsResolved) {
+    pendingResultEvents.set(eventId, sound);
+    return 'pending' as const;
+  }
+
+  // A resolved zero output is an intentional user setting, so the event is
+  // complete without playback. Before settings resolve, however, consuming
+  // the event here would permanently lose the result sound during hydration.
+  if (sfxOutputVolume() === 0 || playSfx(sound) !== null) {
+    resultEvents.add(eventId);
+    return 'accepted' as const;
+  }
+  return 'ignored' as const;
+}
+
+function flushPendingResultSfx() {
+  const pending = [...pendingResultEvents];
+  pendingResultEvents.clear();
+  for (const [eventId, sound] of pending) playResultSfx(eventId, sound);
+}
+
+export function cancelPendingResultSfx(eventId: string) {
+  pendingResultEvents.delete(eventId);
 }
 
 export function playCompletion(eventId: string) {
-  playResultSfx(eventId, 'complete');
+  return playResultSfx(eventId, 'complete');
 }
 
 export function playReward(eventId: string) {
-  playResultSfx(eventId, 'reward');
+  return playResultSfx(eventId, 'reward');
 }
 
 export function resetAudio() {
@@ -243,8 +269,10 @@ export function resetAudio() {
   for (const instance of sfxInstances.values()) instance.unload();
   sfxInstances.clear();
   volumes = { ...DEFAULT_VOLUMES };
+  audioSettingsResolved = false;
   muted = false;
   resultEvents.clear();
+  pendingResultEvents.clear();
 }
 
 export function getAudioVolumes(): AudioVolumes {

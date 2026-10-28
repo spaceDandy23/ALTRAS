@@ -43,6 +43,7 @@ const { howlInstances, MockHowl, MockHowler } = vi.hoisted(() => {
 vi.mock('howler', () => ({ Howl: MockHowl, Howler: MockHowler }));
 
 import {
+  cancelPendingResultSfx,
   getAudioVolumes,
   playMusic,
   playCompletion,
@@ -285,5 +286,32 @@ describe('audio manager', () => {
     expect(howlInstances).toHaveLength(1);
     expect(howlInstances[0].options.src).toEqual(['/audio/sfx/reward.wav']);
     expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not consume a result event before audio settings finish hydrating', () => {
+    resetAudio();
+    howlInstances.length = 0;
+
+    playCompletion('hydrating-result');
+    expect(howlInstances).toHaveLength(0);
+
+    setAudioVolumes({ masterVolume: 100, soundEffectsVolume: 100, musicVolume: 100 });
+    expect(howlInstances).toHaveLength(1);
+    expect(howlInstances[0].options.src).toEqual(['/audio/sfx/complete.wav']);
+    expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
+
+    playCompletion('hydrating-result');
+    expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a pending result sound when its result view is no longer mounted', () => {
+    resetAudio();
+    howlInstances.length = 0;
+    playReward('left-result');
+
+    cancelPendingResultSfx('left-result');
+    setAudioVolumes({ masterVolume: 100, soundEffectsVolume: 100, musicVolume: 100 });
+
+    expect(howlInstances).toHaveLength(0);
   });
 });

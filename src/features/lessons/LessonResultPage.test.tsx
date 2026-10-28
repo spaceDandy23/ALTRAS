@@ -22,6 +22,7 @@ vi.mock('./progress/progress.service', () => ({
   getLessonHubData: vi.fn(),
 }));
 const audio = vi.hoisted(() => ({
+  cancelPendingResultSfx: vi.fn(),
   playCompletion: vi.fn(),
   playReward: vi.fn(),
   playSfx: vi.fn(),
