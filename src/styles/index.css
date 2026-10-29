@@ -2350,6 +2350,10 @@ a .lesson-node:hover {
   color: var(--green);
 }
 
+.lesson-player__save-state--pending {
+  color: var(--yellow);
+}
+
 .lesson-player__save-state--error {
   color: #ffaaa4;
 }
@@ -3210,6 +3214,10 @@ a.almanac-option:hover {
   color: var(--muted);
   background: rgba(255, 220, 82, 0.08);
   font-size: 0.75rem;
+}
+
+.assessment-sync-note + .button {
+  margin-top: 0.75rem;
 }
 
 .researcher-sidebar {

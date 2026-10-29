@@ -7,6 +7,7 @@ import type {
   StoredUnit,
 } from '@/types/learning';
 import type { AssessmentDraft } from '@/types/assessment';
+import type { LessonDraft } from '@/features/lessons/attempts/lesson-draft.service';
 
 export const DATABASE_NAME = 'altras-content';
 
@@ -17,6 +18,7 @@ export class AltrasDatabase extends Dexie {
   lessonItems!: EntityTable<StoredLessonItem, 'id'>;
   contentVersions!: EntityTable<ContentVersionRecord, 'id'>;
   assessmentDrafts!: EntityTable<AssessmentDraft, 'id'>;
+  lessonDrafts!: EntityTable<LessonDraft, 'id'>;
 
   constructor(name = DATABASE_NAME) {
     super(name);
@@ -37,8 +39,18 @@ export class AltrasDatabase extends Dexie {
         'id,sectionId,unitId,[unitId+displayOrder],prerequisiteLessonId,contentStatus,contentVersion',
       lessonItems: 'id,lessonId,[lessonId+displayOrder],kind,contentVersion',
       contentVersions: 'id,version,installedAt',
-      assessmentDrafts:
-        'id,[userId+assessment],attemptId,userId,assessment,updatedAt,syncStatus',
+      assessmentDrafts: 'id,[userId+assessment],attemptId,userId,assessment,updatedAt,syncStatus',
+    });
+
+    this.version(3).stores({
+      sections: 'id,displayOrder,contentVersion',
+      units: 'id,sectionId,[sectionId+displayOrder],contentVersion',
+      lessons:
+        'id,sectionId,unitId,[unitId+displayOrder],prerequisiteLessonId,contentStatus,contentVersion',
+      lessonItems: 'id,lessonId,[lessonId+displayOrder],kind,contentVersion',
+      contentVersions: 'id,version,installedAt',
+      assessmentDrafts: 'id,[userId+assessment],attemptId,userId,assessment,updatedAt,syncStatus',
+      lessonDrafts: 'id,[userId+lessonId],attemptId,userId,lessonId,updatedAt,syncStatus',
     });
   }
 }

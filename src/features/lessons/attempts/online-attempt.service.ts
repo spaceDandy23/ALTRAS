@@ -252,12 +252,17 @@ export async function getOnlineAttempt(userId: string, attemptId: string): Promi
   return attempt;
 }
 
-export async function recordOnlineActiveSeconds(attemptId: string, seconds: number): Promise<void> {
+export async function recordOnlineActiveSeconds(
+  attemptId: string,
+  seconds: number,
+  segmentId: string,
+): Promise<void> {
   assertParticipantLearningAccess();
   if (seconds <= 0) return;
   const { error } = await getSupabaseClient().rpc('add_attempt_active_seconds', {
     p_attempt_id: attemptId,
     p_seconds: Math.min(3600, Math.floor(seconds)),
+    p_segment_id: segmentId,
   });
   if (error) throw new AttemptError('Unable to save active lesson time.');
 }

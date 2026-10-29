@@ -14,6 +14,7 @@ vi.mock('./researcher.service', async (importOriginal) => {
 const results: ResearcherParticipantResult[] = [
   {
     participantCode: 'ALT-8F21C4A1',
+    username: 'student-one',
     preTestStatus: 'completed',
     preTestScore: 45,
     preTestCompletedAt: 1,
@@ -37,6 +38,7 @@ const results: ResearcherParticipantResult[] = [
   },
   {
     participantCode: 'ALT-8F21C4A2',
+    username: 'student-two',
     preTestStatus: 'completed',
     preTestScore: 80,
     preTestCompletedAt: 1,
@@ -84,7 +86,7 @@ describe('researcher results dashboard', () => {
     expect(loading).toHaveClass('researcher-content-loading');
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
-    expect(loading).toHaveTextContent('Loading anonymized participant results…');
+    expect(loading).toHaveTextContent('Loading participant results…');
   });
 
   it('renders an empty participant dataset clearly', async () => {
@@ -95,7 +97,7 @@ describe('researcher results dashboard', () => {
     expect(document.querySelector('[data-character-id]')).not.toBeInTheDocument();
   });
 
-  it('supports search, filters, sorting, and anonymized participant details', async () => {
+  it('supports search, filters, sorting, and authorized participant details', async () => {
     vi.mocked(getResearcherResults).mockResolvedValue(results);
     const user = userEvent.setup();
     renderPage();
@@ -106,12 +108,12 @@ describe('researcher results dashboard', () => {
     expect(screen.queryByText('ALT-8F21C4A2')).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Assessment filter'), 'all');
-    await user.clear(screen.getByLabelText('Find participant code'));
-    await user.type(screen.getByLabelText('Find participant code'), 'a2');
+    await user.clear(screen.getByLabelText('Find participant code or username'));
+    await user.type(screen.getByLabelText('Find participant code or username'), 'student-two');
     expect(screen.getByText('ALT-8F21C4A2')).toBeInTheDocument();
     expect(screen.queryByText('ALT-8F21C4A1')).not.toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText('Find participant code'));
+    await user.clear(screen.getByLabelText('Find participant code or username'));
     await user.selectOptions(screen.getByLabelText('Sort by'), 'pre-score');
     await user.click(screen.getByRole('button', { name: 'Ascending' }));
     const rows = screen.getAllByRole('row');
@@ -119,7 +121,7 @@ describe('researcher results dashboard', () => {
 
     const detailsButton = screen.getAllByRole('button', { name: 'View details' })[1];
     await user.click(detailsButton);
-    expect(screen.getByRole('dialog', { name: 'ALT-8F21C4A1' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'ALT-8F21C4A1 · student-one' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close details' })).toHaveFocus();
     expect(screen.getByText('Read-only participant detail')).toBeInTheDocument();
     expect(screen.getByText('lesson-1')).toBeInTheDocument();
@@ -152,7 +154,7 @@ describe('researcher results dashboard', () => {
 
     const detailsButton = screen.getAllByRole('button', { name: 'View details' })[0];
     await user.click(detailsButton);
-    expect(screen.getByRole('dialog', { name: 'ALT-00000016' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'ALT-00000016 · student-two' })).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
     expect(getResearcherResults).toHaveBeenCalledTimes(1);
 

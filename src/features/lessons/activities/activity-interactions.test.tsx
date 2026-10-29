@@ -74,4 +74,19 @@ describe('accessible lesson activity interactions', () => {
     await user.click(screen.getByRole('button', { name: 'Submit translation' }));
     expect(onSubmit).toHaveBeenCalledWith(activity.correctTokenSequence);
   });
+
+  it('keeps a locally queued answer visible and locked without revealing correctness', () => {
+    const activity = packagedContent.lessons[0].activities.find(
+      (candidate) => candidate.type === 'find-word',
+    );
+    if (!activity || activity.type !== 'find-word') throw new Error('Missing fixture.');
+
+    render(<FindWordActivityView activity={activity} pendingAnswer="sum" onSubmit={vi.fn()} />);
+
+    expect(screen.getByRole('radio', { name: 'sum' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'sum' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).not.toBeInTheDocument();
+    expect(document.querySelector('.choice-option--correct')).not.toBeInTheDocument();
+    expect(document.querySelector('.choice-option--incorrect')).not.toBeInTheDocument();
+  });
 });

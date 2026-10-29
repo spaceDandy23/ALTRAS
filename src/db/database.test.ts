@@ -7,10 +7,11 @@ describe('content cache database', () => {
     const first = new AltrasDatabase(name);
     await first.open();
 
-    expect(first.verno).toBe(2);
+    expect(first.verno).toBe(3);
     expect(first.tables.map((table) => table.name).sort()).toEqual([
       'assessmentDrafts',
       'contentVersions',
+      'lessonDrafts',
       'lessonItems',
       'lessons',
       'sections',

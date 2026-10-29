@@ -77,7 +77,8 @@ describe('Supabase-only lesson attempt routing', () => {
     await expect(restartAttempt(database, attempt.userId, attempt.lessonId)).resolves.toBe(attempt);
     await completeAttempt(database, attempt.id);
     await getAttempt(database, attempt.userId, attempt.id);
-    await recordAttemptActiveSeconds(database, attempt.id, 12);
+    const segmentId = '30000000-0000-4000-8000-000000000003';
+    await recordAttemptActiveSeconds(database, attempt.id, 12, segmentId);
     await ensureLearningReady(database, attempt.userId);
 
     expect(mocks.getActive).toHaveBeenCalledWith(attempt.userId, attempt.lessonId);
@@ -85,7 +86,7 @@ describe('Supabase-only lesson attempt routing', () => {
     expect(mocks.restart).toHaveBeenCalledWith(database, attempt.userId, attempt.lessonId);
     expect(mocks.complete).toHaveBeenCalledWith(database, attempt.id);
     expect(mocks.get).toHaveBeenCalledWith(attempt.userId, attempt.id);
-    expect(mocks.recordSeconds).toHaveBeenCalledWith(attempt.id, 12);
+    expect(mocks.recordSeconds).toHaveBeenCalledWith(attempt.id, 12, segmentId);
     expect(mocks.ensureProgress).toHaveBeenCalledWith(database, attempt.userId);
   });
 

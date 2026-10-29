@@ -113,12 +113,14 @@ export function ResearcherResultsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const matchingParticipants = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleUpperCase('en-US');
+    const normalizedQuery = query.trim().toLocaleLowerCase('en-US');
     return participants
       .filter(
         (participant) =>
           matchesFilter(participant, filter) &&
-          (!normalizedQuery || participant.participantCode.includes(normalizedQuery)),
+          (!normalizedQuery ||
+            participant.participantCode.toLocaleLowerCase('en-US').includes(normalizedQuery) ||
+            participant.username.toLocaleLowerCase('en-US').includes(normalizedQuery)),
       )
       .sort((left, right) => {
         const leftValue = sortValue(left, sort);
@@ -152,7 +154,7 @@ export function ResearcherResultsPage() {
   };
 
   if (loading) {
-    return <ResearcherContentLoading message="Loading anonymized participant results…" />;
+    return <ResearcherContentLoading message="Loading participant results…" />;
   }
 
   if (error) {
@@ -173,8 +175,8 @@ export function ResearcherResultsPage() {
           <p className="researcher-kicker">Participants</p>
           <h1 id="researcher-results-title">Participant learning states</h1>
           <p>
-            Participant identities are anonymized. This view does not include names, emails,
-            authentication IDs, answers, or answer keys.
+            Participant codes remain the research identifier. This view also includes ALTRAS
+            usernames, but not names, emails, authentication IDs, answers, or answer keys.
           </p>
         </div>
       </header>
@@ -186,7 +188,7 @@ export function ResearcherResultsPage() {
             <p>{matchingParticipants.length} matching participant(s)</p>
           </div>
           <label className="researcher-search">
-            <span>Find participant code</span>
+            <span>Find participant code or username</span>
             <input
               value={query}
               onChange={(event) => {
@@ -292,7 +294,7 @@ export function ResearcherResultsPage() {
                   {pageParticipants.map((participant) => (
                     <tr key={participant.participantCode}>
                       <td>
-                        <strong>{participant.participantCode}</strong>
+                        <strong>{participant.participantCode}</strong> · {participant.username}
                       </td>
                       <td>
                         {assessmentLabel(participant.preTestStatus)} ·{' '}
@@ -361,7 +363,9 @@ export function ResearcherResultsPage() {
             <div className="researcher-detail__heading">
               <div>
                 <p className="researcher-kicker">Read-only participant detail</p>
-                <h2 id="participant-detail-title">{selectedParticipant.participantCode}</h2>
+                <h2 id="participant-detail-title">
+                  {selectedParticipant.participantCode} · {selectedParticipant.username}
+                </h2>
               </div>
               <Button variant="quiet" onClick={closeDetails} data-modal-initial-focus>
                 Close details

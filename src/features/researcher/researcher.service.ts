@@ -15,6 +15,7 @@ const remoteLessonResultSchema = z.object({
 
 const remoteParticipantResultSchema = z.object({
   participant_code: z.string().regex(/^ALT-[A-F0-9]{8}$/),
+  username: z.string().regex(/^[a-z0-9_-]{3,24}$/),
   pre_test_status: assessmentStatusSchema,
   pre_test_score: z.coerce.number().int().min(0).max(100).nullable(),
   pre_test_completed_at: z.string().nullable(),
@@ -41,6 +42,7 @@ export interface ResearcherLessonResult {
 
 export interface ResearcherParticipantResult {
   participantCode: string;
+  username: string;
   preTestStatus: AssessmentProgress;
   preTestScore: number | null;
   preTestCompletedAt: number | null;
@@ -113,6 +115,7 @@ export function toResearcherParticipantResult(input: unknown): ResearcherPartici
   const record = remoteParticipantResultSchema.parse(input);
   return {
     participantCode: record.participant_code,
+    username: record.username,
     preTestStatus: record.pre_test_status,
     preTestScore: record.pre_test_score,
     preTestCompletedAt: timestamp(record.pre_test_completed_at),
@@ -181,15 +184,28 @@ export function calculateScoreDistribution(
     return {
       label: range.label,
       preTestCount: participants.filter((participant) => includes(participant.preTestScore)).length,
-      postTestCount: participants.filter((participant) => includes(participant.postTestScore)).length,
+      postTestCount: participants.filter((participant) => includes(participant.postTestScore))
+        .length,
     };
   });
 }
 
-export function calculateLessonSummaries(participants: ResearcherParticipantResult[]): ResearcherLessonSummary[] {
-  const lessonIds = Array.from(new Set(participants.flatMap((participant) => participant.lessonResults.map((lesson) => lesson.lessonId)))).sort();
+export function calculateLessonSummaries(
+  participants: ResearcherParticipantResult[],
+): ResearcherLessonSummary[] {
+  const lessonIds = Array.from(
+    new Set(
+      participants.flatMap((participant) =>
+        participant.lessonResults.map((lesson) => lesson.lessonId),
+      ),
+    ),
+  ).sort();
   return lessonIds.map((lessonId) => {
-    const results = participants.map((participant) => participant.lessonResults.find((lesson) => lesson.lessonId === lessonId)).filter((lesson): lesson is ResearcherLessonResult => Boolean(lesson));
+    const results = participants
+      .map((participant) =>
+        participant.lessonResults.find((lesson) => lesson.lessonId === lessonId),
+      )
+      .filter((lesson): lesson is ResearcherLessonResult => Boolean(lesson));
     const started = results.filter((lesson) => lesson.attemptCount > 0);
     const completed = results.filter((lesson) => lesson.status === 'cleared');
     return {

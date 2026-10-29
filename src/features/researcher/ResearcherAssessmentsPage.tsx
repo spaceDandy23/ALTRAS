@@ -17,7 +17,8 @@ export function ResearcherAssessmentsPage() {
         const complete =
           participant.preTestStatus === 'completed' && participant.postTestStatus === 'completed';
         return (
-          participant.participantCode.includes(query.trim().toUpperCase()) &&
+          (participant.participantCode.toLowerCase().includes(query.trim().toLowerCase()) ||
+            participant.username.toLowerCase().includes(query.trim().toLowerCase())) &&
           (filter === 'all' || (filter === 'complete' ? complete : !complete))
         );
       }),
@@ -37,7 +38,7 @@ export function ResearcherAssessmentsPage() {
         <div>
           <p className="researcher-kicker">Assessments</p>
           <h1 id="assessment-analysis-title">Pre-test and post-test performance</h1>
-          <p>Compare assessment outcomes and completion across anonymized participants.</p>
+          <p>Compare assessment outcomes and completion across authorized participants.</p>
         </div>
       </header>
       <section className="researcher-charts">
@@ -54,7 +55,7 @@ export function ResearcherAssessmentsPage() {
             <p>{rows.length} matching participant(s)</p>
           </div>
           <label className="researcher-search">
-            <span>Find participant code</span>
+            <span>Find participant code or username</span>
             <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
         </div>
@@ -94,7 +95,7 @@ export function ResearcherAssessmentsPage() {
                 {rows.map((p) => (
                   <tr key={p.participantCode}>
                     <td>
-                      <strong>{p.participantCode}</strong>
+                      <strong>{p.participantCode}</strong> · {p.username}
                     </td>
                     <td>{formatScore(p.preTestScore)}</td>
                     <td>{formatStatus(p.preTestStatus)}</td>

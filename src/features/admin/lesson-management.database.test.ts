@@ -11,8 +11,10 @@ import { publicLessonSchema } from '@/features/lessons/domain/content.schemas';
 let pg: PGlite;
 const adminId = randomUUID(),
   studentId = randomUUID(),
-  researcherId = randomUUID();
-const migration = '202609150002_limit_admin_lessons.sql';
+  researcherId = randomUUID(),
+  adminOnlyId = randomUUID(),
+  dualRoleId = randomUUID();
+const migration = '202609160003_idempotent_lesson_active_time.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -80,6 +82,8 @@ beforeAll(async () => {
     [adminId, 'author'],
     [studentId, 'learner'],
     [researcherId, 'observer'],
+    [adminOnlyId, 'admin_only'],
+    [dualRoleId, 'dual_role'],
   ]) {
     await pg.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [
       id,
@@ -107,7 +111,12 @@ beforeAll(async () => {
   ).toEqual(daysBefore.rows);
   await pg.exec('reset role');
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
+  await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
+    adminOnlyId,
+    dualRoleId,
+  ]);
   await pg.query('insert into public.researcher_users(user_id) values($1)', [researcherId]);
+  await pg.query('insert into public.researcher_users(user_id) values($1)', [dualRoleId]);
 }, 30000);
 beforeEach(async () => {
   await pg.exec('reset role; begin');
@@ -468,5 +477,112 @@ describe('Basic Lesson Management SQL and RLS', () => {
     await publish(item, false);
     await asUser(studentId);
     await expect(rpc('start_lesson_attempt', [item.lesson_id])).rejects.toThrow('Lesson not found');
+  });
+
+  it('keeps historical progress but returns an empty active catalog after lessons are removed', async () => {
+    const items = (
+      await pg.query<ManagedLesson>('select * from public.get_admin_lessons() order by lesson_id')
+    ).rows;
+    const second = items.find((item) => item.lesson_id === 'lesson-order-matters');
+    const first = items.find((item) => item.lesson_id === 'lesson-operation-signals');
+    if (!first || !second) throw new Error('Missing seeded lessons.');
+    await publish(second, false);
+    await publish(first, false);
+
+    const freshStudentId = randomUUID();
+    await pg.exec('reset role');
+    await pg.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [
+      freshStudentId,
+      'fresh@example.invalid',
+      { username: `fresh_${freshStudentId.slice(0, 8)}`, display_name: 'Fresh student' },
+    ]);
+    await asUser(freshStudentId);
+    expect(await rpc<AuthoredLesson[]>('get_lesson_catalog')).toEqual([]);
+    await pg.query('select * from public.initialize_lesson_progress()');
+    expect(
+      (
+        await pg.query<{ count: number }>(
+          'select count(*)::int as count from public.lesson_progress where user_id=$1',
+          [freshStudentId],
+        )
+      ).rows[0].count,
+    ).toBe(0);
+
+    await pg.exec('reset role');
+    expect(
+      (
+        await pg.query<{ count: number }>(
+          'select count(*)::int as count from public.lesson_progress where user_id=$1',
+          [studentId],
+        )
+      ).rows[0].count,
+    ).toBeGreaterThan(0);
+    await asUser(researcherId);
+    const result = (
+      await pg.query<{ lessons_available: number; lesson_results: unknown[] }>(
+        'select lessons_available,lesson_results from public.get_researcher_results() where username=$1',
+        ['learner'],
+      )
+    ).rows[0];
+    expect(result).toEqual({ lessons_available: 0, lesson_results: [] });
+  });
+
+  it('returns only participant code and username identity fields through the researcher boundary', async () => {
+    await asUser(researcherId);
+    const result = (
+      await pg.query<{ result: Record<string, unknown> }>(
+        'select to_jsonb(row) as result from public.get_researcher_results() row where username=$1',
+        ['learner'],
+      )
+    ).rows[0].result;
+    expect(result).toMatchObject({ username: 'learner' });
+    expect(result.participant_code).toMatch(/^ALT-[A-F0-9]{8}$/);
+    expect(result).not.toHaveProperty('email');
+    expect(result).not.toHaveProperty('display_name');
+    expect(result).not.toHaveProperty('user_id');
+
+    await asUser(studentId);
+    await pg.exec('savepoint student_researcher_results_denied');
+    await expect(pg.query('select * from public.get_researcher_results()')).rejects.toThrow(
+      'Researcher access required',
+    );
+    await pg.exec('rollback to savepoint student_researcher_results_denied');
+    await asUser('', 'anon');
+    await pg.exec('savepoint anonymous_researcher_results_denied');
+    await expect(pg.query('select * from public.get_researcher_results()')).rejects.toThrow(
+      'permission denied',
+    );
+    await pg.exec('rollback to savepoint anonymous_researcher_results_denied');
+  });
+
+  it('counts students while excluding researcher-only, admin-only, and dual-role accounts', async () => {
+    await asUser(researcherId);
+    const results = await pg.query<{ username: string }>(
+      'select username from public.get_researcher_results() order by username',
+    );
+
+    expect(results.rows).toEqual([{ username: 'learner' }]);
+    expect(results.rows).toHaveLength(1);
+  });
+
+  it('records a retried active-time segment only once', async () => {
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', ['lesson-operation-signals']);
+    const segmentId = randomUUID();
+
+    await rpc('add_attempt_active_seconds', [attempt.id, 30, segmentId]);
+    await rpc('add_attempt_active_seconds', [attempt.id, 30, segmentId]);
+
+    await pg.exec('reset role');
+    const recorded = await pg.query<{ active_seconds: number }>(
+      'select active_seconds from public.lesson_attempts where id=$1',
+      [attempt.id],
+    );
+    expect(recorded.rows[0].active_seconds).toBe(30);
+    const segments = await pg.query<{ count: number }>(
+      'select count(*)::int as count from public.lesson_active_time_segments where attempt_id=$1',
+      [attempt.id],
+    );
+    expect(segments.rows[0].count).toBe(1);
   });
 });

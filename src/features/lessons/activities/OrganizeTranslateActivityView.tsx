@@ -2,27 +2,34 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { OrganizeTranslateActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
-import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function OrganizeTranslateActivityView({
   activity,
   submitted,
+  pendingAnswer,
   onSubmit,
   onHintVisibilityChange,
 }: {
   activity: OrganizeTranslateActivity;
   submitted?: SubmittedActivityAnswer;
+  pendingAnswer?: string[];
   onSubmit: (answer: string[]) => Promise<void>;
   onHintVisibilityChange?: (visible: boolean) => void;
 }) {
-  const submittedSequence = Array.isArray(submitted?.answer) ? submitted.answer : null;
+  const submittedSequence = Array.isArray(submitted?.answer)
+    ? submitted.answer
+    : (pendingAnswer ?? null);
   const [sequence, setSequence] = useState<string[]>(submittedSequence ?? []);
   const [hintVisible, setHintVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const tokenById = new Map(activity.tokens.map((token) => [token.id, token]));
   const available = activity.tokens.filter((token) => !sequence.includes(token.id));
   const submit = async () => {
-    if (sequence.length !== activity.tokens.length || submitted) return;
+    if (sequence.length !== activity.tokens.length || submitted || pendingAnswer) return;
     setSaving(true);
     try {
       await onSubmit(sequence);
@@ -65,18 +72,19 @@ export function OrganizeTranslateActivityView({
             <button
               key={tokenId}
               className="selected-token"
-              disabled={Boolean(submitted)}
+              disabled={Boolean(submitted || pendingAnswer)}
               onClick={() =>
                 setSequence((current) => current.filter((_, itemIndex) => itemIndex !== index))
               }
               aria-label={`Remove ${tokenById.get(tokenId)?.label}`}
             >
-              {tokenById.get(tokenId)?.label} {!submitted && <span aria-hidden="true">×</span>}
+              {tokenById.get(tokenId)?.label}{' '}
+              {!submitted && !pendingAnswer && <span aria-hidden="true">×</span>}
             </button>
           ))}
         </div>
       </section>
-      {!submitted && (
+      {!submitted && !pendingAnswer && (
         <>
           <div className="available-token-list" aria-label="Available phrase tokens">
             {available.map((token) => (
@@ -119,7 +127,7 @@ export function OrganizeTranslateActivityView({
           </div>
         </>
       )}
-      {hintVisible && !submitted && (
+      {hintVisible && !submitted && !pendingAnswer && (
         <p className="activity-hint" role="status">
           <strong>Hint:</strong> {activity.hint?.body}
         </p>

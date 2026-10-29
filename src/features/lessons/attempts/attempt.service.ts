@@ -86,6 +86,7 @@ export async function recordAttemptActiveSeconds(
   _database: AltrasDatabase,
   attemptId: string,
   seconds: number,
+  segmentId: string,
 ): Promise<void> {
-  await recordOnlineActiveSeconds(attemptId, seconds);
+  await recordOnlineActiveSeconds(attemptId, seconds, segmentId);
 }

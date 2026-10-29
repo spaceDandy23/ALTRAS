@@ -94,6 +94,64 @@ describe('main menu loading failures', () => {
     expect(selectHomeLesson(entries, null)?.lesson.id).toBe(first.id);
   });
 
+  it('does not select an active attempt after its lesson leaves the catalog', () => {
+    const [removed, available] = packagedContent.lessons;
+    const staleAttempt: LessonAttempt = {
+      id: '10000000-0000-4000-8000-000000000099',
+      userId,
+      lessonId: removed.id,
+      contentVersion: removed.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: [],
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+    };
+
+    expect(
+      selectHomeLesson(
+        [{ lesson: available, progress: progress(available.id, 'available') }],
+        staleAttempt,
+      )?.lesson.id,
+    ).toBe(available.id);
+  });
+
+  it('shows the empty-catalog state without generating a lesson link', async () => {
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [],
+    });
+    vi.mocked(getTotalXp).mockResolvedValue(0);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'student',
+        displayName: 'Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    render(
+      <MemoryRouter>
+        <MainMenuPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'No published lessons yet' })).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: /Start|Continue|Review lesson/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('uses needs-retry copy with the matching retry action for an uncleared attempt', async () => {
     const [first, second] = packagedContent.lessons;
     vi.mocked(getLessonHubData).mockResolvedValue({

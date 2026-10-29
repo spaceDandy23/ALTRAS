@@ -50,8 +50,8 @@ describe('online lesson attempt mapping', () => {
   it('blocks researchers before writing participant attempt activity', async () => {
     useResearcherAccessStore.setState({ status: 'authorized', userId: crypto.randomUUID() });
 
-    await expect(recordOnlineActiveSeconds(crypto.randomUUID(), 10)).rejects.toThrow(
-      'Researcher accounts cannot create participant learning records.',
-    );
+    await expect(
+      recordOnlineActiveSeconds(crypto.randomUUID(), 10, crypto.randomUUID()),
+    ).rejects.toThrow('Researcher accounts cannot create participant learning records.');
   });
 });

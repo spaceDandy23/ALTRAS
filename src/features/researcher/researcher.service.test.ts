@@ -16,6 +16,7 @@ const participant = (
   lessonsAvailable = 2,
 ): ResearcherParticipantResult => ({
   participantCode,
+  username: `student-${participantCode.slice(-2)}`,
   preTestStatus: preTestScore === null ? 'not_started' : 'completed',
   preTestScore,
   preTestCompletedAt: preTestScore === null ? null : 1,
@@ -77,14 +78,44 @@ describe('researcher results mapping and summary', () => {
   it('calculates lesson completion, score, and attempt summaries from authorized results', () => {
     const first = participant('ALT-8F21C4A1', 40, 70);
     const second = participant('ALT-8F21C4A2', 50, null);
-    first.lessonResults = [{ lessonId: 'lesson-1', status: 'cleared', bestScore: 90, latestScore: 90, attemptCount: 2, completedAt: 3, activeSeconds: 60 }];
-    second.lessonResults = [{ lessonId: 'lesson-1', status: 'in-progress', bestScore: 40, latestScore: 40, attemptCount: 1, completedAt: null, activeSeconds: 30 }];
-    expect(calculateLessonSummaries([first, second])).toEqual([{ lessonId: 'lesson-1', studentsStarted: 2, studentsCompleted: 1, completionRate: 50, averageScore: 90, averageAttempts: 1.5 }]);
+    first.lessonResults = [
+      {
+        lessonId: 'lesson-1',
+        status: 'cleared',
+        bestScore: 90,
+        latestScore: 90,
+        attemptCount: 2,
+        completedAt: 3,
+        activeSeconds: 60,
+      },
+    ];
+    second.lessonResults = [
+      {
+        lessonId: 'lesson-1',
+        status: 'in-progress',
+        bestScore: 40,
+        latestScore: 40,
+        attemptCount: 1,
+        completedAt: null,
+        activeSeconds: 30,
+      },
+    ];
+    expect(calculateLessonSummaries([first, second])).toEqual([
+      {
+        lessonId: 'lesson-1',
+        studentsStarted: 2,
+        studentsCompleted: 1,
+        completionRate: 50,
+        averageScore: 90,
+        averageAttempts: 1.5,
+      },
+    ]);
   });
 
-  it('maps only the anonymous fields returned by the researcher RPC', () => {
+  it('maps the authorized participant code and username without exposing other profile fields', () => {
     const result = toResearcherParticipantResult({
       participant_code: 'ALT-8F21C4A1',
+      username: 'username123',
       pre_test_status: 'completed',
       pre_test_score: 75,
       pre_test_completed_at: '2026-08-31T10:00:00.000Z',
@@ -113,6 +144,7 @@ describe('researcher results mapping and summary', () => {
 
     expect(result).toMatchObject({
       participantCode: 'ALT-8F21C4A1',
+      username: 'username123',
       preTestScore: 75,
       lessonResults: [{ lessonId: 'lesson-1', bestScore: 100 }],
     });

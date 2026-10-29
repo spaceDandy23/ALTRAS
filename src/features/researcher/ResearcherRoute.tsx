@@ -21,14 +21,14 @@ export function ResearcherRoute({ children }: { children: ReactNode }) {
   if (status === 'denied') {
     return (
       <main className="researcher-access-state">
-      <section className="researcher-state panel" aria-labelledby="researcher-access-title">
-        <p className="researcher-kicker">Protected research area</p>
-        <h1 id="researcher-access-title">Researcher access required</h1>
-        <p>
-          This account is not authorized to view anonymized participant results. No research data
-          has been loaded.
-        </p>
-      </section>
+        <section className="researcher-state panel" aria-labelledby="researcher-access-title">
+          <p className="researcher-kicker">Protected research area</p>
+          <h1 id="researcher-access-title">Researcher access required</h1>
+          <p>
+            This account is not authorized to view participant results. No research data has been
+            loaded.
+          </p>
+        </section>
       </main>
     );
   }
@@ -36,12 +36,12 @@ export function ResearcherRoute({ children }: { children: ReactNode }) {
   if (status === 'error') {
     return (
       <main className="researcher-access-state">
-      <section className="researcher-state panel" aria-labelledby="researcher-access-error-title">
-        <p className="researcher-kicker">Protected research area</p>
-        <h1 id="researcher-access-error-title">We couldnâ€™t verify access</h1>
-        <p>No participant results have been loaded. Check the connection and try again.</p>
-        <Button onClick={() => user && void checkAccess(user.id)}>Try again</Button>
-      </section>
+        <section className="researcher-state panel" aria-labelledby="researcher-access-error-title">
+          <p className="researcher-kicker">Protected research area</p>
+          <h1 id="researcher-access-error-title">We couldnâ€™t verify access</h1>
+          <p>No participant results have been loaded. Check the connection and try again.</p>
+          <Button onClick={() => user && void checkAccess(user.id)}>Try again</Button>
+        </section>
       </main>
     );
   }

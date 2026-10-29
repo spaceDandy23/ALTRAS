@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { grantNewUserAccess } from './provisioning.ts';
 
 const allowedOrigins = new Set(
   (Deno.env.get('ALTRAS_ALLOWED_ORIGINS') ?? '')
@@ -114,29 +115,40 @@ Deno.serve(async (request: Request) => {
       if (error || !data.user)
         return response(400, { error: error?.message || 'Unable to provision account.' }, origin);
 
-      if (body.researcher === true) {
-        const { error: grantError } = await userClient.rpc('admin_set_researcher_access', {
-          p_user_id: data.user.id,
-          p_enabled: true,
+      try {
+        await grantNewUserAccess({
+          researcher: body.researcher === true,
+          admin: body.admin === true,
+          setResearcherAccess: async (enabled) => {
+            const { error: grantError } = await userClient.rpc('admin_set_researcher_access', {
+              p_user_id: data.user.id,
+              p_enabled: enabled,
+            });
+            if (grantError) throw grantError;
+          },
+          setAdminAccess: async (enabled) => {
+            const { error: grantError } = await userClient.rpc('admin_set_admin_access', {
+              p_user_id: data.user.id,
+              p_enabled: enabled,
+            });
+            if (grantError) throw grantError;
+          },
+          deleteUser: async () => {
+            const { error: deleteError } = await adminClient.auth.admin.deleteUser(data.user.id);
+            if (deleteError) throw deleteError;
+          },
         });
-        if (grantError)
-          return response(
-            500,
-            { error: 'Account created, but researcher access could not be granted.' },
-            origin,
-          );
-      }
-      if (body.admin === true) {
-        const { error: grantError } = await userClient.rpc('admin_set_admin_access', {
-          p_user_id: data.user.id,
-          p_enabled: true,
-        });
-        if (grantError)
-          return response(
-            500,
-            { error: 'Account created, but admin access could not be granted.' },
-            origin,
-          );
+      } catch (provisioningError) {
+        return response(
+          500,
+          {
+            error:
+              provisioningError instanceof Error
+                ? provisioningError.message
+                : 'Account provisioning failed.',
+          },
+          origin,
+        );
       }
       return response(
         201,

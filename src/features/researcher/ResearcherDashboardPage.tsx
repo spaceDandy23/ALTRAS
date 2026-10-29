@@ -31,7 +31,7 @@ export function ResearcherDashboardPage() {
         <div>
           <p className="researcher-kicker">Research dashboard</p>
           <h1 id="research-dashboard-title">Study overview</h1>
-          <p>High-level anonymized assessment outcomes and learning progress.</p>
+          <p>High-level authorized participant outcomes and learning progress.</p>
         </div>
       </header>
       {participants.length === 0 ? (

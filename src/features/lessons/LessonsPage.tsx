@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageLoadError } from '@/components/ui/PageLoadError';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -16,20 +17,47 @@ export function LessonsPage() {
   const contentStatus = useContentStore((state) => state.status);
   const [hub, setHub] = useState<LessonHubData | null>(null);
   const [totalXp, setTotalXp] = useState(0);
+  const [loadError, setLoadError] = useState('');
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');
+  const loadKey = `${user?.id ?? 'guest'}:${loadRevision}`;
 
   useEffect(() => {
     if (!user || contentStatus !== 'ready') return;
-    void Promise.all([getLessonHubData(db, user.id), getTotalXp(db, user.id)]).then(
-      ([data, xp]) => {
+    let active = true;
+    void Promise.all([getLessonHubData(db, user.id), getTotalXp(db, user.id)])
+      .then(([data, xp]) => {
+        if (!active) return;
         setHub(data);
         setTotalXp(xp);
-      },
+        setLoadError('');
+        setLoadedFor(loadKey);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadError('Your lesson path could not be loaded.');
+        setLoadedFor(loadKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [contentStatus, loadKey, user]);
+
+  if (loadedFor === loadKey && loadError) {
+    return (
+      <ContentState>
+        <PageLoadError
+          title="Lessons unavailable"
+          message={loadError}
+          onRetry={() => setLoadRevision((revision) => revision + 1)}
+        />
+      </ContentState>
     );
-  }, [contentStatus, user]);
+  }
 
   return (
     <ContentState>
-      {!hub ? (
+      {loadedFor !== loadKey || !hub ? (
         <LoadingState variant="page" message="Loading your lesson path…" />
       ) : (
         <div className="standard-page lesson-hub page-enter">
@@ -49,6 +77,12 @@ export function LessonsPage() {
                 <Link to="/lessons/almanac">Almanac</Link>
               </div>
             </section>
+            {hub.entries.length === 0 && (
+              <section className="panel empty-state" aria-labelledby="empty-lessons-title">
+                <h2 id="empty-lessons-title">No lessons are currently available</h2>
+                <p>Your saved progress remains available when lessons return.</p>
+              </section>
+            )}
             <ol className="lesson-path" aria-label="Lesson sequence">
               {hub.entries.map(({ lesson, progress }, index) => {
                 const displayStatus = resolveLessonDisplayStatus(progress);

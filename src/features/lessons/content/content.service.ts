@@ -116,7 +116,7 @@ export async function initializeContent(database: AltrasDatabase): Promise<void>
     'rw',
     [database.sections, database.units, database.lessons, database.lessonItems],
     async () => {
-      // Remove the old packaged key cache; attempts, progress and assessment drafts are untouched.
+      // Remove the old packaged key cache; attempts, progress, and local drafts are untouched.
       await database.lessons.clear();
       await database.lessonItems.clear();
       await database.sections.bulkPut(catalogShell.sections);

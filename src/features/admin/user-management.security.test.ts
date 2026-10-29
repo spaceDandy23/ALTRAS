@@ -21,7 +21,7 @@ describe('Admin User Management security boundaries', () => {
     expect(edgeFunction).toContain("Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')");
     expect(edgeFunction).toContain('adminClient.auth.admin.createUser');
     expect(edgeFunction).toContain('adminClient.auth.admin.updateUserById');
-    expect(edgeFunction).not.toContain('deleteUser');
+    expect(edgeFunction).toContain('adminClient.auth.admin.deleteUser');
   });
   it('uses supported Auth banning and unbanning without password or token output', () => {
     expect(edgeFunction).toContain("ban_duration: body.banned ? '876000h' : 'none'");
