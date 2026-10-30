@@ -77,7 +77,7 @@ describe('audio manager', () => {
     expect(howlInstances).toHaveLength(1);
     expect(howlInstances[0].options).toMatchObject({
       loop: true,
-      src: ['/audio/music/main-theme.mp3'],
+      src: ['/audio/music/main-theme.wav'],
     });
     expect(howlInstances[0].play).toHaveBeenCalledTimes(1);
   });

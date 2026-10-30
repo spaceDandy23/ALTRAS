@@ -1,6 +1,6 @@
 export const AUDIO_ASSETS = {
   music: {
-    main: '/audio/music/main-theme.mp3',
+    main: '/audio/music/main-theme.wav',
   },
   sfx: {
     click: '/audio/sfx/click.wav',
