@@ -9,7 +9,8 @@ export function evaluateActivity(activity: LessonActivity, answer: ActivityAnswe
 
   return (
     Array.isArray(answer) &&
+    activity.correctTokenSequence !== undefined &&
     answer.length === activity.correctTokenSequence.length &&
-    answer.every((tokenId, index) => tokenId === activity.correctTokenSequence[index])
+    answer.every((tokenId, index) => tokenId === activity.correctTokenSequence?.[index])
   );
 }

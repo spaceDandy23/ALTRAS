@@ -22,7 +22,7 @@ export function AuthFrame({ children }: { children: ReactNode }) {
         </div>
         {children}
         <p className="local-account-note">
-          <span aria-hidden="true">⌂</span> Accounts and learning data stay on this computer.
+          <span aria-hidden="true">↻</span> Accounts and learning data sync across supported devices.
         </p>
       </section>
     </main>

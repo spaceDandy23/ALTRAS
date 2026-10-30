@@ -5,6 +5,8 @@ import { packagedContent } from '../content/packaged-content';
 import { FindWordActivityView } from './FindWordActivityView';
 import { OrganizeTranslateActivityView } from './OrganizeTranslateActivityView';
 
+vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
+
 describe('accessible lesson activity interactions', () => {
   it('allows keyboard choice selection and requires explicit Find-the-Word submission', async () => {
     const user = userEvent.setup();
@@ -13,7 +15,19 @@ describe('accessible lesson activity interactions', () => {
     );
     if (!activity || activity.type !== 'find-word') throw new Error('Missing fixture.');
     const onSubmit = vi.fn(async () => undefined);
-    render(<FindWordActivityView activity={activity} onSubmit={onSubmit} />);
+    const onHintVisibilityChange = vi.fn();
+    render(
+      <FindWordActivityView
+        activity={activity}
+        onSubmit={onSubmit}
+        onHintVisibilityChange={onHintVisibilityChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Show hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Hide hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(false);
 
     const correct = screen.getByRole('radio', { name: 'sum' });
     correct.focus();
@@ -31,7 +45,19 @@ describe('accessible lesson activity interactions', () => {
     );
     if (!activity || activity.type !== 'organize-translate') throw new Error('Missing fixture.');
     const onSubmit = vi.fn(async () => undefined);
-    render(<OrganizeTranslateActivityView activity={activity} onSubmit={onSubmit} />);
+    const onHintVisibilityChange = vi.fn();
+    render(
+      <OrganizeTranslateActivityView
+        activity={activity}
+        onSubmit={onSubmit}
+        onHintVisibilityChange={onHintVisibilityChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Show hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Hide hint' }));
+    expect(onHintVisibilityChange).toHaveBeenLastCalledWith(false);
 
     const firstToken = screen.getByRole('button', { name: 'a number' });
     firstToken.focus();
@@ -47,5 +73,20 @@ describe('accessible lesson activity interactions', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Submit translation' }));
     expect(onSubmit).toHaveBeenCalledWith(activity.correctTokenSequence);
+  });
+
+  it('keeps a locally queued answer visible and locked without revealing correctness', () => {
+    const activity = packagedContent.lessons[0].activities.find(
+      (candidate) => candidate.type === 'find-word',
+    );
+    if (!activity || activity.type !== 'find-word') throw new Error('Missing fixture.');
+
+    render(<FindWordActivityView activity={activity} pendingAnswer="sum" onSubmit={vi.fn()} />);
+
+    expect(screen.getByRole('radio', { name: 'sum' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'sum' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Submit answer' })).not.toBeInTheDocument();
+    expect(document.querySelector('.choice-option--correct')).not.toBeInTheDocument();
+    expect(document.querySelector('.choice-option--incorrect')).not.toBeInTheDocument();
   });
 });

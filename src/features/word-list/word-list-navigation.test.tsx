@@ -72,6 +72,10 @@ describe('Word list navigation', () => {
     );
 
     await screen.findByRole('heading', { name: 'Words That Signal Operations' });
+    expect(screen.getByLabelText('Mina, learning companion')).toHaveAttribute(
+      'data-character-state',
+      'greeting',
+    );
     expect(screen.queryByRole('link', { name: 'Almanac' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Word list' })).not.toBeInTheDocument();
   });

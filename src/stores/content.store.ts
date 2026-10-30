@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db } from '@/db/database';
-import { initializePackagedContent } from '@/features/lessons/content/content.service';
+import { initializeContent } from '@/features/lessons/content/content.service';
 
 type ContentStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -17,7 +17,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
     if (get().status === 'loading' || get().status === 'ready') return;
     set({ status: 'loading', error: null });
     try {
-      await initializePackagedContent(db);
+      await initializeContent(db);
       set({ status: 'ready' });
     } catch (error) {
       set({

@@ -319,7 +319,7 @@ try {
   await captureAtBothSizes('phase2.1-login.png');
   await assertNoViewportOverflow('Login');
   await register(firstUsername, 'Manual Learner', true);
-  log('created the first local account');
+  log('created the first Supabase-backed account');
 
   await capture('phase2.1-main-1366x768.png');
   await capture('phase2.1-main-1920x1080.png', 1920, 1080);
@@ -450,8 +450,8 @@ try {
   });
   await send('Page.reload');
   await waitFor(
-    "Boolean(document.querySelector('.result-page--cleared'))",
-    'offline result reload',
+    "Boolean(document.querySelector('.offline-status'))",
+    'offline availability notice',
   );
   await send('Network.emulateNetworkConditions', {
     offline: false,
@@ -459,7 +459,9 @@ try {
     downloadThroughput: -1,
     uploadThroughput: -1,
   });
-  log('completed result and progress survive refresh and offline reopening');
+  await send('Page.reload');
+  await waitFor("Boolean(document.querySelector('.result-page--cleared'))", 'online result reload');
+  log('completed result persists online and disconnected mode is reported clearly');
 
   await navigate(appBase);
   await waitFor("Boolean(document.querySelector('.home-start'))", 'home after lesson clear');
@@ -549,8 +551,8 @@ try {
   });
   await send('Page.reload');
   await waitFor(
-    "Boolean(document.querySelector('.result-page--cleared'))",
-    'offline Lesson 2 result reload',
+    "Boolean(document.querySelector('.offline-status'))",
+    'offline Lesson 2 availability notice',
   );
   await send('Network.emulateNetworkConditions', {
     offline: false,
@@ -558,7 +560,12 @@ try {
     downloadThroughput: -1,
     uploadThroughput: -1,
   });
-  log('Lesson 2 retry, clear, result actions, persistence, and offline reopening work');
+  await send('Page.reload');
+  await waitFor(
+    "Boolean(document.querySelector('.result-page--cleared'))",
+    'online Lesson 2 result reload',
+  );
+  log('Lesson 2 retry, clear, result actions, and online persistence work');
 
   await logout();
   await register(secondUsername, 'Second Learner');
@@ -577,7 +584,7 @@ try {
   );
   if (!restoredLessonTwo.includes('Cleared') || !restoredLessonTwo.includes('Best score 100%'))
     throw new Error('First user Lesson 2 progress was not restored');
-  log('switching local users keeps Lesson 2 progress isolated and existing login works');
+  log('switching Supabase users keeps Lesson 2 progress isolated and existing login works');
 } finally {
   socket.close();
 }
