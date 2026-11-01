@@ -403,6 +403,7 @@ h3 {
 }
 
 .offline-status__dot {
+  flex: 0 0 7px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -416,6 +417,12 @@ h3 {
 
 .offline-status--active .offline-status__dot {
   background: var(--yellow);
+}
+
+.lesson-sync-status {
+  color: var(--blue);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 /* Account access */
@@ -2372,6 +2379,40 @@ a .lesson-node:hover {
 
 .lesson-player__stage:has(.answer-feedback) {
   grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.chapter-teaching {
+  display: grid;
+  width: min(900px, 100%);
+  min-width: 0;
+  gap: 1rem;
+  margin-inline: auto;
+  padding: clamp(1rem, 4vw, 2rem);
+}
+
+.chapter-teaching__content {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.chapter-teaching__block {
+  min-width: 0;
+  border-left: 3px solid var(--blue);
+  padding: 0.8rem 1rem;
+  background: var(--surface-soft);
+  overflow-wrap: anywhere;
+}
+
+.chapter-teaching__block--warning {
+  border-left-color: var(--yellow);
+}
+
+.chapter-teaching__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .activity-card {
@@ -4559,6 +4600,8 @@ a.almanac-option:hover {
   .auth-card__topline {
     top: 1.25rem;
     width: calc(100% - 2.5rem);
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
   .auth-form--grid {
@@ -4572,10 +4615,17 @@ a.almanac-option:hover {
 
   .app-header {
     min-height: 62px;
+    flex-wrap: wrap;
+    gap: 0.55rem 1rem;
     padding: 0.55rem 1rem;
   }
 
   .app-header__tools {
+    min-width: 0;
+    order: 2;
+    flex: 1 1 20rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.45rem;
   }
 
@@ -4615,9 +4665,20 @@ a.almanac-option:hover {
     width: min(220px, calc(100vw - 2rem));
   }
 
-  .offline-status {
-    max-width: 110px;
+  .app-header > .offline-status {
+    min-width: 0;
+    max-width: none;
+    order: 3;
+    flex: 1 1 100%;
     font-size: 0.62rem;
+    overflow-wrap: anywhere;
+  }
+
+  .app-header > .lesson-sync-status {
+    min-width: 0;
+    order: 3;
+    flex: 1 1 100%;
+    text-align: right;
   }
 
   .app-content {

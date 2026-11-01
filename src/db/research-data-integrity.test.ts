@@ -148,7 +148,7 @@ describe('research data integrity migration', () => {
   });
 
   it('restores assessment answers only through the safe projection RPC', () => {
-    expect(assessmentService).toContain(".rpc('get_assessment_attempt'");
+    expect(assessmentService).toMatch(/\.rpc\(\s*'get_assessment_attempt'/);
     expect(assessmentService).not.toContain(".from('assessment_attempts')");
   });
 

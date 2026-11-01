@@ -7,6 +7,10 @@ import {
   type AssessmentQuestion,
 } from '@/types/assessment';
 import { db, type AltrasDatabase } from '@/db/database';
+import {
+  lessonDraftId,
+  queueLessonStageTransition,
+} from '@/features/lessons/attempts/lesson-draft.service';
 
 export const ASSESSMENT_SYNC_RETRY_DELAYS = [1_000, 2_000, 5_000, 10_000, 30_000] as const;
 export const assessmentDraftId = (userId: string, kind: AssessmentKind, attemptId: string) =>
@@ -58,6 +62,8 @@ export function createAssessmentDraft(
     userId: attempt.userId,
     assessment: attempt.assessment,
     attemptId: attempt.id,
+    lessonId: attempt.lessonId ?? undefined,
+    lessonAttemptId: attempt.lessonAttemptId ?? undefined,
     startedAt: attempt.startedAt,
     contentVersion: attempt.contentVersion,
     expectedQuestionCount: attempt.expectedQuestionCount,
@@ -70,6 +76,48 @@ export function createAssessmentDraft(
     updatedAt: Date.now(),
     syncStatus: 'synced',
   };
+}
+
+export function createOfflineAssessmentDraft(
+  userId: string,
+  kind: AssessmentKind,
+  lessonId: string,
+  lessonAttemptId: string,
+  questions: AssessmentQuestion[],
+  now = Date.now(),
+): AssessmentDraft {
+  const contentVersion = questions[0]?.contentVersion;
+  if (
+    !contentVersion ||
+    questions.length === 0 ||
+    questions.some(
+      (question) => question.assessment !== kind || question.contentVersion !== contentVersion,
+    )
+  ) {
+    throw new Error('The cached test questions are incomplete. Reconnect and try again.');
+  }
+  const draft = createAssessmentDraft(
+    {
+      id: crypto.randomUUID(),
+      userId,
+      assessment: kind,
+      status: 'active',
+      startedAt: now,
+      submittedAt: null,
+      score: null,
+      completionSeconds: null,
+      contentVersion,
+      expectedQuestionCount: questions.length,
+      answers: [],
+      acceptedRevision: 0,
+      acceptedMutationId: null,
+      submittedRevision: null,
+      lessonId,
+      lessonAttemptId,
+    },
+    questions,
+  );
+  return { ...draft, pendingStart: true, syncStatus: 'pending_start' };
 }
 
 export function draftToAttempt(draft: AssessmentDraft): AssessmentAttempt {
@@ -86,6 +134,8 @@ export function draftToAttempt(draft: AssessmentDraft): AssessmentAttempt {
     expectedQuestionCount: draft.expectedQuestionCount,
     answers: draft.answers,
     acceptedRevision: draft.syncedRevision,
+    lessonId: draft.lessonId ?? null,
+    lessonAttemptId: draft.lessonAttemptId ?? null,
   };
 }
 
@@ -94,12 +144,14 @@ export function validateLocalDraft(draft: AssessmentDraft, userId: string, kind:
     draft.userId !== userId ||
     draft.assessment !== kind ||
     draft.id !== assessmentDraftId(userId, kind, draft.attemptId) ||
+    Boolean(draft.lessonId) !== Boolean(draft.lessonAttemptId) ||
     !Number.isSafeInteger(draft.revision) ||
     !Number.isSafeInteger(draft.syncedRevision) ||
     draft.syncedRevision < 0 ||
     draft.revision < draft.syncedRevision ||
     !Number.isInteger(draft.currentQuestionIndex) ||
-    !['synced', 'pending', 'pending_submission'].includes(draft.syncStatus)
+    !['pending_start', 'synced', 'pending', 'pending_submission'].includes(draft.syncStatus) ||
+    (draft.pendingStart === true && (!draft.lessonId || !draft.lessonAttemptId))
   ) {
     throw new Error('The local test draft is invalid or belongs to another session.');
   }
@@ -149,6 +201,28 @@ export function markDraftPendingSubmission(draft: AssessmentDraft): AssessmentDr
   };
 }
 
+export async function submitLocalLessonAssessment(
+  draft: AssessmentDraft,
+  database: AltrasDatabase = db,
+): Promise<AssessmentDraft> {
+  validateLocalDraft(draft, draft.userId, draft.assessment);
+  if (!draft.lessonId || !draft.lessonAttemptId)
+    throw new Error('This is not a lesson assessment.');
+  if (draft.answers.length !== draft.expectedQuestionCount)
+    throw new Error('Answer every question before submitting.');
+  const pending = markDraftPendingSubmission(draft);
+  await database.transaction('rw', database.assessmentDrafts, database.lessonDrafts, async () => {
+    await saveAssessmentDraft(pending, database);
+    await queueLessonStageTransition(
+      lessonDraftId(draft.userId, draft.lessonId!, draft.lessonAttemptId!),
+      database,
+      Date.now(),
+      draft.assessment,
+    );
+  });
+  return pending;
+}
+
 export async function saveAssessmentDraft(draft: AssessmentDraft, database: AltrasDatabase = db) {
   await database.transaction('rw', database.assessmentDrafts, async () => {
     const previous = await database.assessmentDrafts.get(draft.id);
@@ -161,6 +235,25 @@ export async function saveAssessmentDraft(draft: AssessmentDraft, database: Altr
     ) {
       throw new Error('Another tab changed the local draft. Your answers remain in this window.');
     }
+    if (previous?.syncStatus === 'pending_submission') {
+      if (previous.revision !== draft.revision || previous.mutationId !== draft.mutationId)
+        throw new Error('This test has already been submitted on this device.');
+      draft = { ...draft, syncStatus: 'pending_submission' };
+    }
+    if (previous) {
+      // A local save must not roll back an acknowledgement from the shared worker.
+      const syncedRevision = Math.max(previous.syncedRevision, draft.syncedRevision);
+      const pendingSnapshot = draft.pendingSnapshot ?? previous.pendingSnapshot;
+      draft = {
+        ...draft,
+        syncedRevision,
+        pendingStart: previous.pendingStart === false ? false : draft.pendingStart,
+        pendingSnapshot:
+          pendingSnapshot && pendingSnapshot.revision > syncedRevision
+            ? pendingSnapshot
+            : undefined,
+      };
+    }
     await database.assessmentDrafts.put(draft);
   });
 }
@@ -168,16 +261,83 @@ export async function getAssessmentDraft(
   userId: string,
   kind: AssessmentKind,
   database: AltrasDatabase = db,
+  lessonAttemptId?: string,
 ): Promise<AssessmentDraft | null> {
   const drafts = await database.assessmentDrafts
     .where('[userId+assessment]')
     .equals([userId, kind])
     .toArray();
-  if (drafts.length > 1)
+  const scoped = drafts.filter((draft) => draft.lessonAttemptId === lessonAttemptId);
+  if (scoped.length > 1)
     throw new Error('Multiple local attempts were found. The local drafts have been preserved.');
-  const draft = drafts[0] ?? null;
+  const draft = scoped[0] ?? null;
   if (draft) validateLocalDraft(draft, userId, kind);
   return draft;
+}
+
+export interface AssessmentDraftDiscovery {
+  drafts: AssessmentDraft[];
+  invalidDraftIds: string[];
+}
+
+export async function discoverPendingAssessmentDrafts(
+  userId: string,
+  database: AltrasDatabase = db,
+): Promise<AssessmentDraftDiscovery> {
+  const stored = await database.assessmentDrafts.where('userId').equals(userId).toArray();
+  const drafts: AssessmentDraft[] = [];
+  const invalidDraftIds: string[] = [];
+  for (const draft of stored) {
+    try {
+      validateLocalDraft(draft, userId, draft.assessment);
+      if (draft.pendingStart || draft.syncStatus !== 'synced') drafts.push(draft);
+    } catch {
+      invalidDraftIds.push(draft.id);
+    }
+  }
+  return { drafts, invalidDraftIds };
+}
+
+export async function acknowledgeAssessmentStart(
+  snapshot: AssessmentDraft,
+  server: AssessmentAttempt,
+  database: AltrasDatabase = db,
+): Promise<AssessmentDraft> {
+  if (
+    server.userId !== snapshot.userId ||
+    server.assessment !== snapshot.assessment ||
+    server.lessonId !== snapshot.lessonId ||
+    server.lessonAttemptId !== snapshot.lessonAttemptId ||
+    server.contentVersion !== snapshot.contentVersion
+  ) {
+    throw new Error('The started assessment does not match the saved test.');
+  }
+  return database.transaction('rw', database.assessmentDrafts, async () => {
+    const current = await database.assessmentDrafts.get(snapshot.id);
+    if (!current) throw new Error('The saved test is unavailable.');
+    const next: AssessmentDraft = {
+      ...current,
+      id: assessmentDraftId(current.userId, current.assessment, server.id),
+      attemptId: server.id,
+      startedAt: server.startedAt,
+      pendingStart: false,
+      syncedRevision: server.acceptedRevision ?? 0,
+      syncStatus:
+        current.syncStatus === 'pending_submission'
+          ? 'pending_submission'
+          : current.revision > (server.acceptedRevision ?? 0)
+            ? 'pending'
+            : 'synced',
+    };
+    validateLocalDraft(next, next.userId, next.assessment);
+    if (next.id !== current.id) {
+      const collision = await database.assessmentDrafts.get(next.id);
+      if (collision) throw new Error('Another saved copy of this test already exists.');
+      await database.assessmentDrafts.delete(current.id);
+    }
+    await database.assessmentDrafts.put(next);
+    return next;
+  });
 }
 export async function deleteAssessmentDraft(
   id: string,
@@ -216,7 +376,11 @@ export function reconcileAssessmentDraft(
   const clean = createAssessmentDraft(server, questions, local?.currentQuestionIndex ?? 0);
   if (!local) return clean;
   validateLocalDraft(local, server.userId, server.assessment);
-  if (local.attemptId !== server.id || local.contentVersion !== server.contentVersion)
+  if (
+    local.attemptId !== server.id ||
+    local.contentVersion !== server.contentVersion ||
+    local.lessonAttemptId !== (server.lessonAttemptId ?? undefined)
+  )
     throw new Error('The local draft belongs to a different attempt or content version.');
   if (!server.acceptedMutationId && clean.revision === local.revision)
     clean.mutationId = local.mutationId ?? clean.mutationId;
@@ -241,7 +405,11 @@ export function reconcileAssessmentDraft(
 }
 
 interface SynchronizerOptions {
+  isCurrent?: () => boolean;
+  attemptId?: string;
   load: () => Promise<AssessmentDraft | null>;
+  start?: (draft: AssessmentDraft) => Promise<AssessmentAttempt>;
+  acknowledgeStart?: (snapshot: AssessmentDraft, server: AssessmentAttempt) => Promise<void>;
   read: (draft: AssessmentDraft) => Promise<AssessmentAttempt | null>;
   sync: (draft: AssessmentDraft) => Promise<AssessmentAttempt>;
   beforeSync?: (snapshot: AssessmentDraft) => Promise<void>;
@@ -252,12 +420,17 @@ interface SynchronizerOptions {
   retryDelays?: readonly number[];
 }
 
+const assessmentSyncLocks = new Map<string, Promise<void>>();
+
 export class AssessmentDraftSynchronizer {
   private running: Promise<void> | null = null;
   private requested = false;
   private retryIndex = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private disposed = false;
+  private stopped = false;
+  private get disposed() {
+    return this.stopped || this.options.isCurrent?.() === false;
+  }
   constructor(private readonly options: SynchronizerOptions) {}
   private clearRetry() {
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
@@ -270,11 +443,23 @@ export class AssessmentDraftSynchronizer {
     this.requested = true;
     if (!this.running) {
       this.running = Promise.resolve()
-        .then(() => this.drain())
+        .then(() => this.runExclusive())
         .finally(() => {
           this.running = null;
           if (this.requested && !this.disposed) this.requestSync(false);
         });
+    }
+  }
+  private async runExclusive() {
+    const key = this.options.attemptId;
+    if (!key) return this.drain();
+    const previous = assessmentSyncLocks.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(() => this.drain());
+    assessmentSyncLocks.set(key, current);
+    try {
+      await current;
+    } finally {
+      if (assessmentSyncLocks.get(key) === current) assessmentSyncLocks.delete(key);
     }
   }
   async flush() {
@@ -282,7 +467,7 @@ export class AssessmentDraftSynchronizer {
     while (this.running) await this.running;
   }
   dispose() {
-    this.disposed = true;
+    this.stopped = true;
     this.requested = false;
     this.clearRetry();
   }
@@ -292,10 +477,25 @@ export class AssessmentDraftSynchronizer {
       try {
         const snapshot = await this.options.load();
         if (!snapshot || this.disposed || snapshot.syncStatus === 'synced') continue;
+        if (!navigator.onLine || document.visibilityState === 'hidden') {
+          this.options.onStatus?.('pending');
+          return;
+        }
         this.options.onStatus?.('syncing');
+        if (snapshot.pendingStart) {
+          if (!this.options.start || !this.options.acknowledgeStart) {
+            throw new Error('Offline assessment start synchronization is unavailable.');
+          }
+          const started = await this.options.start(snapshot);
+          if (this.disposed) return;
+          await this.options.acknowledgeStart(snapshot, started);
+          this.retryIndex = 0;
+          this.requested = true;
+          continue;
+        }
         // Every retry starts with status, including an ambiguous completion timeout.
         let server = await this.options.read(snapshot);
-        if (this.disposed) return;
+        if (this.disposed || !navigator.onLine) return;
         if (
           !server ||
           server.id !== snapshot.attemptId ||
@@ -335,7 +535,7 @@ export class AssessmentDraftSynchronizer {
             return;
           }
           await this.options.beforeSync?.(snapshot);
-          if (this.disposed) return;
+          if (this.disposed || !navigator.onLine) return;
           server = await this.options.sync(snapshot);
           if (this.disposed) return;
         }
@@ -352,9 +552,9 @@ export class AssessmentDraftSynchronizer {
           return;
         }
         await this.options.acknowledge(snapshot, server);
-        if (this.disposed) return;
+        if (this.disposed || !navigator.onLine) return;
         const latest = await this.options.load();
-        if (!latest || this.disposed) return;
+        if (!latest || this.disposed || !navigator.onLine) return;
         if (latest.revision !== snapshot.revision || latest.mutationId !== snapshot.mutationId) {
           this.requested = true;
           continue;
@@ -363,6 +563,7 @@ export class AssessmentDraftSynchronizer {
           try {
             server = await this.options.complete(latest);
           } catch (cause) {
+            if (this.disposed || !navigator.onLine) return;
             const recovered = await this.options.read(latest);
             if (recovered?.status !== 'submitted') throw cause;
             server = recovered;
@@ -385,8 +586,14 @@ export class AssessmentDraftSynchronizer {
   private scheduleRetry() {
     this.clearRetry();
     const delays = this.options.retryDelays ?? ASSESSMENT_SYNC_RETRY_DELAYS;
-    const delay = delays[this.retryIndex++];
-    if (delay === undefined || this.disposed) return;
+    if (
+      delays.length === 0 ||
+      this.disposed ||
+      (typeof navigator !== 'undefined' && !navigator.onLine) ||
+      (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+    )
+      return;
+    const delay = delays[this.retryIndex++] ?? 60_000;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.requestSync(false);

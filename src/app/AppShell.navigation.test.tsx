@@ -12,6 +12,9 @@ vi.mock('@/services/audio/audio.manager', () => ({
   setAudioMuted: vi.fn(),
   stopMusic: vi.fn(),
 }));
+vi.mock('@/features/lessons/components/GlobalLessonSyncStatus', () => ({
+  GlobalLessonSyncStatus: () => null,
+}));
 
 import { AppShell } from './AppShell';
 

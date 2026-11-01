@@ -1,6 +1,15 @@
+import 'fake-indexeddb/auto';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AltrasDatabase } from '@/db/database';
+import {
+  createOfflineAssessmentDraft,
+  getAssessmentDraft,
+  markDraftPendingSubmission,
+  saveAssessmentDraft,
+  updateDraftAnswer,
+} from '@/features/assessments/assessment-draft.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import {
@@ -14,22 +23,27 @@ const adminService = vi.hoisted(() => ({ isCurrentUserAdmin: vi.fn() }));
 vi.mock('@/features/admin/lesson-management.service', () => adminService);
 
 const user = {
-  id: '00000000-0000-0000-0000-000000000001',
+  id: '10000000-0000-4000-8000-000000000001',
   normalizedUsername: 'account_test',
   displayName: 'Account Test',
   createdAt: 1,
   lastLoginAt: 1,
 };
 const originalCheckAccess = useResearcherAccessStore.getState().checkAccess;
+const originalCheckAdminAccess = useResearcherAccessStore.getState().checkAdminAccess;
 
 describe('route guards', () => {
   beforeEach(() => {
+    adminService.isCurrentUserAdmin.mockClear();
     adminService.isCurrentUserAdmin.mockResolvedValue(false);
     useAuthStore.setState({ status: 'guest', user: null });
     useResearcherAccessStore.setState({
       status: 'idle',
       userId: null,
+      adminStatus: 'idle',
+      adminUserId: null,
       checkAccess: originalCheckAccess,
+      checkAdminAccess: originalCheckAdminAccess,
     });
   });
 
@@ -367,5 +381,84 @@ describe('route guards', () => {
     );
 
     await waitFor(() => expect(screen.getByText('Student Home application')).toBeInTheDocument());
+  });
+
+  it('lets a previously verified student return to the lesson when admin verification is offline', async () => {
+    useAuthStore.setState({ status: 'authenticated', user });
+    useResearcherAccessStore.setState({ status: 'denied', userId: user.id });
+    const database = new AltrasDatabase(`offline-return-${crypto.randomUUID()}`);
+    const lessonAttemptId = crypto.randomUUID();
+
+    try {
+      const preTest = markDraftPendingSubmission(
+        updateDraftAnswer(
+          createOfflineAssessmentDraft(user.id, 'pre-test', 'lesson-one', lessonAttemptId, [
+            {
+              id: 'pre-test-question',
+              assessment: 'pre-test',
+              displayOrder: 1,
+              prompt: 'Question',
+              choices: [
+                { id: 'answer-a', label: 'Answer A' },
+                { id: 'answer-b', label: 'Answer B' },
+              ],
+              contentVersion: 1,
+              isPlaceholder: false,
+            },
+          ]),
+          'pre-test-question',
+          'answer-a',
+        ),
+      );
+      const firstVisit = render(
+        <MemoryRouter>
+          <StudentRoute>
+            <p>Cached lesson activities</p>
+          </StudentRoute>
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(screen.getByText('Cached lesson activities')).toBeInTheDocument());
+      expect(adminService.isCurrentUserAdmin).toHaveBeenCalledOnce();
+
+      await saveAssessmentDraft(preTest, database);
+      firstVisit.unmount();
+      adminService.isCurrentUserAdmin.mockRejectedValueOnce(new Error('Network unavailable'));
+
+      render(
+        <MemoryRouter>
+          <StudentRoute>
+            <p>Cached lesson activities</p>
+          </StudentRoute>
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByText('Cached lesson activities')).toBeInTheDocument();
+      expect(screen.queryByText('We couldn’t verify this account')).not.toBeInTheDocument();
+      expect(adminService.isCurrentUserAdmin).toHaveBeenCalledOnce();
+      await expect(
+        getAssessmentDraft(user.id, 'pre-test', database, lessonAttemptId),
+      ).resolves.toMatchObject({ syncStatus: 'pending_submission' });
+    } finally {
+      database.close();
+      await database.delete();
+    }
+  });
+
+  it('keeps learning locked when an account has no successful student resolution', async () => {
+    useAuthStore.setState({ status: 'authenticated', user });
+    useResearcherAccessStore.setState({ status: 'denied', userId: user.id });
+    adminService.isCurrentUserAdmin.mockRejectedValueOnce(new Error('Network unavailable'));
+
+    render(
+      <MemoryRouter>
+        <StudentRoute>
+          <p>Student-only learning</p>
+        </StudentRoute>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('We couldn’t verify this account')).toBeInTheDocument();
+    expect(screen.queryByText('Student-only learning')).not.toBeInTheDocument();
   });
 });

@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@supabase/supabase-js';
+import { captureSyncSession, setSyncIdentity } from '@/services/sync-session';
 import { AuthError } from './auth.errors';
 import {
   loginOnlineUser,
   logoutOnlineUser,
   registerOnlineUser,
   restoreOnlineSession,
+  subscribeToOnlineAuthChanges,
 } from './online-auth.service';
 
 const mocks = vi.hoisted(() => ({
@@ -18,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   single: vi.fn(),
   getSession: vi.fn(),
   signOut: vi.fn(),
+  onAuthStateChange: vi.fn(),
 }));
 
 vi.mock('@/services/supabase.client', () => ({
@@ -50,11 +53,52 @@ const metadataFreeManualUser = {
 
 describe('Supabase authentication behavior', () => {
   beforeEach(() => {
+    setSyncIdentity(null);
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.from.mockReturnValue({ select: mocks.select });
     mocks.select.mockReturnValue({ eq: mocks.eq });
     mocks.eq.mockReturnValue({ single: mocks.single });
   });
+
+  it.each(['logout', 'switch'] as const)(
+    'ignores old profile hydration after %s and stops its sync identity immediately',
+    async (action) => {
+      let notify!: (event: string, session: { user: User } | null) => void;
+      mocks.onAuthStateChange.mockImplementation((callback) => {
+        notify = callback;
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      });
+      let resolve!: (value: {
+        data: { username: string; display_name: string };
+        error: null;
+      }) => void;
+      mocks.single.mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      const listener = vi.fn();
+      const stop = subscribeToOnlineAuthChanges(listener);
+      setSyncIdentity(remoteUser.id);
+      const previousSync = captureSyncSession(remoteUser.id);
+      notify('SIGNED_IN', { user: metadataFreeManualUser });
+      const next = { ...remoteUser, id: '00000000-0000-4000-8000-000000000099' };
+      notify(
+        action === 'logout' ? 'SIGNED_OUT' : 'SIGNED_IN',
+        action === 'logout' ? null : { user: next },
+      );
+      expect(previousSync()).toBe(false);
+      expect(captureSyncSession(next.id)()).toBe(false); // Profile/auth bootstrap has not confirmed it.
+      await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce());
+      resolve({ data: { username: 'old_user', display_name: 'Old User' }, error: null });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(listener).toHaveBeenCalledOnce();
+      if (action === 'logout') expect(listener).toHaveBeenCalledWith(null);
+      else expect(listener).toHaveBeenCalledWith(expect.objectContaining({ id: next.id }));
+      stop();
+    },
+  );
 
   it('registers through Supabase and maps the authenticated user', async () => {
     mocks.signUp.mockResolvedValue({ data: { user: remoteUser, session: {} }, error: null });

@@ -30,11 +30,17 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
       <h2>{lesson.title}</h2>
       <p>Preview only — no attempts, progress, XP or streaks are recorded.</p>
       <p>{lesson.shortDescription}</p>
-      {lesson.instructionalContent.map((block) => (
-        <article key={block.id}>
-          <h3>{block.type === 'example' ? block.phrase : block.title}</h3>
-          <p>{block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}</p>
-        </article>
+      {lesson.chapters.map((chapter) => (
+        <section key={chapter.id} aria-labelledby={`${chapter.id}-preview-title`}>
+          <h3 id={`${chapter.id}-preview-title`}>{chapter.title}</h3>
+          {chapter.description && <p>{chapter.description}</p>}
+          {chapter.instructionalContent.map((block) => (
+            <article key={block.id}>
+              <h4>{block.type === 'example' ? block.phrase : block.title}</h4>
+              <p>{block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}</p>
+            </article>
+          ))}
+        </section>
       ))}
       {activity.type === 'find-word' ? (
         <FindWordActivityView
@@ -56,7 +62,7 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
           {answer.isCorrect ? 'Correct.' : 'Not quite.'} {activity.explanation.body}
         </p>
       )}
-      <div className="admin-actions">
+      <div className="admin-actions lesson-preview-navigation">
         <button
           className="button button--quiet"
           disabled={index === 0}

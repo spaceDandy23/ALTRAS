@@ -111,6 +111,20 @@ export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+export const lessonChapterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  displayOrder: z.number().int().positive(),
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(activitySchema),
+});
+
+export const lessonAssessmentFlowSchema = z.object({
+  preTest: z.literal('pre-test').optional(),
+  postTest: z.literal('post-test').optional(),
+});
+
 export const sectionSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -148,6 +162,8 @@ export const lessonSchema = lessonMetadataSchema
   .extend({
     instructionalContent: z.array(instructionalContentBlockSchema),
     activities: z.array(activitySchema),
+    chapters: z.array(lessonChapterSchema).optional(),
+    assessments: lessonAssessmentFlowSchema.optional(),
   })
   .superRefine((lesson, context) => {
     if (lesson.contentStatus === 'playable' && lesson.activities.length === 0) {
@@ -159,6 +175,23 @@ export const lessonSchema = lessonMetadataSchema
     ];
     if (new Set(itemIds).size !== itemIds.length) {
       context.addIssue({ code: 'custom', message: 'Lesson content IDs must be unique.' });
+    }
+    if (lesson.chapters) {
+      const chapterIds = lesson.chapters.map((chapter) => chapter.id);
+      const chapterOrders = lesson.chapters.map((chapter) => chapter.displayOrder);
+      if (new Set(chapterIds).size !== chapterIds.length) {
+        context.addIssue({ code: 'custom', message: 'Chapter IDs must be unique.' });
+      }
+      if (new Set(chapterOrders).size !== chapterOrders.length) {
+        context.addIssue({ code: 'custom', message: 'Chapter order must be unique.' });
+      }
+      const chapterItems = lesson.chapters.flatMap((chapter) => [
+        ...chapter.instructionalContent,
+        ...chapter.activities,
+      ]);
+      if (new Set(chapterItems.map((item) => item.id)).size !== chapterItems.length) {
+        context.addIssue({ code: 'custom', message: 'Chapter content IDs must be unique.' });
+      }
     }
   });
 
@@ -202,9 +235,19 @@ export const publicActivitySchema = z.discriminatedUnion('type', [
     correctTokenSequence: z.array(z.string()).optional(),
   }),
 ]);
+export const publicLessonChapterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  displayOrder: z.number().int().positive(),
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(publicActivitySchema),
+});
 export const publicLessonSchema = lessonMetadataSchema.extend({
   instructionalContent: z.array(instructionalContentBlockSchema),
   activities: z.array(publicActivitySchema).min(1).max(10),
+  chapters: z.array(publicLessonChapterSchema).optional(),
+  assessments: lessonAssessmentFlowSchema.optional(),
 });
 export type FindWordActivity = Extract<z.infer<typeof publicActivitySchema>, { type: 'find-word' }>;
 export type OrganizeTranslateActivity = Extract<
@@ -213,6 +256,7 @@ export type OrganizeTranslateActivity = Extract<
 >;
 export type LessonActivity = z.infer<typeof publicActivitySchema>;
 export type InstructionalContentBlock = z.infer<typeof instructionalContentBlockSchema>;
+export type LessonChapter = z.infer<typeof lessonChapterSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
 export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;

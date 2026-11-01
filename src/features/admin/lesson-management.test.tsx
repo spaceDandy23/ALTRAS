@@ -14,8 +14,11 @@ import {
   MAX_ACTIVITIES,
   MAX_LESSONS,
   newActivity,
+  newChapter,
+  normalizeAuthoredLesson,
   publishManagedLesson,
   saveManagedLesson,
+  totalLessonActivities,
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
@@ -24,7 +27,7 @@ const client = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('@/services/supabase.client', () => ({ getSupabaseClient: () => client }));
 const item = (): ManagedLesson => ({
   lesson_id: packagedContent.lessons[0].id,
-  draft: structuredClone(packagedContent.lessons[0]),
+  draft: normalizeAuthoredLesson(structuredClone(packagedContent.lessons[0])),
   revision: 1,
   published: true,
   published_version: 1,
@@ -79,12 +82,11 @@ describe('Basic Lesson Management editor and preview', () => {
 
     page();
 
-    expect(screen.getByRole('status')).toHaveClass(
-      'loading-state--page',
-      'admin-content-loading',
-    );
+    expect(screen.getByRole('status')).toHaveClass('loading-state--page', 'admin-content-loading');
     expect(screen.getByRole('status')).toHaveTextContent('Loading lessons…');
-    expect(screen.queryByRole('heading', { name: 'Basic Lesson Management' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Basic Lesson Management' }),
+    ).not.toBeInTheDocument();
 
     await act(async () => resolve({ data: [item()], error: null }));
     expect(
@@ -93,11 +95,25 @@ describe('Basic Lesson Management editor and preview', () => {
   });
 
   it('lists metadata and saves a changed draft without publishing it', async () => {
-    const user = userEvent.setup();
+    const row = item();
+    row.draft.chapters[0].activities = [];
+    row.draft.chapters[0].instructionalContent = [];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(
+      async (name: string, args?: { p_lesson: ManagedLesson['draft'] }) => ({
+        error: null,
+        data:
+          name === 'get_admin_lessons'
+            ? [row]
+            : name === 'save_admin_lesson'
+              ? { ...row, draft: args!.p_lesson, revision: 2 }
+              : { ...row, revision: 3 },
+      }),
+    );
     page();
-    await user.click(await screen.findByRole('button', { name: `Edit ${item().draft.title}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
     fireEvent.change(screen.getByLabelText('Lesson title'), { target: { value: 'Updated draft' } });
-    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(await screen.findByText('Draft saved.')).toBeInTheDocument();
     expect(client.rpc).toHaveBeenCalledWith(
       'save_admin_lesson',
@@ -110,22 +126,24 @@ describe('Basic Lesson Management editor and preview', () => {
   });
   it('blocks activity eleven in the editor', async () => {
     const row = item();
-    row.draft.activities = Array.from({ length: 9 }, () => newActivity('find-word'));
+    row.draft.chapters[0].activities = Array.from({ length: 9 }, () => newActivity('find-word'));
+    row.draft = normalizeAuthoredLesson(row.draft);
     client.rpc.mockResolvedValue({ data: [row], error: null });
-    page();
-    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
-    // Avoid a computed-style accessibility-tree traversal of ten full editors in jsdom.
-    const add = screen.getByText('Add activity', { selector: 'button' });
+    const { container } = page();
+    fireEvent.click(await screen.findByText(`Edit ${row.draft.title}`, { selector: 'button' }));
+    const add = screen.getByText('Add activity to Chapter 1', { selector: 'button' });
     fireEvent.click(add);
     expect(add).toBeDisabled();
-    expect(screen.getAllByLabelText('Activity title')).toHaveLength(MAX_ACTIVITIES);
+    expect(container.querySelectorAll('.admin-activity')).toHaveLength(MAX_ACTIVITIES);
     fireEvent.click(add);
-    expect(screen.getAllByLabelText('Activity title')).toHaveLength(MAX_ACTIVITIES);
+    expect(container.querySelectorAll('.admin-activity')).toHaveLength(MAX_ACTIVITIES);
   });
   it('creates a draft, edits, reorders and deletes activities', async () => {
     page();
     fireEvent.click(await screen.findByRole('button', { name: 'Create lesson' }));
-    const add = screen.getByRole('button', { name: 'Add activity' });
+    expect(screen.getByRole('checkbox', { name: 'Require lesson pre-test' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Require lesson post-test' })).toBeChecked();
+    const add = screen.getByRole('button', { name: 'Add activity to Chapter 1' });
     fireEvent.click(add);
     fireEvent.click(add);
     const activities = screen.getAllByLabelText('Activity title');
@@ -135,11 +153,89 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(screen.getAllByLabelText('Activity title')[0]).toHaveValue('Second');
     fireEvent.click(screen.getByRole('button', { name: 'Delete activity 1' }));
     expect(screen.getAllByLabelText('Activity title')[0]).toHaveValue('First');
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add activity to Chapter 1' })).toBeEnabled();
     fireEvent.change(screen.getAllByLabelText('Activity type')[0], {
       target: { value: 'organize-translate' },
     });
     expect(screen.getByRole('group', { name: 'Correct token order' })).toBeInTheDocument();
+  });
+  it('creates, edits, reorders and confirms deletion of ordered chapters', async () => {
+    const row = item();
+    row.draft.chapters[0].activities = [];
+    row.draft.chapters[0].instructionalContent = [];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockResolvedValue({ data: [row], error: null });
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add chapter' }));
+    const titles = screen.getAllByLabelText('Chapter title');
+    fireEvent.change(titles[1], { target: { value: 'Applications' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move chapter 2 up' }));
+    expect(screen.getAllByLabelText('Chapter title')[0]).toHaveValue('Applications');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete chapter 1' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete chapter?' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete chapter' }));
+    expect(screen.queryByDisplayValue('Applications')).not.toBeInTheDocument();
+  });
+  it('keeps chapter ownership and ordering when activities move between chapters', () => {
+    const first = newChapter(1, 'Foundations');
+    const second = newChapter(2, 'Applications');
+    first.activities = [newActivity('find-word')];
+    second.activities = [newActivity('organize-translate')];
+    const lesson = normalizeAuthoredLesson({
+      ...item().draft,
+      chapters: [second, first],
+      instructionalContent: [],
+      activities: [],
+    });
+
+    expect(lesson.chapters.map((chapter) => chapter.title)).toEqual([
+      'Foundations',
+      'Applications',
+    ]);
+    expect(lesson.activities.map((activity) => activity.id)).toEqual([
+      first.activities[0].id,
+      second.activities[0].id,
+    ]);
+    expect(totalLessonActivities(lesson)).toBe(2);
+  });
+  it('authors teaching content inside a chapter and saves it with the lesson draft', async () => {
+    const row = item();
+    row.draft.chapters[0].activities = [];
+    row.draft.chapters[0].instructionalContent = [];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(
+      async (name: string, args?: { p_lesson: ManagedLesson['draft'] }) => ({
+        error: null,
+        data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+      }),
+    );
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add teaching content to Chapter 1' }));
+    fireEvent.change(screen.getByLabelText('Teaching content title'), {
+      target: { value: 'Variables' },
+    });
+    fireEvent.change(screen.getByLabelText('Teaching content'), {
+      target: { value: 'A variable represents a number.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(client.rpc).toHaveBeenCalledWith(
+        'save_admin_lesson',
+        expect.objectContaining({
+          p_lesson: expect.objectContaining({
+            chapters: [
+              expect.objectContaining({
+                instructionalContent: [expect.objectContaining({ title: 'Variables' })],
+              }),
+            ],
+          }),
+        }),
+      ),
+    );
   });
   it('keeps correct-token rows distinct while preserving token reordering', async () => {
     const activity = newActivity('organize-translate') as Extract<
@@ -166,10 +262,8 @@ describe('Basic Lesson Management editor and preview', () => {
     );
   });
   it('rejects eleven activities in the service before any RPC', async () => {
-    const draft = {
-      ...item().draft,
-      activities: Array.from({ length: 11 }, () => newActivity('find-word')),
-    };
+    const draft = item().draft;
+    draft.chapters[0].activities = Array.from({ length: 11 }, () => newActivity('find-word'));
     await expect(saveManagedLesson(draft, 0)).rejects.toThrow('at most 10');
     expect(client.rpc).not.toHaveBeenCalled();
   });

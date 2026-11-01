@@ -38,6 +38,8 @@ export const assessmentAttemptSchema = z.object({
   acceptedRevision: z.number().int().nonnegative().optional(),
   acceptedMutationId: z.string().uuid().nullable().optional(),
   submittedRevision: z.number().int().nonnegative().nullable().optional(),
+  lessonId: z.string().nullable().optional(),
+  lessonAttemptId: z.string().uuid().nullable().optional(),
 });
 
 export type AssessmentKind = z.infer<typeof assessmentKindSchema>;
@@ -45,13 +47,20 @@ export type AssessmentQuestion = z.infer<typeof assessmentQuestionSchema>;
 export type AssessmentAnswer = z.infer<typeof assessmentAnswerSchema>;
 export type AssessmentAttempt = z.infer<typeof assessmentAttemptSchema>;
 
-export type AssessmentDraftSyncStatus = 'pending' | 'synced' | 'pending_submission';
+export type AssessmentDraftSyncStatus =
+  | 'pending_start'
+  | 'pending'
+  | 'synced'
+  | 'pending_submission';
 
 export interface AssessmentDraft {
   id: string;
   userId: string;
   assessment: AssessmentKind;
   attemptId: string;
+  lessonId?: string;
+  lessonAttemptId?: string;
+  pendingStart?: boolean;
   startedAt: number;
   contentVersion: number;
   expectedQuestionCount: number;

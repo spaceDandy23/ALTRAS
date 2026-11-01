@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -18,6 +18,8 @@ import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attemp
 import { ContentState } from './components/ContentState';
 import { resolveLessonDisplayStatus } from './components/lesson-display-status';
 import { useLessonTransition } from './navigation/useLessonTransition';
+import { useLessonDrafts } from './attempts/useLessonDrafts';
+import { StarRating } from './components/StarRating';
 import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
@@ -27,11 +29,30 @@ export function LessonOverviewPage() {
   const { lessonId = '' } = useParams();
   const user = useAuthStore((state) => state.user);
   const contentStatus = useContentStore((state) => state.status);
+  const drafts = useLessonDrafts(user?.id);
+  const local = drafts?.get(lessonId);
+  const pendingResult = Boolean(local?.pendingCompletion);
   const { loadingMessage, transitionError, transitionBusy, startTransition } =
     useLessonTransition();
-  const [lesson, setLesson] = useState<LearningLesson | null>(null);
-  const [progress, setProgress] = useState<LessonProgress | null>(null);
-  const [active, setActive] = useState<LessonAttempt | null>(null);
+  const [remoteLesson, setLesson] = useState<LearningLesson | null>(null);
+  const [remoteProgress, setProgress] = useState<LessonProgress | null>(null);
+  const [remoteActive, setActive] = useState<LessonAttempt | null>(null);
+  const newerActive =
+    local &&
+    remoteActive?.userId === user?.id &&
+    remoteActive?.lessonId === lessonId &&
+    remoteActive.id !== local.attemptId &&
+    remoteActive.startedAt >= local.attempt.startedAt;
+  const result = local?.attempt.status === 'completed' && !newerActive ? local.attempt : null;
+  const cached =
+    local && (local.pendingCompletion || result || !navigator.onLine) ? local : undefined;
+  const lesson = cached?.lesson ?? remoteLesson;
+  const progress = cached ? null : remoteProgress;
+  const active = cached
+    ? cached.attempt.status === 'active'
+      ? cached.attempt
+      : null
+    : remoteActive;
   const [prerequisiteTitle, setPrerequisiteTitle] = useState('the prerequisite lesson');
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -40,7 +61,8 @@ export function LessonOverviewPage() {
   const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${loadRevision}`;
 
   useEffect(() => {
-    if (!user || contentStatus !== 'ready') return;
+    if (!user || contentStatus !== 'ready' || drafts === undefined) return;
+    if (local && (local.pendingCompletion || !navigator.onLine)) return;
     let current = true;
     void Promise.all([
       getLesson(db, lessonId),
@@ -72,22 +94,26 @@ export function LessonOverviewPage() {
     return () => {
       current = false;
     };
-  }, [contentStatus, lessonId, loadKey, user]);
+  }, [contentStatus, lessonId, loadKey, user, drafts, local]);
 
   if (!user) return null;
   const displayStatus = progress ? resolveLessonDisplayStatus(progress, active !== null) : null;
   const begin = () => {
-    if (progress?.status === 'locked' || transitionBusy) return;
+    if (pendingResult || progress?.status === 'locked' || transitionBusy) return;
     void startTransition({
       loadingMessage: active ? 'Restoring your attempt…' : 'Preparing your lesson…',
       run: async () => {
-        const attempt = active ?? (await startOrResumeAttempt(db, user.id, lessonId));
+        const attempt =
+          !navigator.onLine && local
+            ? local.attempt
+            : await startOrResumeAttempt(db, user.id, lessonId);
         return `/lessons/${lessonId}/play/${attempt.id}`;
       },
       fallbackError: 'Unable to open this lesson.',
     });
   };
   const restart = () => {
+    if (pendingResult || transitionBusy) return;
     setConfirmRestart(false);
     void startTransition({
       loadingMessage: 'Restarting your lesson…',
@@ -109,15 +135,15 @@ export function LessonOverviewPage() {
 
   return (
     <ContentState>
-      {loadedFor !== loadKey ? (
+      {!cached && loadedFor !== loadKey ? (
         <LoadingState variant="page" message="Opening lesson…" />
-      ) : loadError ? (
+      ) : !cached && loadError ? (
         <PageLoadError
           title="Lesson unavailable"
           message={loadError}
           onRetry={() => setLoadRevision((revision) => revision + 1)}
         />
-      ) : !lesson || !progress ? (
+      ) : !lesson || (!progress && !local) ? (
         <LoadingState variant="page" message="Opening lesson…" />
       ) : (
         <div className="standard-page lesson-overview page-enter">
@@ -130,7 +156,17 @@ export function LessonOverviewPage() {
                 <div className="lesson-overview__meta" aria-label="Lesson details">
                   <span>{lesson.activities.length} activities</span>
                   <span>{lesson.passingThreshold}% to pass</span>
-                  {progress.attemptCount > 0 && <span>Best score {progress.bestScore}%</span>}
+                  {!pendingResult && result ? (
+                    <>
+                      <span>Score {result.finalScore}%</span>
+                      <StarRating count={result.starCount ?? 0} />
+                      <span>{result.xpImprovement} XP earned</span>
+                    </>
+                  ) : (
+                    !pendingResult &&
+                    progress &&
+                    progress.attemptCount > 0 && <span>Best score {progress.bestScore}%</span>
+                  )}
                 </div>
                 <CharacterAssistant
                   characterId={lesson.characterId}
@@ -140,7 +176,29 @@ export function LessonOverviewPage() {
                   reactionKey={lesson.id}
                   className="lesson-overview__companion"
                 />
-                {progress.status === 'locked' ? (
+                {pendingResult ? (
+                  <div className="lesson-overview__actions lesson-summary">
+                    <p role="status">
+                      <strong>Results pending sync</strong>
+                      <br />
+                      Your attempt is saved on this device. Connect to the internet for official
+                      results.
+                    </p>
+                    <Button disabled>Try again</Button>
+                  </div>
+                ) : result ? (
+                  <div className="lesson-overview__actions lesson-summary">
+                    <Link
+                      className="button button--primary"
+                      to={`/lessons/${lessonId}/result/${result.id}`}
+                    >
+                      View Results
+                    </Link>
+                    <Button onClick={restart} disabled={transitionBusy}>
+                      Try again
+                    </Button>
+                  </div>
+                ) : progress?.status === 'locked' ? (
                   <p className="lesson-overview__actions lesson-summary">
                     Clear {prerequisiteTitle} to unlock this lesson.
                   </p>
@@ -153,7 +211,7 @@ export function LessonOverviewPage() {
                       disabled={transitionBusy}
                       aria-busy={transitionBusy}
                     >
-                      {displayStatus === 'in-progress'
+                      {active || displayStatus === 'in-progress'
                         ? 'Resume lesson'
                         : displayStatus === 'needs-retry'
                           ? 'Try again'
@@ -186,7 +244,7 @@ export function LessonOverviewPage() {
                 <span className="lesson-overview__equation-label">math</span>
               </div>
             </section>
-            {progress.status !== 'locked' && (
+            {progress?.status !== 'locked' && (
               <section className="lesson-reference" aria-labelledby="operation-words-heading">
                 <h2 id="operation-words-heading">Operation words</h2>
                 {lesson.instructionalContent

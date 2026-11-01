@@ -5,7 +5,12 @@ import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { packagedContent } from '@/features/lessons/content/packaged-content';
-import type { AuthoredLesson, ManagedLesson } from './lesson-management.service';
+import {
+  newChapter,
+  normalizeAuthoredLesson,
+  type AuthoredLesson,
+  type ManagedLesson,
+} from './lesson-management.service';
 import { publicLessonSchema } from '@/features/lessons/domain/content.schemas';
 
 let pg: PGlite;
@@ -14,7 +19,10 @@ const adminId = randomUUID(),
   researcherId = randomUUID(),
   adminOnlyId = randomUUID(),
   dualRoleId = randomUUID();
-const migration = '202609160003_idempotent_lesson_active_time.sql';
+const migration = '202610300001_lesson_chapters.sql';
+const phase2Migration = '202610300002_lesson_chapter_runtime.sql';
+const phase3Migration = '202610300003_lesson_offline_transitions.sql';
+const offlineAssessmentMigration = '202610310001_offline_assessment_start.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -23,6 +31,8 @@ async function rpc<T>(name: string, args: unknown[] = []): Promise<T> {
   // Names are fixed test code, never user input.
   if (name === 'submit_lesson_activity_answer')
     args = args.map((value, index) => (index === 2 ? JSON.stringify(value) : value));
+  if (name === 'sync_assessment_draft')
+    args = args.map((value, index) => (index === 4 ? JSON.stringify(value) : value));
   return (
     await pg.query<{ result: T }>(
       `select to_jsonb(public.${name}(${args.map((_, i) => `$${i + 1}`).join(',')})) as result`,
@@ -31,16 +41,30 @@ async function rpc<T>(name: string, args: unknown[] = []): Promise<T> {
   ).rows[0].result;
 }
 function draft(overrides: Partial<AuthoredLesson> = {}): AuthoredLesson {
-  return {
-    ...structuredClone(packagedContent.lessons[0]),
+  const legacy = structuredClone(packagedContent.lessons[0]);
+  const chapter = newChapter(1, 'Chapter 1');
+  chapter.description = legacy.shortDescription;
+  chapter.instructionalContent = overrides.instructionalContent ?? legacy.instructionalContent;
+  chapter.activities = overrides.activities ?? [structuredClone(legacy.activities[0])];
+  return normalizeAuthoredLesson({
+    ...legacy,
     id: `lesson-${randomUUID()}`,
     title: 'Test authoring lesson',
     displayOrder: 3,
     contentVersion: 1,
     prerequisiteLessonId: 'lesson-order-matters',
-    activities: [structuredClone(packagedContent.lessons[0].activities[0])],
     ...overrides,
-  };
+    chapters: overrides.chapters ?? [chapter],
+  });
+}
+function withActivities(
+  lesson: AuthoredLesson,
+  activities: AuthoredLesson['activities'],
+): AuthoredLesson {
+  return normalizeAuthoredLesson({
+    ...lesson,
+    chapters: [{ ...lesson.chapters[0], activities }],
+  });
 }
 async function save(lesson: AuthoredLesson, revision = 0) {
   return rpc<ManagedLesson>('save_admin_lesson', [lesson, revision]);
@@ -110,6 +134,9 @@ beforeAll(async () => {
     (await pg.query('select * from public.student_activity_days order by activity_day')).rows,
   ).toEqual(daysBefore.rows);
   await pg.exec('reset role');
+  await pg.exec(readFileSync(resolve('supabase/migrations', phase2Migration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', phase3Migration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', offlineAssessmentMigration), 'utf8'));
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
     adminOnlyId,
@@ -130,6 +157,190 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('claims a stable client assessment ID idempotently without exposing answer keys', async () => {
+    await pg.exec(`reset role;
+      update public.lesson_definitions
+      set pre_assessment_version=(select published_version from public.assessment_catalog where assessment='pre-test')
+      where lesson_id='lesson-order-matters';`);
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', ['lesson-order-matters']);
+    const clientId = randomUUID();
+
+    const first = await rpc<{ id: string }>('start_assessment', ['pre-test', attempt.id, clientId]);
+    const retry = await rpc<{ id: string }>('start_assessment', ['pre-test', attempt.id, clientId]);
+    const questions = await pg.query<Record<string, unknown>>(
+      'select * from public.get_assessment_questions($1,$2)',
+      ['pre-test', attempt.id],
+    );
+
+    expect(first.id).toBe(clientId);
+    expect(retry.id).toBe(clientId);
+    expect(questions.rows.length).toBeGreaterThan(0);
+    expect(questions.rows.some((question) => 'correct_choice_id' in question)).toBe(false);
+    await completeScopedAssessment(attempt.id, 'pre-test');
+    await rpc('advance_lesson_attempt_stage', [attempt.id]);
+    const recovered = await rpc<{ id: string }>('start_assessment', [
+      'pre-test',
+      attempt.id,
+      clientId,
+    ]);
+    expect(recovered.id).toBe(clientId);
+  });
+
+  async function completeScopedAssessment(lessonAttemptId: string, kind: 'pre-test' | 'post-test') {
+    const assessment = await rpc<{ id: string }>('start_assessment', [kind, lessonAttemptId]);
+    const questions = await pg.query<{ id: string; choices: Array<{ id: string }> }>(
+      'select id,choices from public.get_assessment_questions($1,$2)',
+      [kind, lessonAttemptId],
+    );
+    const answers = questions.rows.map((question) => ({
+      question_id: question.id,
+      selected_choice_id: question.choices[0].id,
+    }));
+    await rpc('sync_assessment_draft', [assessment.id, 0, 1, randomUUID(), answers]);
+    await rpc('complete_assessment_revision', [assessment.id, 1]);
+  }
+
+  it('enforces pre-test, ordered chapters, post-test, and final lesson completion', async () => {
+    const lesson = draft({
+      prerequisiteLessonId: undefined,
+      assessments: { preTest: 'pre-test', postTest: 'post-test' },
+    });
+    const first = newChapter(1, 'Foundations');
+    const second = newChapter(2, 'Applications');
+    first.activities = structuredClone(packagedContent.lessons[0].activities.slice(0, 2));
+    second.activities = [structuredClone(packagedContent.lessons[0].activities[2])];
+    lesson.chapters = [first, second];
+    const item = await publish(await save(normalizeAuthoredLesson(lesson)));
+
+    await asUser(studentId);
+    let attempt = await rpc<{
+      id: string;
+      flow_stage: string;
+      current_chapter_id: string;
+    }>('start_lesson_attempt', [item.lesson_id]);
+    expect(attempt).toMatchObject({ flow_stage: 'pre-test', current_chapter_id: first.id });
+    await pg.exec('savepoint pretest_required');
+    await expect(rpc('advance_lesson_attempt_stage', [attempt.id])).rejects.toThrow(
+      'Complete the lesson pre-test first',
+    );
+    await pg.exec('rollback to savepoint pretest_required');
+
+    await completeScopedAssessment(attempt.id, 'pre-test');
+    attempt = await rpc('sync_lesson_attempt_stage', [attempt.id, 'pre-test', first.id]);
+    expect(attempt.flow_stage).toBe('chapter-teaching');
+    expect((await rpc<typeof attempt>('start_lesson_attempt', [item.lesson_id])).flow_stage).toBe(
+      'chapter-teaching',
+    );
+    attempt = await rpc('sync_lesson_attempt_stage', [attempt.id, 'chapter-teaching', first.id]);
+    expect(attempt.flow_stage).toBe('chapter-activity');
+
+    const duplicateTeachingTransition = await rpc<typeof attempt>('sync_lesson_attempt_stage', [
+      attempt.id,
+      'chapter-teaching',
+      first.id,
+    ]);
+    expect(duplicateTeachingTransition).toMatchObject({
+      flow_stage: 'chapter-activity',
+      current_chapter_id: first.id,
+    });
+
+    await pg.exec('reset role');
+    const keys = await pg.query<{ activity_id: string; correct_answer: unknown }>(
+      'select activity_id,correct_answer from public.lesson_activity_keys where lesson_id=$1 and content_version=$2 order by activity_id',
+      [item.lesson_id, item.published_version],
+    );
+    await asUser(studentId);
+    const firstKey = keys.rows.find((key) => key.activity_id === first.activities[0].id)!;
+    const nextFirstChapterKey = keys.rows.find(
+      (key) => key.activity_id === first.activities[1].id,
+    )!;
+    const secondKey = keys.rows.find((key) => key.activity_id === second.activities[0].id)!;
+    await pg.exec('savepoint chapter_order_required');
+    await expect(
+      rpc('submit_lesson_activity_answer', [
+        attempt.id,
+        secondKey.activity_id,
+        secondKey.correct_answer,
+      ]),
+    ).rejects.toThrow('current chapter');
+    await pg.exec('rollback to savepoint chapter_order_required');
+    await pg.exec('savepoint activity_order_required');
+    await expect(
+      rpc('submit_lesson_activity_answer', [
+        attempt.id,
+        nextFirstChapterKey.activity_id,
+        nextFirstChapterKey.correct_answer,
+      ]),
+    ).rejects.toThrow('Complete activities in order');
+    await pg.exec('rollback to savepoint activity_order_required');
+    await rpc('submit_lesson_activity_answer', [
+      attempt.id,
+      firstKey.activity_id,
+      firstKey.correct_answer,
+    ]);
+    await rpc('submit_lesson_activity_answer', [
+      attempt.id,
+      nextFirstChapterKey.activity_id,
+      nextFirstChapterKey.correct_answer,
+    ]);
+    attempt = await rpc('advance_lesson_attempt_stage', [attempt.id]);
+    expect(attempt).toMatchObject({
+      flow_stage: 'chapter-teaching',
+      current_chapter_id: second.id,
+    });
+    attempt = await rpc('advance_lesson_attempt_stage', [attempt.id]);
+    await rpc('submit_lesson_activity_answer', [
+      attempt.id,
+      secondKey.activity_id,
+      secondKey.correct_answer,
+    ]);
+    attempt = await rpc('advance_lesson_attempt_stage', [attempt.id]);
+    expect(attempt.flow_stage).toBe('post-test');
+    await pg.exec('savepoint posttest_required');
+    await expect(rpc('complete_lesson_attempt', [attempt.id])).rejects.toThrow(
+      'required lesson step',
+    );
+    await pg.exec('rollback to savepoint posttest_required');
+    await completeScopedAssessment(attempt.id, 'post-test');
+    attempt = await rpc('advance_lesson_attempt_stage', [attempt.id]);
+    expect(attempt.flow_stage).toBe('ready-to-complete');
+    expect(await rpc('complete_lesson_attempt', [attempt.id])).toMatchObject({
+      status: 'completed',
+    });
+    const progressAfterCompletion = (
+      await pg.query<{ attempt_count: number; xp_awarded: number }>(
+        'select attempt_count,xp_awarded from public.lesson_progress where user_id=$1 and lesson_id=$2',
+        [studentId, item.lesson_id],
+      )
+    ).rows[0];
+    expect(await rpc('complete_lesson_attempt', [attempt.id])).toMatchObject({
+      status: 'completed',
+    });
+    expect(
+      (
+        await pg.query<{ attempt_count: number; xp_awarded: number }>(
+          'select attempt_count,xp_awarded from public.lesson_progress where user_id=$1 and lesson_id=$2',
+          [studentId, item.lesson_id],
+        )
+      ).rows[0],
+    ).toEqual(progressAfterCompletion);
+
+    expect(await rpc('start_assessment', ['pre-test'])).toMatchObject({
+      assessment: 'pre-test',
+      lesson_attempt_id: null,
+    });
+    await asUser(researcherId);
+    expect(
+      (
+        await pg.query<{ pre_test_status: string; post_test_status: string }>(
+          'select pre_test_status,post_test_status from public.get_researcher_results() where username=$1',
+          ['learner'],
+        )
+      ).rows[0],
+    ).toEqual({ pre_test_status: 'in_progress', post_test_status: 'not_started' });
+  });
+
   it('enforces the eight-lesson limit at the database boundary', async () => {
     for (let index = 0; index < 6; index += 1) await save(draft({ displayOrder: index + 3 }));
     await pg.exec('savepoint lesson_limit');
@@ -142,11 +353,83 @@ describe('Basic Lesson Management SQL and RLS', () => {
   });
   it('seeds exact original authoring content and scoring versions without remapping IDs', async () => {
     const rows = (await pg.query<ManagedLesson>('select * from public.get_admin_lessons()')).rows;
-    expect(rows.map((row) => row.draft)).toEqual(packagedContent.lessons);
+    expect(rows.map((row) => row.draft.id)).toEqual(
+      packagedContent.lessons.map((lesson) => lesson.id),
+    );
+    expect(rows.every((row) => row.draft.chapters.length === 1)).toBe(true);
     expect(rows.map((row) => row.published_version)).toEqual([1, 2]);
     await asUser(studentId);
     const catalog = await rpc<unknown[]>('get_lesson_catalog');
     for (const lesson of catalog) expect(publicLessonSchema.safeParse(lesson).success).toBe(true);
+  });
+  it('migrates existing lessons into one chapter without changing progress or attempt ownership', async () => {
+    await pg.exec('reset role');
+    const chapters = await pg.query<{
+      lesson_id: string;
+      chapter_id: string;
+      activity_count: number;
+    }>(`
+      select lesson_id, draft->'chapters'->0->>'id' as chapter_id,
+        jsonb_array_length(draft->'chapters'->0->'activities')::int as activity_count
+      from public.lesson_catalog order by lesson_id
+    `);
+    expect(chapters.rows).toEqual([
+      {
+        lesson_id: 'lesson-operation-signals',
+        chapter_id: 'chapter-lesson-operation-signals',
+        activity_count: 6,
+      },
+      {
+        lesson_id: 'lesson-order-matters',
+        chapter_id: 'chapter-lesson-order-matters',
+        activity_count: 5,
+      },
+    ]);
+    expect(
+      (
+        await pg.query<{ count: number }>(
+          'select count(*)::int as count from public.lesson_attempts where user_id=$1',
+          [studentId],
+        )
+      ).rows[0].count,
+    ).toBeGreaterThan(0);
+  });
+  it('publishes multiple ordered chapters with isolated teaching content and activity order', async () => {
+    const lesson = draft({ prerequisiteLessonId: undefined });
+    const first = newChapter(1, 'Foundations');
+    const second = newChapter(2, 'Applications');
+    first.instructionalContent = [structuredClone(lesson.instructionalContent[0])];
+    first.activities = [structuredClone(packagedContent.lessons[0].activities[1])];
+    second.instructionalContent = [structuredClone(lesson.instructionalContent[1])];
+    second.activities = [structuredClone(packagedContent.lessons[0].activities[0])];
+    const authored = normalizeAuthoredLesson({ ...lesson, chapters: [second, first] });
+    const item = await publish(await save(authored));
+
+    await asUser(studentId);
+    const published = await rpc<AuthoredLesson>('get_lesson_content', [item.lesson_id, null]);
+    expect(published.chapters.map((chapter) => chapter.title)).toEqual([
+      'Foundations',
+      'Applications',
+    ]);
+    expect(published.chapters[0].activities.map((activity) => activity.id)).toEqual([
+      first.activities[0].id,
+    ]);
+    expect(published.chapters[1].activities.map((activity) => activity.id)).toEqual([
+      second.activities[0].id,
+    ]);
+    expect(published.activities.map((activity) => activity.id)).toEqual([
+      first.activities[0].id,
+      second.activities[0].id,
+    ]);
+  });
+  it('keeps chapters isolated inside their owning lesson draft', async () => {
+    const first = await save(draft({ prerequisiteLessonId: undefined }));
+    const second = await save(draft({ displayOrder: 4, prerequisiteLessonId: undefined }));
+    expect(first.draft.chapters[0].id).not.toBe(second.draft.chapters[0].id);
+    expect(first.draft.chapters[0].activities[0].id).toBe(
+      second.draft.chapters[0].activities[0].id,
+    );
+    expect(first.lesson_id).not.toBe(second.lesson_id);
   });
   it('creates and edits a draft with revision conflict protection and unchanged public content', async () => {
     const original = draft();
@@ -161,10 +444,10 @@ describe('Basic Lesson Management SQL and RLS', () => {
     });
     let item = await save(lesson);
     item = await save(
-      {
-        ...lesson,
-        activities: [{ ...lesson.activities[3], title: 'Reordered' }, lesson.activities[0]],
-      },
+      withActivities(lesson, [
+        { ...lesson.activities[3], title: 'Reordered' },
+        lesson.activities[0],
+      ]),
       item.revision,
     );
     item = await publish(item);
@@ -204,22 +487,28 @@ describe('Basic Lesson Management SQL and RLS', () => {
   });
   it('enforces 10 activities on the server and table constraint', async () => {
     const lesson = draft();
-    lesson.activities = Array.from({ length: 11 }, (_, i) => ({
+    const activities = Array.from({ length: 11 }, (_, i) => ({
       ...lesson.activities[0],
       id: `activity-${i}`,
     }));
-    await expect(save(lesson)).rejects.toThrow('at most 10');
+    await expect(save(withActivities(lesson, activities))).rejects.toThrow('at most 10');
   });
-  it('prevents an owner-level direct insert with 11 activities via a database check', async () => {
+  it('prevents an owner-level direct insert with 11 chapter activities', async () => {
     await pg.exec('reset role');
     const lesson = draft();
-    lesson.activities = Array.from({ length: 11 }, () => lesson.activities[0]);
+    const oversized = withActivities(
+      lesson,
+      Array.from({ length: 11 }, (_, index) => ({
+        ...lesson.activities[0],
+        id: `activity-${index}`,
+      })),
+    );
     await expect(
       pg.query('insert into public.lesson_catalog(lesson_id,draft) values($1,$2)', [
         lesson.id,
-        lesson,
+        oversized,
       ]),
-    ).rejects.toThrow('check constraint');
+    ).rejects.toThrow('at most 10 activities');
   });
   it.each(['title', 'shortDescription', 'passingThreshold', 'displayOrder'] as const)(
     'rejects invalid publication field %s',
@@ -233,7 +522,7 @@ describe('Basic Lesson Management SQL and RLS', () => {
   );
   it('rejects incomplete activities, unsupported types and invalid correct answers at publication', async () => {
     const lesson = draft();
-    const item = await save({ ...lesson, activities: [] });
+    const item = await save(withActivities(lesson, []));
     await expect(publish(item)).rejects.toThrow('1 to 10');
   });
   it('rejects an unknown activity engine type', async () => {
@@ -315,12 +604,14 @@ describe('Basic Lesson Management SQL and RLS', () => {
     ]);
     await asUser(adminId);
     const oldActivity = item.draft.activities[0];
-    const updated = {
-      ...item.draft,
-      title: 'New title',
-      passingThreshold: 100,
-      activities: [{ ...oldActivity, id: 'new-activity' }],
-    };
+    const updated = withActivities(
+      {
+        ...item.draft,
+        title: 'New title',
+        passingThreshold: 100,
+      },
+      [{ ...oldActivity, id: 'new-activity' }],
+    );
     item = await publish(await save(updated, item.revision));
     await asUser(studentId);
     const old = await rpc<AuthoredLesson>('get_lesson_content', [item.lesson_id, attempt.id]);

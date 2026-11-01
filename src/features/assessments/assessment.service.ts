@@ -41,8 +41,15 @@ const remoteAttemptSchema = z.object({
   accepted_revision: z.number().int().nonnegative(),
   accepted_mutation_id: z.string().uuid().nullable(),
   submitted_revision: z.number().int().nonnegative().nullable(),
+  lesson_id: z.string().nullable().optional().default(null),
+  lesson_attempt_id: z.string().uuid().nullable().optional().default(null),
   assessment_attempt_answers: z.array(remoteAnswerSchema).optional().default([]),
 });
+
+export interface AssessmentScope {
+  lessonId: string;
+  lessonAttemptId: string;
+}
 
 const ASSESSMENT_REQUEST_TIMEOUT_MS = 15_000;
 
@@ -103,6 +110,8 @@ export function toAssessmentAttempt(input: unknown): AssessmentAttempt {
     acceptedRevision: record.accepted_revision,
     acceptedMutationId: record.accepted_mutation_id,
     submittedRevision: record.submitted_revision,
+    lessonId: record.lesson_id,
+    lessonAttemptId: record.lesson_attempt_id,
     answers: record.assessment_attempt_answers
       .map((answer) => ({
         questionId: answer.question_id,
@@ -113,9 +122,17 @@ export function toAssessmentAttempt(input: unknown): AssessmentAttempt {
   });
 }
 
-export async function getAssessmentQuestions(kind: AssessmentKind): Promise<AssessmentQuestion[]> {
+export async function getAssessmentQuestions(
+  kind: AssessmentKind,
+  scope?: AssessmentScope,
+): Promise<AssessmentQuestion[]> {
   const { data, error } = await withAssessmentTimeout(
-    requireOnlineServices().rpc('get_assessment_questions', { p_assessment: kind }),
+    requireOnlineServices().rpc(
+      'get_assessment_questions',
+      scope
+        ? { p_assessment: kind, p_lesson_attempt_id: scope.lessonAttemptId }
+        : { p_assessment: kind },
+    ),
   );
   if (error) throw new AssessmentError('Unable to load the assessment questions.');
   return z.array(remoteQuestionSchema).parse(data).map(toQuestion);
@@ -124,13 +141,26 @@ export async function getAssessmentQuestions(kind: AssessmentKind): Promise<Asse
 export async function getAssessmentAttempt(
   userId: string,
   kind: AssessmentKind,
+  scope?: AssessmentScope,
 ): Promise<AssessmentAttempt | null> {
   const { data, error } = await withAssessmentTimeout(
-    requireOnlineServices().rpc('get_assessment_attempt', { p_assessment: kind }),
+    requireOnlineServices().rpc(
+      'get_assessment_attempt',
+      scope
+        ? { p_assessment: kind, p_lesson_attempt_id: scope.lessonAttemptId }
+        : { p_assessment: kind },
+    ),
   );
   if (error) throw new AssessmentError('Unable to restore this assessment.');
   const records = z.array(remoteAttemptSchema).parse(data ?? []);
-  if (records.some((record) => record.user_id !== userId || record.assessment !== kind)) {
+  if (
+    records.some(
+      (record) =>
+        record.user_id !== userId ||
+        record.assessment !== kind ||
+        record.lesson_attempt_id !== (scope?.lessonAttemptId ?? null),
+    )
+  ) {
     throw new AssessmentError('The restored assessment belongs to another session.');
   }
   return records[0] ? toAssessmentAttempt(records[0]) : null;
@@ -139,14 +169,28 @@ export async function getAssessmentAttempt(
 export async function startAssessment(
   userId: string,
   kind: AssessmentKind,
+  scope?: AssessmentScope,
+  clientAttemptId?: string,
+  checkSync: () => void = () => undefined,
 ): Promise<AssessmentAttempt> {
+  checkSync();
   assertParticipantLearningAccess();
   const client = requireOnlineServices();
   const { error } = await withAssessmentTimeout(
-    client.rpc('start_assessment', { p_assessment: kind }),
+    client.rpc(
+      'start_assessment',
+      scope
+        ? {
+            p_assessment: kind,
+            p_lesson_attempt_id: scope.lessonAttemptId,
+            ...(clientAttemptId ? { p_client_attempt_id: clientAttemptId } : {}),
+          }
+        : { p_assessment: kind },
+    ),
   );
   if (error) throw new AssessmentError('Unable to start this assessment.');
-  const attempt = await getAssessmentAttempt(userId, kind);
+  checkSync();
+  const attempt = await getAssessmentAttempt(userId, kind, scope);
   if (!attempt) throw new AssessmentError('The assessment did not start correctly.');
   return attempt;
 }
@@ -156,7 +200,10 @@ export async function completeAssessment(
   kind: AssessmentKind,
   attemptId: string,
   revision: number,
+  scope?: AssessmentScope,
+  checkSync: () => void = () => undefined,
 ): Promise<AssessmentAttempt> {
+  checkSync();
   assertParticipantLearningAccess();
   const { error } = await withAssessmentTimeout(
     requireOnlineServices().rpc('complete_assessment_revision', {
@@ -168,14 +215,19 @@ export async function completeAssessment(
     throw new AssessmentError(
       'Submission is not yet confirmed. We will check the saved result before retrying.',
     );
-  const attempt = await getAssessmentAttempt(userId, kind);
+  checkSync();
+  const attempt = await getAssessmentAttempt(userId, kind, scope);
   if (!attempt) throw new AssessmentError('Unable to load the submitted result.');
   return attempt;
 }
 
 export class AssessmentConflictError extends AssessmentError {}
 
-export async function syncAssessmentDraft(draft: AssessmentDraft): Promise<AssessmentAttempt> {
+export async function syncAssessmentDraft(
+  draft: AssessmentDraft,
+  checkSync: () => void = () => undefined,
+): Promise<AssessmentAttempt> {
+  checkSync();
   assertParticipantLearningAccess();
   const { error } = await withAssessmentTimeout(
     requireOnlineServices().rpc('sync_assessment_draft', {
@@ -195,7 +247,14 @@ export async function syncAssessmentDraft(draft: AssessmentDraft): Promise<Asses
     );
   }
   if (error) throw new AssessmentError('Unable to sync the test. We will retry.');
-  const result = await getAssessmentAttempt(draft.userId, draft.assessment);
+  checkSync();
+  const result = await getAssessmentAttempt(
+    draft.userId,
+    draft.assessment,
+    draft.lessonAttemptId && draft.lessonId
+      ? { lessonId: draft.lessonId, lessonAttemptId: draft.lessonAttemptId }
+      : undefined,
+  );
   if (!result || result.id !== draft.attemptId)
     throw new AssessmentError('Unable to confirm the saved test.');
   return result;

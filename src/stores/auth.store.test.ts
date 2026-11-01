@@ -25,6 +25,7 @@ vi.mock('@/features/settings/visual-preferences.cache', () => ({
 }));
 
 import { useAuthStore } from './auth.store';
+import { captureSyncSession } from '@/services/sync-session';
 
 const firstUser: PublicUser = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -111,8 +112,11 @@ describe('authenticated visual bootstrap', () => {
     useAuthStore.setState({ status: 'authenticated', user: firstUser });
     document.documentElement.dataset.experience = 'student';
     mocks.logoutOnlineUser.mockResolvedValue(undefined);
+    const previousSync = captureSyncSession(firstUser.id);
+    expect(previousSync()).toBe(true);
 
     await useAuthStore.getState().logout();
+    expect(previousSync()).toBe(false);
 
     expect(mocks.logoutOnlineUser).toHaveBeenCalledOnce();
     expect(mocks.deactivate).toHaveBeenCalledOnce();

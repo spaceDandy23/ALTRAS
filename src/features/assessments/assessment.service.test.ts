@@ -13,6 +13,32 @@ const remote = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('@/services/supabase.client', () => ({ getSupabaseClient: () => remote }));
 
 describe('online assessment attempt mapping', () => {
+  it.each(['start', 'complete'] as const)(
+    'does not send a follow-up result read after the %s request outlives its session',
+    async (phase) => {
+      let valid = true;
+      const check = () => {
+        if (!valid) throw new Error('Progress sync paused.');
+      };
+      remote.rpc.mockImplementationOnce(async () => {
+        valid = false;
+        return { error: null };
+      });
+      const operation =
+        phase === 'start'
+          ? startAssessment(crypto.randomUUID(), 'pre-test', undefined, undefined, check)
+          : completeAssessment(
+              crypto.randomUUID(),
+              'post-test',
+              crypto.randomUUID(),
+              1,
+              undefined,
+              check,
+            );
+      await expect(operation).rejects.toThrow('Progress sync paused.');
+      expect(remote.rpc).toHaveBeenCalledOnce();
+    },
+  );
   afterEach(() => {
     useResearcherAccessStore.getState().clear();
     vi.resetAllMocks();
@@ -64,6 +90,36 @@ describe('online assessment attempt mapping', () => {
     );
   });
 
+  it('scopes lesson-owned assessment attempts to the lesson attempt', async () => {
+    const scope = {
+      lessonId: 'lesson-operation-signals',
+      lessonAttemptId: '40000000-0000-4000-8000-000000000004',
+    };
+    remote.rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({
+      data: [
+        {
+          ...record,
+          lesson_id: scope.lessonId,
+          lesson_attempt_id: scope.lessonAttemptId,
+        },
+      ],
+      error: null,
+    });
+
+    await expect(startAssessment(record.user_id, 'pre-test', scope)).resolves.toMatchObject({
+      lessonId: scope.lessonId,
+      lessonAttemptId: scope.lessonAttemptId,
+    });
+    expect(remote.rpc).toHaveBeenNthCalledWith(1, 'start_assessment', {
+      p_assessment: 'pre-test',
+      p_lesson_attempt_id: scope.lessonAttemptId,
+    });
+    expect(remote.rpc).toHaveBeenNthCalledWith(2, 'get_assessment_attempt', {
+      p_assessment: 'pre-test',
+      p_lesson_attempt_id: scope.lessonAttemptId,
+    });
+  });
+
   const record = {
     id: '3dd244a8-011c-4684-b759-e43ff1daec24',
     user_id: '6ec599dd-3494-4e5d-b917-342905bcb1fa',
@@ -99,12 +155,10 @@ describe('online assessment attempt mapping', () => {
       'q',
       'b',
     );
-    remote.rpc
-      .mockResolvedValueOnce({ error: null })
-      .mockResolvedValueOnce({
-        data: [{ ...record, accepted_revision: 1, accepted_mutation_id: draft.mutationId }],
-        error: null,
-      });
+    remote.rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({
+      data: [{ ...record, accepted_revision: 1, accepted_mutation_id: draft.mutationId }],
+      error: null,
+    });
     await expect(syncAssessmentDraft(draft)).resolves.toMatchObject({
       acceptedRevision: 1,
       acceptedMutationId: draft.mutationId,
@@ -128,21 +182,19 @@ describe('online assessment attempt mapping', () => {
     expect(() => toAssessmentAttempt({ ...record, accepted_revision: undefined })).toThrow();
   });
   it('requires the exact final revision and does not submit client scoring', async () => {
-    remote.rpc
-      .mockResolvedValueOnce({ error: null })
-      .mockResolvedValueOnce({
-        data: [
-          {
-            ...record,
-            status: 'submitted',
-            score: 100,
-            submitted_at: '2026-08-30T12:01:00.000Z',
-            submitted_revision: 3,
-            accepted_revision: 3,
-          },
-        ],
-        error: null,
-      });
+    remote.rpc.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({
+      data: [
+        {
+          ...record,
+          status: 'submitted',
+          score: 100,
+          submitted_at: '2026-08-30T12:01:00.000Z',
+          submitted_revision: 3,
+          accepted_revision: 3,
+        },
+      ],
+      error: null,
+    });
     await completeAssessment(record.user_id, 'pre-test', record.id, 3);
     expect(remote.rpc).toHaveBeenNthCalledWith(1, 'complete_assessment_revision', {
       p_attempt_id: record.id,

@@ -60,4 +60,13 @@ describe('Admin workspace layout styles', () => {
     );
     expect(adminStyles).toMatch(/\.admin-table:focus-visible\s*\{[\s\S]*?outline:/);
   });
+
+  it('separates lesson preview navigation and stacks it on narrow screens', () => {
+    expect(adminStyles).toMatch(
+      /\.lesson-preview-navigation\s*\{[\s\S]*display: grid;[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[\s\S]*gap:/,
+    );
+    expect(adminStyles).toMatch(
+      /@media \(max-width: 650px\) \{[\s\S]*\.lesson-preview-navigation\s*\{[\s\S]*grid-template-columns: 1fr;/,
+    );
+  });
 });

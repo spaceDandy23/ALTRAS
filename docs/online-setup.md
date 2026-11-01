@@ -40,8 +40,17 @@ Published lesson content comes from Supabase. The separately authorized, lightwe
     database-catalog frontend. Follow the admin grant and QA instructions in the management guide.
 18. Run `supabase/migrations/202609120003_admin_user_management.sql`, then deploy the authenticated
     `admin-users` Edge Function. Follow [Admin User Management deployment and QA](admin-user-management.md).
-19. Copy the project URL and publishable key from **Project Settings > API Keys**.
-20. Create `.env.local` from `.env.example` and add those two public values.
+19. Apply all later ordered migrations through `202609160003_idempotent_lesson_active_time.sql`.
+20. Run `supabase/migrations/202610300001_lesson_chapters.sql` before deploying the chapter-aware
+    lesson editor. See [Lesson chapters Phase 1](lesson-chapters-phase-1.md).
+21. Run `supabase/migrations/202610300002_lesson_chapter_runtime.sql` with the Phase 2 client to
+    enable server-owned chapter stages and lesson-scoped assessments. See
+    [Lesson chapters Phase 2](lesson-chapters-phase-2.md).
+22. Run `supabase/migrations/202610300003_lesson_offline_transitions.sql` with the Phase 3 client
+    so reconnect retries can acknowledge chapter-stage transitions idempotently. See
+    [Lesson chapters Phase 3](lesson-chapters-phase-3.md).
+23. Copy the project URL and publishable key from **Project Settings > API Keys**.
+24. Create `.env.local` from `.env.example` and add those two public values.
 
 Never place the `service_role` key in the Vite app, Git repository, or Vercel browser environment.
 

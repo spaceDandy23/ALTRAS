@@ -1,15 +1,23 @@
 import { z } from 'zod';
-import { lessonSchema } from '@/features/lessons/domain/content.schemas';
+import {
+  lessonSchema,
+  type InstructionalContentBlock,
+  type LessonChapter,
+} from '@/features/lessons/domain/content.schemas';
 import { catalogShell } from '@/features/lessons/content/catalog-shell';
 import { getSupabaseClient } from '@/services/supabase.client';
 
-export type AuthoredLesson = z.infer<typeof lessonSchema>;
+type LegacyAuthoredLesson = z.infer<typeof lessonSchema>;
+export type AuthoredLesson = LegacyAuthoredLesson & { chapters: LessonChapter[] };
+export type AuthoredChapter = LessonChapter;
 export const MAX_ACTIVITIES = 10;
 export const MAX_LESSONS = 8;
 export const publishableLessonSchema = lessonSchema.superRefine((lesson, ctx) => {
   if (!lesson.title.trim() || !lesson.shortDescription.trim())
     ctx.addIssue({ code: 'custom', message: 'Title and description are required.' });
   if (lesson.displayOrder < 1) ctx.addIssue({ code: 'custom', message: 'Order must be positive.' });
+  if (!lesson.chapters?.length)
+    ctx.addIssue({ code: 'custom', message: 'A published lesson requires at least one chapter.' });
   if (lesson.activities.length > MAX_ACTIVITIES)
     ctx.addIssue({ code: 'custom', message: 'A lesson supports at most 10 activities.' });
   for (const activity of lesson.activities) {
@@ -35,16 +43,20 @@ export async function isCurrentUserAdmin(): Promise<boolean> {
   return (await call('is_admin')) === true;
 }
 export async function listManagedLessons(): Promise<ManagedLesson[]> {
-  return (await call('get_admin_lessons')) as ManagedLesson[];
+  return ((await call('get_admin_lessons')) as ManagedLesson[]).map((item) => ({
+    ...item,
+    draft: normalizeAuthoredLesson(item.draft),
+  }));
 }
 export async function saveManagedLesson(
   draft: AuthoredLesson,
   revision: number,
 ): Promise<ManagedLesson> {
-  if (draft.activities.length > MAX_ACTIVITIES)
+  const normalized = normalizeAuthoredLesson(draft);
+  if (normalized.activities.length > MAX_ACTIVITIES)
     throw new Error('A lesson supports at most 10 activities.');
   return (await call('save_admin_lesson', {
-    p_lesson: draft,
+    p_lesson: normalized,
     p_revision: revision,
   })) as ManagedLesson;
 }
@@ -60,7 +72,7 @@ export async function publishManagedLesson(
   })) as ManagedLesson;
 }
 export function newLesson(order: number): AuthoredLesson {
-  return {
+  return normalizeAuthoredLesson({
     id: `lesson-${crypto.randomUUID()}`,
     sectionId: catalogShell.sections[0].id,
     unitId: catalogShell.units[0].id,
@@ -73,7 +85,56 @@ export function newLesson(order: number): AuthoredLesson {
     passingThreshold: 70,
     instructionalContent: [],
     activities: [],
+    chapters: [newChapter(1)],
+    assessments: { preTest: 'pre-test', postTest: 'post-test' },
+  });
+}
+
+export function newChapter(order: number, title = `Chapter ${order}`): AuthoredChapter {
+  return {
+    id: `chapter-${crypto.randomUUID()}`,
+    title,
+    description: '',
+    displayOrder: order,
+    instructionalContent: [],
+    activities: [],
   };
+}
+
+export function newInstructionalBlock(
+  type: InstructionalContentBlock['type'] = 'paragraph',
+): InstructionalContentBlock {
+  const id = `content-${crypto.randomUUID()}`;
+  if (type === 'example') return { id, type, phrase: '', expression: '', note: '' };
+  return { id, type, title: '', body: '' };
+}
+
+export function normalizeAuthoredLesson(lesson: LegacyAuthoredLesson): AuthoredLesson {
+  const source = lesson.chapters?.length
+    ? lesson.chapters
+    : [
+        {
+          id: `chapter-${lesson.id}`,
+          title: 'Chapter 1',
+          description: lesson.shortDescription,
+          displayOrder: 1,
+          instructionalContent: lesson.instructionalContent,
+          activities: lesson.activities,
+        },
+      ];
+  const chapters = [...source]
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map((chapter, index) => ({ ...chapter, displayOrder: index + 1 }));
+  return {
+    ...lesson,
+    chapters,
+    instructionalContent: chapters.flatMap((chapter) => chapter.instructionalContent),
+    activities: chapters.flatMap((chapter) => chapter.activities),
+  };
+}
+
+export function totalLessonActivities(lesson: Pick<AuthoredLesson, 'chapters'>): number {
+  return lesson.chapters.reduce((total, chapter) => total + chapter.activities.length, 0);
 }
 export function newActivity(
   type: 'find-word' | 'organize-translate',

@@ -72,6 +72,7 @@ describe('lesson overview transitions', () => {
     vi.mocked(getLesson).mockResolvedValue(lesson);
     vi.mocked(getLessonProgress).mockResolvedValue(progress);
     vi.mocked(getActiveAttempt).mockResolvedValue(attempt);
+    vi.mocked(startOrResumeAttempt).mockResolvedValue(attempt);
     useAuthStore.setState({
       status: 'authenticated',
       user: {
@@ -100,7 +101,7 @@ describe('lesson overview transitions', () => {
     await user.click(await screen.findByRole('button', { name: 'Resume lesson' }));
 
     expect(await screen.findByText('Lesson player destination')).toBeVisible();
-    expect(startOrResumeAttempt).not.toHaveBeenCalled();
+    expect(startOrResumeAttempt).toHaveBeenCalledWith(expect.anything(), userId, lesson.id);
     expect(getLesson).toHaveBeenCalledWith(expect.anything(), lesson.id, attempt.id);
   });
 

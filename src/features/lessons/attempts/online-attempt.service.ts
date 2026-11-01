@@ -9,6 +9,7 @@ import {
 } from '@/types/learning';
 import { getLesson } from '../content/content.service';
 import type { ActivityAnswer } from '../domain/evaluation';
+import type { LessonFlowStage } from '../domain/lesson-flow';
 import { getOnlineLessonProgress } from '../progress/online-progress.service';
 import { recordLessonUnlock } from '../progress/progress-transitions';
 import { AttemptError } from './attempt.errors';
@@ -36,12 +37,27 @@ const remoteAttemptSchema = z.object({
   star_count: z.number().int().nullable(),
   cleared: z.boolean().nullable(),
   xp_improvement: z.number().int(),
+  flow_stage: z
+    .enum([
+      'legacy-activity',
+      'pre-test',
+      'chapter-teaching',
+      'chapter-activity',
+      'post-test',
+      'ready-to-complete',
+    ])
+    .optional()
+    .default('legacy-activity'),
+  current_chapter_id: z.string().nullable().optional().default(null),
+  pre_assessment_version: z.number().int().nullable().optional().default(null),
+  post_assessment_version: z.number().int().nullable().optional().default(null),
   attempt_answers: z.array(remoteAnswerSchema).optional().default([]),
 });
 
 const attemptColumns = `
   id, user_id, lesson_id, content_version, status, started_at, last_updated_at,
   completed_at, abandoned_at, final_score, star_count, cleared, xp_improvement,
+  flow_stage, current_chapter_id, pre_assessment_version, post_assessment_version,
   attempt_answers (activity_id, activity_type, submitted_answer, is_correct, submitted_at)
 `;
 
@@ -79,6 +95,10 @@ export function toLessonAttempt(input: unknown): LessonAttempt {
     starCount: record.star_count,
     cleared: record.cleared,
     xpImprovement: record.xp_improvement,
+    flowStage: record.flow_stage,
+    currentChapterId: record.current_chapter_id,
+    preAssessmentVersion: record.pre_assessment_version,
+    postAssessmentVersion: record.post_assessment_version,
   });
 }
 
@@ -187,15 +207,19 @@ export async function submitOnlineActivityAnswer(
   activityId: string,
   answer: ActivityAnswer,
   currentAttempt?: LessonAttempt,
+  checkSync: () => void = () => undefined,
 ): Promise<LessonAttempt> {
+  checkSync();
   assertParticipantLearningAccess();
   if (currentAttempt && currentAttempt.id !== attemptId) {
     throw new AttemptError('The active attempt does not match this answer.');
   }
   const attempt = currentAttempt ?? (await readAttempt(attemptId));
+  checkSync();
   if (attempt.status !== 'active') throw new AttemptError('This attempt is already closed.');
   if (attempt.answers.some((item) => item.activityId === activityId)) return attempt;
   const lesson = await getLesson(database, attempt.lessonId, attempt.id);
+  checkSync();
   const activity = lesson.activities.find((item) => item.id === activityId);
   if (!activity) throw new AttemptError('This activity is not part of the lesson.');
 
@@ -204,6 +228,7 @@ export async function submitOnlineActivityAnswer(
     p_activity_id: activityId,
     p_submitted_answer: answer,
   });
+  checkSync();
   if (error?.code === '23505') return readAttempt(attemptId);
   if (error) throw new AttemptError('Unable to save this answer online.');
 
@@ -218,11 +243,15 @@ export async function submitOnlineActivityAnswer(
 export async function completeOnlineAttempt(
   database: AltrasDatabase,
   attemptId: string,
+  checkSync: () => void = () => undefined,
 ): Promise<LessonAttempt> {
+  checkSync();
   assertParticipantLearningAccess();
   const attempt = await readAttempt(attemptId);
+  checkSync();
   if (attempt.status === 'completed') return attempt;
   const lesson = await getLesson(database, attempt.lessonId, attempt.id);
+  checkSync();
   if (attempt.answers.length !== lesson.activities.length) {
     throw new AttemptError('Complete every activity before finishing the lesson.');
   }
@@ -231,11 +260,14 @@ export async function completeOnlineAttempt(
     attempt.userId,
     attempt.lessonId,
   ).catch(() => null);
+  checkSync();
   const { error } = await getSupabaseClient().rpc('complete_lesson_attempt', {
     p_attempt_id: attemptId,
   });
   if (error) throw new AttemptError('Unable to finish and score this lesson online.');
+  checkSync();
   const completedAttempt = await readAttempt(attemptId);
+  checkSync();
   if (
     completedAttempt.cleared === true &&
     progressBeforeCompletion !== null &&
@@ -250,6 +282,34 @@ export async function getOnlineAttempt(userId: string, attemptId: string): Promi
   const attempt = await readAttempt(attemptId);
   if (attempt.userId !== userId) throw new AttemptError('This attempt belongs to another account.');
   return attempt;
+}
+
+export async function advanceOnlineAttemptStage(
+  attemptId: string,
+  expectedStage: LessonFlowStage,
+  expectedChapterId: string | null,
+  checkSync: () => void = () => undefined,
+): Promise<LessonAttempt> {
+  checkSync();
+  assertParticipantLearningAccess();
+  const { error } = await getSupabaseClient().rpc('sync_lesson_attempt_stage', {
+    p_attempt_id: attemptId,
+    p_expected_stage: expectedStage,
+    p_expected_chapter_id: expectedChapterId,
+  });
+  checkSync();
+  if (error) {
+    const restored = await readAttempt(attemptId).catch(() => null);
+    if (
+      restored &&
+      (restored.flowStage !== expectedStage ||
+        (restored.currentChapterId ?? null) !== expectedChapterId)
+    ) {
+      return restored;
+    }
+    throw new AttemptError(error.message || 'Unable to continue this lesson.');
+  }
+  return readAttempt(attemptId);
 }
 
 export async function recordOnlineActiveSeconds(

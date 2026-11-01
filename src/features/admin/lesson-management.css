@@ -134,6 +134,8 @@
   max-width: 100%;
 }
 .admin-editor,
+.admin-chapter,
+.admin-instruction,
 .admin-activity,
 .admin-options {
   min-width: 0;
@@ -141,6 +143,43 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   margin-block: 1rem;
+}
+.admin-chapter {
+  border-color: var(--line-strong);
+  background: var(--surface-soft);
+}
+.admin-instruction {
+  background: var(--panel-bg);
+}
+.admin-instruction-fields,
+.admin-textarea-field {
+  display: grid;
+  gap: 0.65rem;
+}
+.admin-instruction-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.admin-instruction-fields label,
+.admin-activity label {
+  display: grid;
+  gap: 0.45rem;
+}
+.admin-instruction-fields select,
+.admin-activity select,
+.admin-textarea-field textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.65rem;
+  color: var(--paper);
+  background: var(--control-bg);
+}
+.admin-textarea-field {
+  grid-column: 1 / -1;
+}
+.admin-textarea-field textarea {
+  min-height: 7rem;
+  resize: vertical;
 }
 .admin-options {
   grid-column: 1/-1;
@@ -226,6 +265,28 @@
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+.lesson-preview-navigation {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+}
+.lesson-preview-navigation > :first-child {
+  justify-self: start;
+}
+.lesson-preview-navigation > :last-child {
+  justify-self: end;
+}
+.lesson-preview-navigation > span {
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.lesson-preview-navigation .button {
+  max-width: 100%;
+  white-space: normal;
 }
 .admin-assessment-table table {
   min-width: 760px;
@@ -480,6 +541,16 @@
   }
   .admin-fields {
     grid-template-columns: 1fr;
+  }
+  .admin-instruction-fields {
+    grid-template-columns: 1fr;
+  }
+  .lesson-preview-navigation {
+    grid-template-columns: 1fr;
+  }
+  .lesson-preview-navigation > * {
+    width: 100%;
+    justify-self: stretch;
   }
   .admin-section-heading,
   .admin-search {

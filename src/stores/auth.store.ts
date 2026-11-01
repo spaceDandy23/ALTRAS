@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { setSyncIdentity } from '@/services/sync-session';
 import {
   loginOnlineUser,
   logoutOnlineUser,
@@ -31,6 +32,7 @@ let authGeneration = 0;
 
 export const useAuthStore = create<AuthState>((set, get) => {
   const clearUserScope = () => {
+    setSyncIdentity(null);
     useResearcherAccessStore.getState().clear();
     deactivateVisualPreferences();
     applyExperienceScope('neutral');
@@ -39,11 +41,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
   const authenticate = async (user: PublicUser, generation: number) => {
     await hydrateVisualPreferencesForUser(user.id);
-    if (generation === authGeneration) set({ user, status: 'authenticated' });
+    if (generation === authGeneration) {
+      setSyncIdentity(user.id);
+      set({ user, status: 'authenticated' });
+    }
   };
 
   const acceptAuthUser = (user: PublicUser | null) => {
     if (user && get().status === 'authenticated' && get().user?.id === user.id) {
+      setSyncIdentity(user.id);
       set({ user });
       return;
     }
@@ -104,4 +110,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
     replaceUser: (user) => set({ user }),
     subscribeToAuthChanges: () => subscribeToOnlineAuthChanges(acceptAuthUser),
   };
+});
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.status !== previous.status || state.user?.id !== previous.user?.id) {
+    setSyncIdentity(state.status === 'authenticated' ? (state.user?.id ?? null) : null);
+  }
 });

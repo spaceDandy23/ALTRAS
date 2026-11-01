@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+const offlineMessage = "You're offline — some features may be unavailable.";
+
 export function OfflineStatus() {
   const [online, setOnline] = useState(() => navigator.onLine);
 
@@ -25,9 +27,12 @@ export function OfflineStatus() {
       className="offline-status offline-status--active"
       role="status"
       aria-live="polite"
+      aria-label={offlineMessage}
     >
       <span className="offline-status__dot" aria-hidden="true" />
-      You're offline — some features may be unavailable.
+      <span className="offline-status__message" aria-hidden="true">
+        {offlineMessage}
+      </span>
     </span>
   );
 }

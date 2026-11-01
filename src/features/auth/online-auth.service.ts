@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { getSupabaseClient } from '@/services/supabase.client';
+import { observeSyncAuthIdentity } from '@/services/sync-session';
 import type { PublicUser } from '@/types/models';
 import {
   loginSchema,
@@ -166,15 +167,27 @@ export async function restoreOnlineSession(): Promise<PublicUser | null> {
 export function subscribeToOnlineAuthChanges(
   listener: (user: PublicUser | null) => void,
 ): () => void {
+  let revision = 0;
   const { data } = getSupabaseClient().auth.onAuthStateChange((_event, session) => {
+    const current = ++revision;
+    observeSyncAuthIdentity(session?.user.id ?? null);
     if (!session) {
       listener(null);
       return;
     }
 
-    void toPublicUser(session.user).then(listener).catch(() => listener(null));
+    void toPublicUser(session.user)
+      .then((user) => {
+        if (current === revision) listener(user);
+      })
+      .catch(() => {
+        if (current === revision) listener(null);
+      });
   });
-  return () => data.subscription.unsubscribe();
+  return () => {
+    revision++;
+    data.subscription.unsubscribe();
+  };
 }
 
 export async function logoutOnlineUser(): Promise<void> {

@@ -3,6 +3,7 @@ import { FormField } from '@/components/ui/FormField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminContentLoading } from './AdminContentLoading';
 import { ActivityEditor } from './ActivityEditor';
+import { InstructionalContentEditor } from './InstructionalContentEditor';
 import { LessonContentPreview } from './LessonContentPreview';
 import {
   listManagedLessons,
@@ -10,7 +11,11 @@ import {
   publishManagedLesson,
   newLesson,
   newActivity,
+  newChapter,
+  newInstructionalBlock,
+  normalizeAuthoredLesson,
   moveItem,
+  totalLessonActivities,
   MAX_ACTIVITIES,
   MAX_LESSONS,
   type AuthoredLesson,
@@ -30,6 +35,7 @@ export function LessonManagementPage() {
   const [notice, setNotice] = useState('');
   const [reload, setReload] = useState(0);
   const [leaving, setLeaving] = useState(false);
+  const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     void listManagedLessons()
@@ -52,9 +58,17 @@ export function LessonManagementPage() {
   }, [reload]);
   const current = items.find((item) => item.lesson_id === draft?.id);
   const change = (next: AuthoredLesson) => {
-    setDraft(next);
+    setDraft(normalizeAuthoredLesson(next));
     setDirty(true);
     setNotice('');
+  };
+  const changeChapters = (chapters: AuthoredLesson['chapters']) => {
+    if (draft) {
+      change({
+        ...draft,
+        chapters: chapters.map((chapter, index) => ({ ...chapter, displayOrder: index + 1 })),
+      });
+    }
   };
   const accept = (item: ManagedLesson) => {
     setItems((rows) =>
@@ -183,7 +197,7 @@ export function LessonManagementPage() {
                           ? 'Unpublished'
                           : 'Draft'}
                     </td>
-                    <td>{item.draft.activities.length}/10</td>
+                    <td>{totalLessonActivities(item.draft)}/10</td>
                     <td>
                       {items.find((p) => p.lesson_id === item.draft.prerequisiteLessonId)?.draft
                         .title ?? 'None'}
@@ -289,71 +303,349 @@ export function LessonManagementPage() {
                     </select>
                   </label>
                 </div>
-                <h2>Activities ({draft.activities.length}/10)</h2>
-                {draft.activities.map((activity, index) => (
-                  <fieldset key={activity.id} className="admin-activity">
-                    <legend>Activity {index + 1}</legend>
-                    <div className="admin-actions">
-
-                      <div className="lesson-actions">
-                        <button
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() =>
-                            change({ ...draft, activities: moveItem(draft.activities, index, -1) })
-                          }
-                        >
-                          Move activity {index + 1} up
-                        </button>
-                        <button
-                          type="button"
-                          disabled={index === draft.activities.length - 1}
-                          onClick={() =>
-                            change({ ...draft, activities: moveItem(draft.activities, index, 1) })
-                          }
-                        >
-                          Move activity {index + 1} down
-                        </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
+                <fieldset className="admin-options">
+                  <legend>Lesson assessments</legend>
+                  <div className="admin-checks">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={draft.assessments?.preTest === 'pre-test'}
+                        onChange={(event) =>
                           change({
                             ...draft,
-                            activities: draft.activities.filter((a) => a.id !== activity.id),
+                            assessments: {
+                              ...draft.assessments,
+                              preTest: event.target.checked ? 'pre-test' : undefined,
+                            },
                           })
                         }
+                      />
+                      Require lesson pre-test
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={draft.assessments?.postTest === 'post-test'}
+                        onChange={(event) =>
+                          change({
+                            ...draft,
+                            assessments: {
+                              ...draft.assessments,
+                              postTest: event.target.checked ? 'post-test' : undefined,
+                            },
+                          })
+                        }
+                      />
+                      Require lesson post-test
+                    </label>
+                  </div>
+                </fieldset>
+                <div className="admin-section-heading">
+                  <div>
+                    <h2>Chapters ({draft.chapters.length})</h2>
+                    <p>{totalLessonActivities(draft)}/10 activities across this lesson.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      changeChapters([...draft.chapters, newChapter(draft.chapters.length + 1)])
+                    }
+                  >
+                    Add chapter
+                  </button>
+                </div>
+                {draft.chapters.map((chapter, chapterIndex) => (
+                  <fieldset key={chapter.id} className="admin-chapter">
+                    <legend>Chapter {chapterIndex + 1}</legend>
+                    <div className="admin-actions lesson-actions">
+                      <button
+                        type="button"
+                        disabled={chapterIndex === 0}
+                        onClick={() => changeChapters(moveItem(draft.chapters, chapterIndex, -1))}
                       >
-                        Delete activity {index + 1}
+                        Move chapter {chapterIndex + 1} up
                       </button>
-
-                      </div>
+                      <button
+                        type="button"
+                        disabled={chapterIndex === draft.chapters.length - 1}
+                        onClick={() => changeChapters(moveItem(draft.chapters, chapterIndex, 1))}
+                      >
+                        Move chapter {chapterIndex + 1} down
+                      </button>
+                      <button type="button" onClick={() => setDeletingChapterId(chapter.id)}>
+                        Delete chapter {chapterIndex + 1}
+                      </button>
                     </div>
-                    <ActivityEditor
-                      activity={activity}
-                      onChange={(a) =>
-                        change({
-                          ...draft,
-                          activities: draft.activities.map((old) => (old.id === a.id ? a : old)),
-                        })
+                    <div className="admin-fields">
+                      <FormField
+                        label="Chapter title"
+                        required
+                        value={chapter.title}
+                        onChange={(event) =>
+                          changeChapters(
+                            draft.chapters.map((item) =>
+                              item.id === chapter.id
+                                ? { ...item, title: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                      <FormField
+                        label="Chapter description"
+                        value={chapter.description ?? ''}
+                        onChange={(event) =>
+                          changeChapters(
+                            draft.chapters.map((item) =>
+                              item.id === chapter.id
+                                ? { ...item, description: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                    <h3>Teaching and discussion content</h3>
+                    {chapter.instructionalContent.map((block, contentIndex) => (
+                      <fieldset key={block.id} className="admin-instruction">
+                        <legend>Content {contentIndex + 1}</legend>
+                        <div className="admin-actions lesson-actions">
+                          <button
+                            type="button"
+                            disabled={contentIndex === 0}
+                            onClick={() =>
+                              changeChapters(
+                                draft.chapters.map((item) =>
+                                  item.id === chapter.id
+                                    ? {
+                                        ...item,
+                                        instructionalContent: moveItem(
+                                          item.instructionalContent,
+                                          contentIndex,
+                                          -1,
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            Move content {contentIndex + 1} up
+                          </button>
+                          <button
+                            type="button"
+                            disabled={contentIndex === chapter.instructionalContent.length - 1}
+                            onClick={() =>
+                              changeChapters(
+                                draft.chapters.map((item) =>
+                                  item.id === chapter.id
+                                    ? {
+                                        ...item,
+                                        instructionalContent: moveItem(
+                                          item.instructionalContent,
+                                          contentIndex,
+                                          1,
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            Move content {contentIndex + 1} down
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              changeChapters(
+                                draft.chapters.map((item) =>
+                                  item.id === chapter.id
+                                    ? {
+                                        ...item,
+                                        instructionalContent: item.instructionalContent.filter(
+                                          (entry) => entry.id !== block.id,
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            Delete content {contentIndex + 1}
+                          </button>
+                        </div>
+                        <InstructionalContentEditor
+                          block={block}
+                          onChange={(next) =>
+                            changeChapters(
+                              draft.chapters.map((item) =>
+                                item.id === chapter.id
+                                  ? {
+                                      ...item,
+                                      instructionalContent: item.instructionalContent.map(
+                                        (entry) => (entry.id === block.id ? next : entry),
+                                      ),
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </fieldset>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        changeChapters(
+                          draft.chapters.map((item) =>
+                            item.id === chapter.id
+                              ? {
+                                  ...item,
+                                  instructionalContent: [
+                                    ...item.instructionalContent,
+                                    newInstructionalBlock(),
+                                  ],
+                                }
+                              : item,
+                          ),
+                        )
                       }
-                    />
+                    >
+                      Add teaching content to {chapter.title}
+                    </button>
+                    <h3>Activities ({chapter.activities.length})</h3>
+                    {chapter.activities.map((activity, activityIndex) => (
+                      <fieldset key={activity.id} className="admin-activity">
+                        <legend>Activity {activityIndex + 1}</legend>
+                        <div className="admin-actions lesson-actions">
+                          <button
+                            type="button"
+                            disabled={activityIndex === 0}
+                            onClick={() =>
+                              changeChapters(
+                                draft.chapters.map((item) =>
+                                  item.id === chapter.id
+                                    ? {
+                                        ...item,
+                                        activities: moveItem(item.activities, activityIndex, -1),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            Move activity {activityIndex + 1} up
+                          </button>
+                          <button
+                            type="button"
+                            disabled={activityIndex === chapter.activities.length - 1}
+                            onClick={() =>
+                              changeChapters(
+                                draft.chapters.map((item) =>
+                                  item.id === chapter.id
+                                    ? {
+                                        ...item,
+                                        activities: moveItem(item.activities, activityIndex, 1),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            Move activity {activityIndex + 1} down
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              changeChapters(
+                                draft.chapters.map((item) =>
+                                  item.id === chapter.id
+                                    ? {
+                                        ...item,
+                                        activities: item.activities.filter(
+                                          (entry) => entry.id !== activity.id,
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            Delete activity {activityIndex + 1}
+                          </button>
+                          {draft.chapters.length > 1 && (
+                            <label>
+                              Activity chapter
+                              <select
+                                value={chapter.id}
+                                onChange={(event) => {
+                                  const destination = event.target.value;
+                                  changeChapters(
+                                    draft.chapters.map((item) =>
+                                      item.id === chapter.id
+                                        ? {
+                                            ...item,
+                                            activities: item.activities.filter(
+                                              (entry) => entry.id !== activity.id,
+                                            ),
+                                          }
+                                        : item.id === destination
+                                          ? { ...item, activities: [...item.activities, activity] }
+                                          : item,
+                                    ),
+                                  );
+                                }}
+                              >
+                                {draft.chapters.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                        </div>
+                        <ActivityEditor
+                          activity={activity}
+                          onChange={(next) =>
+                            changeChapters(
+                              draft.chapters.map((item) =>
+                                item.id === chapter.id
+                                  ? {
+                                      ...item,
+                                      activities: item.activities.map((entry) =>
+                                        entry.id === activity.id ? next : entry,
+                                      ),
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </fieldset>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={totalLessonActivities(draft) >= MAX_ACTIVITIES}
+                      onClick={() =>
+                        changeChapters(
+                          draft.chapters.map((item) =>
+                            item.id === chapter.id
+                              ? {
+                                  ...item,
+                                  activities: [...item.activities, newActivity('find-word')],
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      Add activity to {chapter.title}
+                    </button>
                   </fieldset>
                 ))}
                 <div className="admin-actions">
-                  <button
-                    type="button"
-                    disabled={draft.activities.length >= MAX_ACTIVITIES}
-                    onClick={() =>
-                      change({
-                        ...draft,
-                        activities: [...draft.activities, newActivity('find-word')],
-                      })
-                    }
-                  >
-                    Add activity
-                  </button>
-                  {draft.activities.length >= MAX_ACTIVITIES && (
+                  {totalLessonActivities(draft) >= MAX_ACTIVITIES && (
                     <span role="status">Maximum 10 activities reached.</span>
                   )}
                 </div>
@@ -389,6 +681,21 @@ export function LessonManagementPage() {
         onConfirm={leave}
       >
         Unsaved lesson edits will be lost.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={deletingChapterId !== null}
+        title="Delete chapter?"
+        confirmLabel="Delete chapter"
+        onCancel={() => setDeletingChapterId(null)}
+        onConfirm={() => {
+          if (draft && deletingChapterId) {
+            changeChapters(draft.chapters.filter((chapter) => chapter.id !== deletingChapterId));
+          }
+          setDeletingChapterId(null);
+        }}
+      >
+        This removes the chapter and its teaching content and activities from the draft. Save the
+        draft to keep this change; published content remains unchanged until republished.
       </ConfirmDialog>
     </>
   );

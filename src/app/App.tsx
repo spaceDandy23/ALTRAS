@@ -112,6 +112,10 @@ export function App() {
               <Route path="lessons/almanac/review" element={<AlmanacReviewPlaceholder />} />
               <Route path="lessons/:lessonId" element={<LessonOverviewPage />} />
               <Route path="lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+              <Route
+                path="lessons/:lessonId/play/:attemptId/assessment/:kind"
+                element={<AssessmentPage />}
+              />
               <Route path="lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
               <Route path="lessons/:lessonId/preview" element={<LessonPreviewPage />} />
             </Route>

@@ -4,16 +4,15 @@ import { AltrasLogo } from '@/components/brand/AltrasLogo';
 import { AlgebraicBackdrop } from '@/components/decorative/AlgebraicBackdrop';
 import { OfflineStatus } from '@/components/status/OfflineStatus';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { GlobalLessonSyncStatus } from '@/features/lessons/components/GlobalLessonSyncStatus';
 import { resolveTheme } from '@/features/settings/apply-preferences';
 import { useAuthStore } from '@/stores/auth.store';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
+import { getAudioMuted, playMusic, setAudioMuted, stopMusic } from '@/services/audio/audio.manager';
 import {
-  getAudioMuted,
-  playMusic,
-  setAudioMuted,
-  stopMusic,
-} from '@/services/audio/audio.manager';
-import { playNeutralClickOnKeyDown, playNeutralClickOnPointerDown } from '@/services/audio/click.handlers';
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function AppShell() {
   const [confirmingLogout, setConfirmingLogout] = useState(false);
@@ -25,7 +24,9 @@ export function AppShell() {
   const researcherStatus = useResearcherAccessStore((state) => state.status);
   const navigate = useNavigate();
   const location = useLocation();
-  const activeLesson = /^\/lessons\/[^/]+\/play\/[^/]+\/?$/.test(location.pathname);
+  const activeLessonMatch = location.pathname.match(/^\/lessons\/[^/]+\/play\/([^/]+)\/?$/);
+  const globalAssessmentMatch = location.pathname.match(/^\/assessments\/(pre-test|post-test)\/?$/);
+  const activeLesson = Boolean(activeLessonMatch);
   useEffect(() => {
     const colorScheme =
       typeof window.matchMedia === 'function'
@@ -71,6 +72,18 @@ export function AppShell() {
       <AlgebraicBackdrop />
       <header className="app-header">
         <AltrasLogo linked={!activeLesson} />
+        <OfflineStatus />
+        {user && (
+          <GlobalLessonSyncStatus
+            userId={user.id}
+            excludedAttemptId={activeLessonMatch?.[1]}
+            excludedAssessment={
+              globalAssessmentMatch
+                ? { assessment: globalAssessmentMatch[1] as 'pre-test' | 'post-test' }
+                : undefined
+            }
+          />
+        )}
         <div className="app-header__tools">
           <Link
             className="app-home-link"
@@ -85,7 +98,6 @@ export function AppShell() {
           >
             Home
           </Link>
-          <OfflineStatus />
           <button
             className="audio-mute-button"
             type="button"
@@ -96,9 +108,21 @@ export function AppShell() {
             <svg className="audio-mute-button__icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" />
               {audioMuted ? (
-                <path d="m17 9 4 6m0-6-4 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="m17 9 4 6m0-6-4 6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               ) : (
-                <path d="M16 9.5a4 4 0 0 1 0 5m2-7.5a7 7 0 0 1 0 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M16 9.5a4 4 0 0 1 0 5m2-7.5a7 7 0 0 1 0 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               )}
             </svg>
           </button>

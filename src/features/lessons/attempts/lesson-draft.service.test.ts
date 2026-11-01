@@ -7,14 +7,19 @@ import {
   LessonDraftSynchronizer,
   acknowledgeLessonActiveTime,
   acknowledgeLessonAnswer,
+  acknowledgeLessonStageTransition,
   createLessonDraft,
+  discoverPendingLessonDrafts,
   getLessonDraft,
   lessonDraftId,
   markLessonDraftPendingCompletion,
   queueLessonAnswer,
   queueLessonActiveTime,
+  queueLessonStageTransition,
   reconcileLessonDraft,
   saveLessonDraft,
+  updateStoredLessonDraft,
+  updateLessonDraftPosition,
   type LessonDraft,
 } from './lesson-draft.service';
 
@@ -101,6 +106,178 @@ describe('offline lesson drafts', () => {
     });
   });
 
+  it('persists an offline teaching transition across reload', async () => {
+    const name = `lesson-stage-refresh-${crypto.randomUUID()}`;
+    const first = new AltrasDatabase(name);
+    const chapterLesson = {
+      ...structuredClone(lesson),
+      chapters: [
+        {
+          id: 'chapter-one',
+          title: 'Chapter one',
+          displayOrder: 1,
+          instructionalContent: lesson.instructionalContent,
+          activities: lesson.activities,
+        },
+      ],
+    };
+    const initial = createLessonDraft(
+      attempt({ flowStage: 'chapter-teaching', currentChapterId: 'chapter-one' }),
+      chapterLesson,
+    );
+    await saveLessonDraft(initial, first);
+
+    const queued = await queueLessonStageTransition(initial.id, first, 100);
+    expect(queued).toMatchObject({
+      attempt: { flowStage: 'chapter-activity', currentChapterId: 'chapter-one' },
+      pendingStageTransitions: [
+        {
+          fromStage: 'chapter-teaching',
+          fromChapterId: 'chapter-one',
+          toStage: 'chapter-activity',
+          toChapterId: 'chapter-one',
+        },
+      ],
+    });
+
+    first.close();
+    const restored = new AltrasDatabase(name);
+    databases.push(restored);
+    await expect(getLessonDraft(userId, lesson.id, attemptId, restored)).resolves.toMatchObject({
+      attempt: { flowStage: 'chapter-activity' },
+      pendingStageTransitions: [{ fromStage: 'chapter-teaching' }],
+    });
+  });
+
+  it('removes an accepted transition while preserving newer offline work', async () => {
+    const local = database();
+    const chapterLesson = {
+      ...structuredClone(lesson),
+      chapters: [
+        {
+          id: 'chapter-one',
+          title: 'Chapter one',
+          displayOrder: 1,
+          instructionalContent: lesson.instructionalContent,
+          activities: lesson.activities,
+        },
+      ],
+    };
+    const initial = createLessonDraft(
+      attempt({ flowStage: 'chapter-teaching', currentChapterId: 'chapter-one' }),
+      chapterLesson,
+    );
+    await saveLessonDraft(initial, local);
+    const queued = await queueLessonStageTransition(initial.id, local, 100);
+
+    const acknowledged = await acknowledgeLessonStageTransition(
+      queued.id,
+      queued.pendingStageTransitions[0],
+      attempt({ flowStage: 'chapter-activity', currentChapterId: 'chapter-one' }),
+      local,
+    );
+
+    expect(acknowledged).toMatchObject({
+      attempt: { flowStage: 'chapter-activity' },
+      pendingStageTransitions: [],
+      syncStatus: 'synced',
+    });
+  });
+
+  it('replays offline transitions and answers in their original order', async () => {
+    const local = database();
+    const activity = lesson.activities[0];
+    const chapterLesson = {
+      ...structuredClone(lesson),
+      chapters: [
+        {
+          id: 'chapter-one',
+          title: 'Chapter one',
+          displayOrder: 1,
+          instructionalContent: lesson.instructionalContent,
+          activities: [activity],
+        },
+      ],
+      activities: [activity],
+    };
+    const initial = createLessonDraft(
+      attempt({
+        flowStage: 'chapter-teaching',
+        currentChapterId: 'chapter-one',
+        postAssessmentVersion: 1,
+      }),
+      chapterLesson,
+    );
+    await saveLessonDraft(initial, local);
+    const activityStage = await queueLessonStageTransition(initial.id, local, 100);
+    const answered = queueLessonAnswer(
+      activityStage,
+      activity.id,
+      activity.type,
+      activity.type === 'find-word'
+        ? activity.choices[0].id
+        : activity.tokens.map((token) => token.id),
+      0,
+      200,
+    );
+    await saveLessonDraft(answered, local);
+    await queueLessonStageTransition(initial.id, local, 300);
+    const events: string[] = [];
+    let server = initial.attempt;
+    const synchronizer = new LessonDraftSynchronizer({
+      load: () => getLessonDraft(userId, lesson.id, attemptId, local),
+      recordActiveTime: vi.fn(),
+      acknowledgeActiveTime: vi.fn(),
+      advanceStage: async (_draft, transition) => {
+        events.push(`stage:${transition.fromStage}`);
+        server = {
+          ...server,
+          flowStage: transition.toStage,
+          currentChapterId: transition.toChapterId,
+        };
+        return server;
+      },
+      acknowledgeStage: (snapshot, transition, next) =>
+        acknowledgeLessonStageTransition(snapshot.id, transition, next, local).then(
+          () => undefined,
+        ),
+      submit: async (_draft, pending) => {
+        events.push(`answer:${pending.activityId}`);
+        server = {
+          ...server,
+          answers: [
+            {
+              activityId: pending.activityId,
+              activityType: pending.activityType,
+              answer: pending.answer,
+              isCorrect: true,
+              submittedAt: 250,
+            },
+          ],
+        };
+        return server;
+      },
+      acknowledge: (snapshot, pending, next) =>
+        acknowledgeLessonAnswer(snapshot.id, pending, next, local).then(() => undefined),
+      complete: vi.fn(),
+      onCompleted: vi.fn(),
+      retryDelays: [],
+    });
+
+    await synchronizer.flush();
+
+    expect(events).toEqual([
+      'stage:chapter-teaching',
+      `answer:${activity.id}`,
+      'stage:chapter-activity',
+    ]);
+    await expect(getLessonDraft(userId, lesson.id, attemptId, local)).resolves.toMatchObject({
+      attempt: { flowStage: 'post-test' },
+      pendingAnswers: [],
+      pendingStageTransitions: [],
+    });
+  });
+
   it('retains a failed active-time write for reconnect replay', async () => {
     const local = database();
     const initial = createLessonDraft(attempt(), lesson);
@@ -125,6 +302,42 @@ describe('offline lesson drafts', () => {
     expect(recordActiveTime).toHaveBeenCalledOnce();
     await expect(getLessonDraft(userId, lesson.id, attemptId, local)).resolves.toMatchObject({
       pendingActiveTimeSegments: [{ id: segmentId, seconds: 18 }],
+    });
+  });
+
+  it('keeps the newest local position when an earlier activity is acknowledged during navigation', async () => {
+    const local = database();
+    const initial = queueLessonAnswer(
+      createLessonDraft(attempt(), lesson),
+      lesson.activities[0].id,
+      lesson.activities[0].type,
+      'sum',
+      0,
+    );
+    await saveLessonDraft(initial, local);
+    const server = attempt({
+      answers: [
+        {
+          activityId: lesson.activities[0].id,
+          activityType: lesson.activities[0].type,
+          answer: 'sum',
+          isCorrect: true,
+          submittedAt: 2,
+        },
+      ],
+    });
+    await Promise.all([
+      acknowledgeLessonAnswer(initial.id, initial.pendingAnswers[0], server, local),
+      updateStoredLessonDraft(
+        initial.id,
+        (current) => updateLessonDraftPosition(current, 2),
+        local,
+      ),
+    ]);
+    expect(await getLessonDraft(userId, lesson.id, attemptId, local)).toMatchObject({
+      currentActivityIndex: 2,
+      pendingAnswers: [],
+      attempt: { answers: server.answers },
     });
   });
 
@@ -377,6 +590,48 @@ describe('offline lesson drafts', () => {
     });
   });
 
+  it('reconciles a transition accepted before its response was lost', async () => {
+    const local = database();
+    const chapterLesson = {
+      ...structuredClone(lesson),
+      chapters: [
+        {
+          id: 'chapter-one',
+          title: 'Chapter one',
+          displayOrder: 1,
+          instructionalContent: lesson.instructionalContent,
+          activities: lesson.activities,
+        },
+      ],
+    };
+    const initial = createLessonDraft(
+      attempt({ flowStage: 'chapter-teaching', currentChapterId: 'chapter-one' }),
+      chapterLesson,
+    );
+    await saveLessonDraft(initial, local);
+    const queued = await queueLessonStageTransition(initial.id, local, 100);
+
+    expect(
+      reconcileLessonDraft(
+        attempt({ flowStage: 'chapter-activity', currentChapterId: 'chapter-one' }),
+        chapterLesson,
+        queued,
+      ),
+    ).toMatchObject({
+      attempt: { flowStage: 'chapter-activity' },
+      pendingStageTransitions: [],
+      syncStatus: 'synced',
+    });
+  });
+
+  it('does not restore a stale draft into a fresh retry attempt', async () => {
+    const local = database();
+    await saveLessonDraft(createLessonDraft(attempt(), lesson), local);
+    const retryAttemptId = '50000000-0000-4000-8000-000000000005';
+
+    await expect(getLessonDraft(userId, lesson.id, retryAttemptId, local)).resolves.toBeNull();
+  });
+
   it('keeps pending completion after a failed request and finishes once on a later retry', async () => {
     let current: LessonDraft | null = markLessonDraftPendingCompletion(
       createLessonDraft(
@@ -423,5 +678,81 @@ describe('offline lesson drafts', () => {
     expect(complete).toHaveBeenCalledTimes(2);
     expect(onCompleted).toHaveBeenCalledTimes(1);
     expect(current).toBeNull();
+  });
+
+  it('serializes active-page and global workers for the same attempt', async () => {
+    let current: LessonDraft | null = queueLessonAnswer(
+      createLessonDraft(attempt(), lesson),
+      lesson.activities[0].id,
+      lesson.activities[0].type,
+      'sum',
+      1,
+    );
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const submit = vi.fn(async () => {
+      await gate;
+      return attempt({
+        answers: [
+          {
+            activityId: lesson.activities[0].id,
+            activityType: lesson.activities[0].type,
+            answer: 'sum',
+            isCorrect: true,
+            submittedAt: 2,
+          },
+        ],
+      });
+    });
+    const createSynchronizer = () =>
+      new LessonDraftSynchronizer({
+        attemptId,
+        load: async () => current,
+        recordActiveTime: vi.fn(),
+        acknowledgeActiveTime: vi.fn(),
+        submit,
+        acknowledge: async (_draft, _answer, server) => {
+          if (current) current = { ...current, attempt: server, pendingAnswers: [] };
+        },
+        complete: async () => attempt(),
+        onCompleted: async () => undefined,
+        retryDelays: [],
+      });
+    const activeWorker = createSynchronizer();
+    const globalWorker = createSynchronizer();
+
+    const activeFlush = activeWorker.flush();
+    const globalFlush = globalWorker.flush();
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    finish();
+    await Promise.all([activeFlush, globalFlush]);
+
+    expect(submit).toHaveBeenCalledOnce();
+    expect(current?.pendingAnswers).toHaveLength(0);
+  });
+
+  it('preserves a corrupt lesson draft without blocking valid pending work', async () => {
+    const database = new AltrasDatabase(`lesson-discovery-${crypto.randomUUID()}`);
+    try {
+      const valid = queueLessonAnswer(
+        createLessonDraft(attempt(), lesson),
+        lesson.activities[0].id,
+        lesson.activities[0].type,
+        'sum',
+        0,
+      );
+      const invalid = { ...valid, id: 'invalid-lesson-draft' };
+      await database.lessonDrafts.bulkPut([valid, invalid]);
+
+      const discovery = await discoverPendingLessonDrafts(userId, database);
+
+      expect(discovery.drafts.map((item) => item.id)).toEqual([valid.id]);
+      expect(discovery.invalidDraftIds).toEqual(['invalid-lesson-draft']);
+      expect(await database.lessonDrafts.get('invalid-lesson-draft')).toBeDefined();
+    } finally {
+      await database.delete();
+    }
   });
 });

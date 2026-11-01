@@ -14,6 +14,9 @@ const audio = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/audio/audio.manager', () => audio);
+vi.mock('@/features/lessons/components/GlobalLessonSyncStatus', () => ({
+  GlobalLessonSyncStatus: () => null,
+}));
 
 import { AppShell } from './AppShell';
 import { ResolvedExperienceRoute } from './route-guards';

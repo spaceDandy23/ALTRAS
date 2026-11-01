@@ -2,7 +2,14 @@ import type { AltrasDatabase } from '@/db/database';
 import { db } from '@/db/database';
 import type { LessonAttempt } from '@/types/learning';
 import type { LearningLesson } from '../domain/content.schemas';
+import type { AssessmentKind, AssessmentQuestion } from '@/types/assessment';
 import type { ActivityAnswer } from '../domain/evaluation';
+import {
+  lessonChapters,
+  lessonFlowPosition,
+  nextLessonFlowState,
+  type LessonFlowStage,
+} from '../domain/lesson-flow';
 
 export type LessonDraftSyncStatus = 'synced' | 'pending' | 'pending_completion';
 
@@ -11,12 +18,22 @@ export interface LessonPendingAnswer {
   activityType: 'find-word' | 'organize-translate';
   answer: ActivityAnswer;
   queuedAt: number;
+  sequence?: number;
 }
 
 export interface LessonPendingActiveTimeSegment {
   id: string;
   seconds: number;
   queuedAt: number;
+}
+
+export interface LessonPendingStageTransition {
+  fromStage: LessonFlowStage;
+  fromChapterId: string | null;
+  toStage: LessonFlowStage;
+  toChapterId: string | null;
+  queuedAt: number;
+  sequence: number;
 }
 
 export interface LessonDraft {
@@ -26,9 +43,11 @@ export interface LessonDraft {
   attemptId: string;
   contentVersion: number;
   lesson: LearningLesson;
+  assessmentQuestions: Partial<Record<AssessmentKind, AssessmentQuestion[]>>;
   attempt: LessonAttempt;
   pendingAnswers: LessonPendingAnswer[];
   pendingActiveTimeSegments: LessonPendingActiveTimeSegment[];
+  pendingStageTransitions: LessonPendingStageTransition[];
   currentActivityIndex: number;
   pendingCompletion: boolean;
   revision: number;
@@ -43,9 +62,14 @@ export function lessonDraftId(userId: string, lessonId: string, attemptId: strin
 }
 
 function normalizeLessonDraft(draft: LessonDraft): LessonDraft {
-  return Array.isArray(draft.pendingActiveTimeSegments)
-    ? draft
-    : { ...draft, pendingActiveTimeSegments: [] };
+  return {
+    ...draft,
+    assessmentQuestions: draft.assessmentQuestions ?? {},
+    pendingActiveTimeSegments:
+      draft.pendingActiveTimeSegments === undefined ? [] : draft.pendingActiveTimeSegments,
+    pendingStageTransitions:
+      draft.pendingStageTransitions === undefined ? [] : draft.pendingStageTransitions,
+  };
 }
 
 function validateLessonDraft(draft: LessonDraft): void {
@@ -62,10 +86,31 @@ function validateLessonDraft(draft: LessonDraft): void {
     !Number.isInteger(draft.currentActivityIndex) ||
     draft.currentActivityIndex < 0 ||
     draft.currentActivityIndex >= draft.lesson.activities.length ||
+    Object.entries(draft.assessmentQuestions).some(([kind, questions]) => {
+      const expectedVersion =
+        kind === 'pre-test'
+          ? draft.attempt.preAssessmentVersion
+          : draft.attempt.postAssessmentVersion;
+      return (
+        !Array.isArray(questions) ||
+        questions.length === 0 ||
+        questions.some(
+          (question) => question.assessment !== kind || question.contentVersion !== expectedVersion,
+        )
+      );
+    }) ||
     new Set(draft.pendingAnswers.map((answer) => answer.activityId)).size !==
       draft.pendingAnswers.length ||
     new Set(draft.pendingActiveTimeSegments.map((segment) => segment.id)).size !==
       draft.pendingActiveTimeSegments.length ||
+    draft.pendingStageTransitions.some(
+      (transition) =>
+        !Number.isSafeInteger(transition.sequence) ||
+        transition.sequence <= 0 ||
+        lessonFlowPosition(draft.lesson, transition.fromStage, transition.fromChapterId) < 0 ||
+        lessonFlowPosition(draft.lesson, transition.toStage, transition.toChapterId) <=
+          lessonFlowPosition(draft.lesson, transition.fromStage, transition.fromChapterId),
+    ) ||
     draft.pendingActiveTimeSegments.some(
       (segment) =>
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -102,6 +147,7 @@ export function createLessonDraft(
   attempt: LessonAttempt,
   lesson: LearningLesson,
   currentActivityIndex = attempt.answers.length,
+  assessmentQuestions: Partial<Record<AssessmentKind, AssessmentQuestion[]>> = {},
 ): LessonDraft {
   if (
     attempt.userId.length === 0 ||
@@ -119,9 +165,11 @@ export function createLessonDraft(
     attemptId: attempt.id,
     contentVersion: lesson.contentVersion,
     lesson,
+    assessmentQuestions,
     attempt,
     pendingAnswers: [],
     pendingActiveTimeSegments: [],
+    pendingStageTransitions: [],
     currentActivityIndex: index,
     pendingCompletion: false,
     revision: 0,
@@ -137,26 +185,37 @@ export function reconcileLessonDraft(
 ): LessonDraft {
   const clean = createLessonDraft(attempt, lesson, local?.currentActivityIndex);
   if (!local) return clean;
-  validateLessonDraft(local);
+  const current = normalizeLessonDraft(local);
+  validateLessonDraft(current);
   if (
-    local.userId !== attempt.userId ||
-    local.attemptId !== attempt.id ||
-    local.contentVersion !== attempt.contentVersion
+    current.userId !== attempt.userId ||
+    current.attemptId !== attempt.id ||
+    current.contentVersion !== attempt.contentVersion
   ) {
     throw new Error('The local lesson draft belongs to a different attempt.');
   }
   const confirmed = new Set(attempt.answers.map((answer) => answer.activityId));
-  const pendingAnswers = local.pendingAnswers.filter((answer) => !confirmed.has(answer.activityId));
+  const pendingAnswers = current.pendingAnswers.filter(
+    (answer) => !confirmed.has(answer.activityId),
+  );
+  const serverPosition = lessonFlowPosition(lesson, attempt.flowStage, attempt.currentChapterId);
+  const pendingStageTransitions = current.pendingStageTransitions.filter(
+    (transition) =>
+      lessonFlowPosition(lesson, transition.toStage, transition.toChapterId) > serverPosition,
+  );
   return {
-    ...local,
+    ...current,
     lesson,
-    attempt,
+    attempt: reconciledAttempt(attempt, pendingStageTransitions),
     pendingAnswers,
-    revision: local.revision + 1,
+    pendingStageTransitions,
+    revision: current.revision + 1,
     updatedAt: Date.now(),
-    syncStatus: local.pendingCompletion
+    syncStatus: current.pendingCompletion
       ? 'pending_completion'
-      : pendingAnswers.length > 0 || local.pendingActiveTimeSegments.length > 0
+      : pendingAnswers.length > 0 ||
+          current.pendingActiveTimeSegments.length > 0 ||
+          pendingStageTransitions.length > 0
         ? 'pending'
         : 'synced',
   };
@@ -181,7 +240,16 @@ export function queueLessonAnswer(
   }
   return {
     ...draft,
-    pendingAnswers: [...draft.pendingAnswers, { activityId, activityType, answer, queuedAt: now }],
+    pendingAnswers: [
+      ...draft.pendingAnswers,
+      {
+        activityId,
+        activityType,
+        answer,
+        queuedAt: now,
+        sequence: draft.revision + 1,
+      },
+    ],
     currentActivityIndex: Math.max(
       0,
       Math.min(currentActivityIndex, draft.lesson.activities.length - 1),
@@ -223,6 +291,152 @@ export function markLessonDraftPendingCompletion(
   };
 }
 
+export async function queueLessonStageTransition(
+  draftId: string,
+  database: AltrasDatabase = db,
+  now = Date.now(),
+  expectedStage?: LessonFlowStage,
+): Promise<LessonDraft> {
+  return database.transaction('rw', database.lessonDrafts, async () => {
+    const stored = await database.lessonDrafts.get(draftId);
+    if (!stored) throw new Error('The saved lesson attempt is unavailable.');
+    const current = normalizeLessonDraft(stored);
+    validateLessonDraft(current);
+    if (expectedStage && current.attempt.flowStage !== expectedStage) return current;
+    const target = nextLessonFlowState(current.lesson, current.attempt);
+    if (!target) throw new Error('This lesson step cannot continue.');
+    if (current.attempt.flowStage === 'chapter-activity') {
+      const chapter = lessonChapters(current.lesson).find(
+        (item) => item.id === current.attempt.currentChapterId,
+      );
+      const answered = new Set([
+        ...current.attempt.answers.map((answer) => answer.activityId),
+        ...current.pendingAnswers.map((answer) => answer.activityId),
+      ]);
+      if (!chapter || chapter.activities.some((activity) => !answered.has(activity.id))) {
+        throw new Error('Complete every chapter activity first.');
+      }
+    }
+    const sequence = current.revision + 1;
+    const transition: LessonPendingStageTransition = {
+      fromStage: current.attempt.flowStage as LessonFlowStage,
+      fromChapterId: current.attempt.currentChapterId ?? null,
+      toStage: target.flowStage,
+      toChapterId: target.currentChapterId,
+      queuedAt: now,
+      sequence,
+    };
+    const targetChapter = lessonChapters(current.lesson).find(
+      (chapter) => chapter.id === target.currentChapterId,
+    );
+    const firstTargetActivity = targetChapter?.activities[0];
+    const next: LessonDraft = {
+      ...current,
+      attempt: {
+        ...current.attempt,
+        flowStage: target.flowStage,
+        currentChapterId: target.currentChapterId,
+        lastUpdatedAt: Math.max(current.attempt.lastUpdatedAt, now),
+      },
+      pendingStageTransitions: [...current.pendingStageTransitions, transition],
+      currentActivityIndex: firstTargetActivity
+        ? Math.max(
+            0,
+            current.lesson.activities.findIndex(
+              (activity) => activity.id === firstTargetActivity.id,
+            ),
+          )
+        : current.currentActivityIndex,
+      pendingCompletion: current.pendingCompletion || target.flowStage === 'ready-to-complete',
+      revision: sequence,
+      updatedAt: now,
+      syncStatus:
+        current.pendingCompletion || target.flowStage === 'ready-to-complete'
+          ? 'pending_completion'
+          : 'pending',
+    };
+    validateLessonDraft(next);
+    await database.lessonDrafts.put(next);
+    return next;
+  });
+}
+
+// Read and mutate inside one transaction so a background acknowledgement cannot
+// overwrite a newer answer or move the student's current position backwards.
+export async function updateStoredLessonDraft(
+  draftId: string,
+  update: (current: LessonDraft) => LessonDraft,
+  database: AltrasDatabase = db,
+): Promise<LessonDraft> {
+  return database.transaction('rw', database.lessonDrafts, async () => {
+    const stored = await database.lessonDrafts.get(draftId);
+    if (!stored) throw new Error('The saved lesson attempt is unavailable.');
+    const current = normalizeLessonDraft(stored);
+    validateLessonDraft(current);
+    const next = update(current);
+    validateLessonDraft(next);
+    await database.lessonDrafts.put(next);
+    return next;
+  });
+}
+
+function reconciledAttempt(
+  server: LessonAttempt,
+  pendingStageTransitions: LessonPendingStageTransition[],
+) {
+  const latest = pendingStageTransitions.at(-1);
+  return latest
+    ? {
+        ...server,
+        flowStage: latest.toStage,
+        currentChapterId: latest.toChapterId,
+      }
+    : server;
+}
+
+export async function acknowledgeLessonStageTransition(
+  draftId: string,
+  transition: LessonPendingStageTransition,
+  attempt: LessonAttempt,
+  database: AltrasDatabase = db,
+): Promise<LessonDraft | null> {
+  return database.transaction('rw', database.lessonDrafts, async () => {
+    const stored = await database.lessonDrafts.get(draftId);
+    if (!stored) return null;
+    const current = normalizeLessonDraft(stored);
+    const first = current.pendingStageTransitions[0];
+    if (!first || first.sequence !== transition.sequence || attempt.id !== current.attemptId) {
+      return null;
+    }
+    const serverPosition = lessonFlowPosition(
+      current.lesson,
+      attempt.flowStage,
+      attempt.currentChapterId,
+    );
+    const pendingStageTransitions = current.pendingStageTransitions.filter(
+      (item) => lessonFlowPosition(current.lesson, item.toStage, item.toChapterId) > serverPosition,
+    );
+    if (pendingStageTransitions.length === current.pendingStageTransitions.length) return null;
+    const next: LessonDraft = {
+      ...current,
+      attempt: reconciledAttempt(attempt, pendingStageTransitions),
+      pendingStageTransitions,
+      revision: current.revision + 1,
+      updatedAt: Date.now(),
+      syncStatus: current.pendingCompletion
+        ? 'pending_completion'
+        : current.pendingAnswers.length > 0 ||
+            current.pendingActiveTimeSegments.length > 0 ||
+            pendingStageTransitions.length > 0
+          ? 'pending'
+          : 'synced',
+    };
+    validateLessonDraft(next);
+    await database.lessonDrafts.put(next);
+    return next;
+  });
+}
+
 function isEquivalentLessonDraft(left: LessonDraft, right: LessonDraft): boolean {
   return JSON.stringify({ ...left, updatedAt: 0 }) === JSON.stringify({ ...right, updatedAt: 0 });
 }
@@ -256,6 +470,56 @@ export async function getLessonDraft(
   const draft = stored ? normalizeLessonDraft(stored) : null;
   if (draft) validateLessonDraft(draft);
   return draft;
+}
+
+export async function getCachedLessonAssessmentQuestions(
+  userId: string,
+  lessonId: string,
+  attemptId: string,
+  kind: AssessmentKind,
+  database: AltrasDatabase = db,
+): Promise<AssessmentQuestion[]> {
+  return (
+    (await getLessonDraft(userId, lessonId, attemptId, database))?.assessmentQuestions[kind] ?? []
+  );
+}
+
+export interface LessonDraftDiscovery {
+  drafts: LessonDraft[];
+  invalidDraftIds: string[];
+}
+
+export async function discoverPendingLessonDrafts(
+  userId: string,
+  database: AltrasDatabase = db,
+): Promise<LessonDraftDiscovery> {
+  const stored = await database.lessonDrafts.where('userId').equals(userId).toArray();
+  const drafts: LessonDraft[] = [];
+  const invalidDraftIds: string[] = [];
+  for (const item of stored) {
+    try {
+      const draft = normalizeLessonDraft(item);
+      validateLessonDraft(draft);
+      if (
+        draft.pendingAnswers.length > 0 ||
+        draft.pendingActiveTimeSegments.length > 0 ||
+        draft.pendingStageTransitions.length > 0 ||
+        draft.pendingCompletion
+      ) {
+        drafts.push(draft);
+      }
+    } catch {
+      invalidDraftIds.push(item.id);
+    }
+  }
+  return { drafts, invalidDraftIds };
+}
+
+export async function getPendingLessonDrafts(
+  userId: string,
+  database: AltrasDatabase = db,
+): Promise<LessonDraft[]> {
+  return (await discoverPendingLessonDrafts(userId, database)).drafts;
 }
 
 export async function queueLessonActiveTime(
@@ -310,7 +574,9 @@ export async function acknowledgeLessonActiveTime(
       updatedAt: Date.now(),
       syncStatus: current.pendingCompletion
         ? 'pending_completion'
-        : current.pendingAnswers.length > 0 || pendingActiveTimeSegments.length > 0
+        : current.pendingAnswers.length > 0 ||
+            current.pendingStageTransitions.length > 0 ||
+            pendingActiveTimeSegments.length > 0
           ? 'pending'
           : 'synced',
     };
@@ -336,13 +602,15 @@ export async function acknowledgeLessonAnswer(
     const pendingAnswers = current.pendingAnswers.slice(1);
     const next: LessonDraft = {
       ...current,
-      attempt,
+      attempt: reconciledAttempt(attempt, current.pendingStageTransitions),
       pendingAnswers,
       revision: current.revision + 1,
       updatedAt: Date.now(),
       syncStatus: current.pendingCompletion
         ? 'pending_completion'
-        : pendingAnswers.length > 0 || current.pendingActiveTimeSegments.length > 0
+        : pendingAnswers.length > 0 ||
+            current.pendingStageTransitions.length > 0 ||
+            current.pendingActiveTimeSegments.length > 0
           ? 'pending'
           : 'synced',
     };
@@ -358,12 +626,76 @@ export async function deleteLessonDraft(
   await database.lessonDrafts.delete(draftId);
 }
 
+export async function getUserLessonDrafts(userId: string, database: AltrasDatabase = db) {
+  const stored = await database.lessonDrafts.where('userId').equals(userId).toArray();
+  return stored.flatMap((item) => {
+    try {
+      const draft = normalizeLessonDraft(item);
+      validateLessonDraft(draft);
+      return [draft];
+    } catch {
+      // Discovery reports invalid drafts separately; keep them available for recovery.
+      return [];
+    }
+  });
+}
+
+export async function acknowledgeLessonCompletion(
+  snapshot: LessonDraft,
+  attempt: LessonAttempt,
+  database: AltrasDatabase = db,
+): Promise<void> {
+  if (
+    attempt.id !== snapshot.attemptId ||
+    attempt.userId !== snapshot.userId ||
+    attempt.lessonId !== snapshot.lessonId ||
+    attempt.status !== 'completed' ||
+    attempt.finalScore === null ||
+    attempt.starCount === null ||
+    attempt.cleared === null
+  ) {
+    throw new Error('The official lesson result is not confirmed.');
+  }
+  await updateStoredLessonDraft(
+    snapshot.id,
+    (current) => {
+      if (
+        current.pendingAnswers.length ||
+        current.pendingStageTransitions.length ||
+        current.pendingActiveTimeSegments.length
+      ) {
+        throw new Error('Lesson work is still pending.');
+      }
+      return {
+        ...current,
+        attempt,
+        pendingCompletion: false,
+        syncStatus: 'synced',
+        revision: current.revision + 1,
+        updatedAt: Date.now(),
+      };
+    },
+    database,
+  );
+}
+
 interface LessonDraftSynchronizerOptions {
+  isCurrent?: () => boolean;
+  attemptId?: string;
   load: () => Promise<LessonDraft | null>;
   recordActiveTime: (draft: LessonDraft, segment: LessonPendingActiveTimeSegment) => Promise<void>;
   acknowledgeActiveTime: (
     draft: LessonDraft,
     segment: LessonPendingActiveTimeSegment,
+  ) => Promise<void>;
+  advanceStage?: (
+    draft: LessonDraft,
+    transition: LessonPendingStageTransition,
+  ) => Promise<LessonAttempt>;
+  acknowledgeStage?: (
+    draft: LessonDraft,
+    transition: LessonPendingStageTransition,
+    attempt: LessonAttempt,
   ) => Promise<void>;
   submit: (draft: LessonDraft, answer: LessonPendingAnswer) => Promise<LessonAttempt>;
   acknowledge: (
@@ -377,10 +709,15 @@ interface LessonDraftSynchronizerOptions {
   retryDelays?: readonly number[];
 }
 
+const lessonSyncLocks = new Map<string, Promise<void>>();
+
 export class LessonDraftSynchronizer {
   private running: Promise<void> | null = null;
   private requested = false;
-  private disposed = false;
+  private stopped = false;
+  private get disposed() {
+    return this.stopped || this.options.isCurrent?.() === false;
+  }
   private retryIndex = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -393,11 +730,24 @@ export class LessonDraftSynchronizer {
     this.requested = true;
     if (!this.running) {
       this.running = Promise.resolve()
-        .then(() => this.drain())
+        .then(() => this.runExclusive())
         .finally(() => {
           this.running = null;
           if (this.requested && !this.disposed) this.requestSync(false);
         });
+    }
+  }
+
+  private async runExclusive(): Promise<void> {
+    const key = this.options.attemptId;
+    if (!key) return this.drain();
+    const previous = lessonSyncLocks.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(() => this.drain());
+    lessonSyncLocks.set(key, current);
+    try {
+      await current;
+    } finally {
+      if (lessonSyncLocks.get(key) === current) lessonSyncLocks.delete(key);
     }
   }
 
@@ -407,7 +757,7 @@ export class LessonDraftSynchronizer {
   }
 
   dispose(): void {
-    this.disposed = true;
+    this.stopped = true;
     this.requested = false;
     this.clearRetry();
   }
@@ -425,8 +775,32 @@ export class LessonDraftSynchronizer {
       try {
         const snapshot = await this.options.load();
         if (!snapshot || this.disposed) return;
-        currentHasVisibleWork = snapshot.pendingAnswers.length > 0 || snapshot.pendingCompletion;
+        if (!navigator.onLine || document.visibilityState === 'hidden') {
+          if (snapshot.syncStatus !== 'synced') this.options.onStatus?.('pending');
+          return;
+        }
+        currentHasVisibleWork =
+          snapshot.pendingAnswers.length > 0 ||
+          snapshot.pendingStageTransitions.length > 0 ||
+          snapshot.pendingCompletion;
         const answer = snapshot.pendingAnswers[0];
+        const transition = snapshot.pendingStageTransitions[0];
+        const transitionFirst =
+          transition &&
+          (!answer || (answer.sequence !== undefined && transition.sequence < answer.sequence));
+        if (transitionFirst) {
+          visibleWork = true;
+          this.options.onStatus?.('syncing');
+          if (!this.options.advanceStage || !this.options.acknowledgeStage) {
+            throw new Error('Lesson stage synchronization is unavailable.');
+          }
+          const attempt = await this.options.advanceStage(snapshot, transition);
+          if (this.disposed) return;
+          await this.options.acknowledgeStage(snapshot, transition, attempt);
+          this.retryIndex = 0;
+          this.requested = true;
+          continue;
+        }
         if (answer) {
           visibleWork = true;
           this.options.onStatus?.('syncing');
@@ -469,8 +843,14 @@ export class LessonDraftSynchronizer {
   private scheduleRetry(): void {
     this.clearRetry();
     const delays = this.options.retryDelays ?? LESSON_SYNC_RETRY_DELAYS;
-    const delay = delays[this.retryIndex++];
-    if (delay === undefined || this.disposed) return;
+    if (
+      delays.length === 0 ||
+      this.disposed ||
+      (typeof navigator !== 'undefined' && !navigator.onLine) ||
+      (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+    )
+      return;
+    const delay = delays[this.retryIndex++] ?? 60_000;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.requestSync(false);

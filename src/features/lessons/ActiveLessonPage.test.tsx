@@ -9,6 +9,7 @@ import { packagedContent } from './content/packaged-content';
 import { getLesson } from './content/content.service';
 import {
   completeAttempt,
+  advanceAttemptStage,
   consumeLessonAttemptLaunchMode,
   getAttempt,
   submitActivityAnswer,
@@ -27,6 +28,7 @@ import { ActiveLessonPage } from './ActiveLessonPage';
 
 vi.mock('./content/content.service', () => ({ getLesson: vi.fn() }));
 vi.mock('./attempts/attempt.service', () => ({
+  advanceAttemptStage: vi.fn(),
   completeAttempt: vi.fn(),
   consumeLessonAttemptLaunchMode: vi.fn(() => 'resume'),
   getAttempt: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock('@/services/audio/audio.manager', () => ({ playCompletion: vi.fn(), play
 
 describe('active lesson loading failures', () => {
   afterEach(async () => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     await db.lessonDrafts.clear();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
@@ -76,6 +79,152 @@ describe('active lesson loading failures', () => {
     );
 
     expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+
+  it('routes a new lesson attempt to its required pre-test', async () => {
+    const lesson = {
+      ...structuredClone(packagedContent.lessons[0]),
+      assessments: { preTest: 'pre-test' as const, postTest: 'post-test' as const },
+    };
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue({
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: [],
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+      flowStage: 'pre-test',
+      currentChapterId: `chapter-${lesson.id}`,
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'student',
+        displayName: 'Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+          <Route
+            path="/lessons/:lessonId/play/:attemptId/assessment/:kind"
+            element={<p>Lesson pre-test</p>}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Lesson pre-test')).toBeInTheDocument();
+  });
+
+  it('advances once from teaching after checkpointing active time', async () => {
+    const base = structuredClone(packagedContent.lessons[0]);
+    const lesson = {
+      ...base,
+      chapters: [
+        {
+          id: 'chapter-foundations',
+          title: 'Foundations',
+          description: 'Read this before practicing.',
+          displayOrder: 1,
+          instructionalContent: [base.instructionalContent[0]],
+          activities: base.activities.slice(0, 2),
+        },
+        {
+          id: 'chapter-applications',
+          title: 'Applications',
+          displayOrder: 2,
+          instructionalContent: base.instructionalContent.slice(1),
+          activities: base.activities.slice(2),
+        },
+      ],
+    };
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const teachingAttempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: [],
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+      flowStage: 'chapter-teaching',
+      currentChapterId: 'chapter-foundations',
+    };
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(teachingAttempt);
+    const advancedAttempt: LessonAttempt = {
+      ...teachingAttempt,
+      flowStage: 'chapter-activity',
+    };
+    let resolveAdvance!: (attempt: LessonAttempt) => void;
+    vi.mocked(advanceAttemptStage).mockReturnValue(
+      new Promise((resolve) => {
+        resolveAdvance = resolve;
+      }),
+    );
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'student',
+        displayName: 'Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Foundations' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: lesson.activities[0].title }),
+    ).not.toBeInTheDocument();
+    now.mockReturnValue(3_000);
+    const startButton = screen.getByRole('button', { name: 'Start chapter activities' });
+    act(() => {
+      startButton.click();
+      startButton.click();
+    });
+    await waitFor(() => expect(advanceAttemptStage).toHaveBeenCalledTimes(1));
+    expect(advanceAttemptStage).toHaveBeenCalledWith(
+      attemptId,
+      'chapter-teaching',
+      'chapter-foundations',
+    );
+    await act(async () => resolveAdvance(advancedAttempt));
+    expect(await screen.findByRole('heading', { name: lesson.activities[0].title })).toBeVisible();
   });
 
   it('renders a recoverable error and retries restoration', async () => {
@@ -251,7 +400,7 @@ describe('active lesson loading failures', () => {
     expect(getAttempt).not.toHaveBeenCalled();
   });
 
-  it('does not show offline-save feedback while an online answer is being checked', async () => {
+  it('allows Continue after the local save while an online answer request is still in flight', async () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000002';
     const attemptId = '10000000-0000-4000-8000-000000000001';
@@ -303,7 +452,9 @@ describe('active lesson loading failures', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: 'sum' })).toBeDisabled());
 
     expect(screen.getByText('Saving…')).toBeVisible();
-    expect(screen.queryByText('Saved on this device')).not.toBeInTheDocument();
+    expect(screen.getByText('Saved on this device')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
 
     await act(async () => {
       resolveSubmission({
@@ -321,8 +472,9 @@ describe('active lesson loading failures', () => {
       await submission;
     });
 
-    expect(await screen.findByText('Correct')).toBeVisible();
-    expect(playSfx).toHaveBeenCalledWith('correct');
+    expect(screen.queryByText('Correct')).not.toBeInTheDocument();
+    expect(playSfx).not.toHaveBeenCalledWith('correct');
+    expect(screen.getByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
   });
 
   it('does not flash the final activity result while an offline completion is syncing', async () => {
@@ -351,9 +503,7 @@ describe('active lesson loading failures', () => {
         localDraft,
         activity.id,
         activity.type,
-        activity.type === 'find-word'
-          ? activity.correctChoiceId
-          : activity.correctTokenSequence,
+        activity.type === 'find-word' ? activity.correctChoiceId : activity.correctTokenSequence,
         index,
       );
     }
@@ -376,7 +526,12 @@ describe('active lesson loading failures', () => {
         return { ...activeAttempt, answers: [...syncedAnswers] };
       },
     );
-    vi.mocked(completeAttempt).mockReturnValue(new Promise(() => undefined));
+    let finish!: (attempt: LessonAttempt) => void;
+    vi.mocked(completeAttempt).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     useAuthStore.setState({
       status: 'authenticated',
       user: {
@@ -409,5 +564,22 @@ describe('active lesson loading failures', () => {
       document.querySelector('.choice-option--incorrect, .translation-builder--incorrect'),
     ).not.toBeInTheDocument();
     expect(playSfx).not.toHaveBeenCalled();
+    await act(async () =>
+      finish({
+        ...activeAttempt,
+        answers: syncedAnswers,
+        status: 'completed',
+        finalScore: 0,
+        starCount: 0,
+        cleared: false,
+        completedAt: 10,
+      }),
+    );
+    await waitFor(async () =>
+      expect(await getLessonDraft(userId, lesson.id, attemptId)).toMatchObject({
+        pendingCompletion: false,
+        attempt: { status: 'completed', finalScore: 0 },
+      }),
+    );
   });
 });

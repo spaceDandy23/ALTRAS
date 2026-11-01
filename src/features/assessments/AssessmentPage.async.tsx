@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { captureSyncSession, requireSyncSession } from '@/services/sync-session';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
 import { resolveCharacterDialogue } from '@/features/characters/character.dialogue';
-import {
-  cancelPendingResultSfx,
-  playCompletion,
-  playReward,
-} from '@/services/audio/audio.manager';
+import { cancelPendingResultSfx, playCompletion, playReward } from '@/services/audio/audio.manager';
 import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
 } from '@/services/audio/click.handlers';
 import { useAuthStore } from '@/stores/auth.store';
+import { db } from '@/db/database';
+import { queueAttemptStageTransition } from '@/features/lessons/attempts/attempt.service';
 import {
   assessmentKindSchema,
   assessmentQuestionSchema,
@@ -24,7 +23,9 @@ import {
 } from '@/types/assessment';
 import {
   AssessmentDraftSynchronizer,
+  acknowledgeAssessmentStart,
   createAssessmentDraft,
+  createOfflineAssessmentDraft,
   deleteAssessmentDraft,
   draftToAttempt,
   getAssessmentDraft,
@@ -32,16 +33,22 @@ import {
   reconcileAssessmentDraft,
   replaceAssessmentDraft,
   saveAssessmentDraft,
+  submitLocalLessonAssessment,
   updateDraftAnswer,
   updateDraftPosition,
   validateLocalDraft,
 } from './assessment-draft.service';
+import {
+  getCachedLessonAssessmentQuestions,
+  getLessonDraft,
+} from '@/features/lessons/attempts/lesson-draft.service';
 import {
   completeAssessment,
   getAssessmentAttempt,
   getAssessmentQuestions,
   startAssessment,
   syncAssessmentDraft,
+  type AssessmentScope,
 } from './assessment.service';
 
 const duration = (seconds: number) =>
@@ -49,9 +56,14 @@ const duration = (seconds: number) =>
 type SyncNotice = 'none' | 'offline' | 'pending' | 'syncing' | 'conflict';
 
 export function AssessmentPage() {
-  const parsedKind = assessmentKindSchema.safeParse(useParams().kind ?? '');
+  const { kind: kindParam, lessonId, attemptId } = useParams();
+  const parsedKind = assessmentKindSchema.safeParse(kindParam ?? '');
   const kind = parsedKind.success ? parsedKind.data : null;
   const user = useAuthStore((state) => state.user);
+  const scope = useMemo(
+    () => (lessonId && attemptId ? { lessonId, lessonAttemptId: attemptId } : undefined),
+    [attemptId, lessonId],
+  );
   if (!kind)
     return (
       <section className="assessment-shell panel">
@@ -60,10 +72,27 @@ export function AssessmentPage() {
       </section>
     );
   if (!user) return <LoadingState variant="page" />;
-  return <AssessmentSession key={`${user.id}:${kind}`} userId={user.id} kind={kind} />;
+  return (
+    <AssessmentSession
+      key={`${user.id}:${kind}:${scope?.lessonAttemptId ?? 'global'}`}
+      userId={user.id}
+      kind={kind}
+      scope={scope}
+    />
+  );
 }
 
-function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentKind }) {
+function AssessmentSession({
+  userId,
+  kind,
+  scope,
+}: {
+  userId: string;
+  kind: AssessmentKind;
+  scope?: AssessmentScope;
+}) {
+  const navigate = useNavigate();
+  const localLessonAssessment = Boolean(scope);
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
   const [draft, setDraft] = useState<AssessmentDraft | null>(null);
@@ -87,8 +116,13 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
   const draftRef = useRef<AssessmentDraft | null>(null);
   const synchronizerRef = useRef<AssessmentDraftSynchronizer | null>(null);
   const localSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const submissionInFlightRef = useRef(false);
 
   const applyDraft = useCallback((next: AssessmentDraft | null) => {
+    const current = draftRef.current;
+    if (next && current?.id === next.id && current.syncStatus === 'pending_submission') {
+      next = { ...next, syncStatus: 'pending_submission' };
+    }
     draftRef.current = next;
     setDraft(next);
     if (next) setAttempt(draftToAttempt(next));
@@ -122,20 +156,55 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
   useEffect(() => {
     let active = true;
     localSaveQueueRef.current = Promise.resolve();
-    void Promise.allSettled([
-      getAssessmentQuestions(kind),
-      getAssessmentAttempt(userId, kind),
-      getAssessmentDraft(userId, kind),
-    ])
-      .then(async ([questionsResult, attemptResult, localResult]) => {
+    const load = async () => {
+      if (scope) {
+        const [local, cached] = await Promise.all([
+          getAssessmentDraft(userId, kind, db, scope.lessonAttemptId),
+          getLessonDraft(userId, scope.lessonId, scope.lessonAttemptId),
+        ]);
+        if (!active) return;
+        if (local) {
+          if (local.syncStatus === 'pending_submission') {
+            await submitLocalLessonAssessment(local);
+            if (!active) return;
+          }
+          setQuestions(local.questions);
+          applyDraft(local);
+          setQuestionIndex(local.currentQuestionIndex);
+          setSyncNotice(local.syncStatus === 'synced' ? 'none' : 'pending');
+          return;
+        }
+        const cachedQuestions = cached?.assessmentQuestions[kind];
+        if (cached?.attempt.flowStage === kind && cachedQuestions?.length) {
+          setQuestions(cachedQuestions);
+          setAttempt(null);
+          return;
+        }
+      }
+      return Promise.allSettled([
+        getAssessmentQuestions(kind, scope),
+        getAssessmentAttempt(userId, kind, scope),
+        getAssessmentDraft(userId, kind, db, scope?.lessonAttemptId),
+        scope
+          ? getCachedLessonAssessmentQuestions(userId, scope.lessonId, scope.lessonAttemptId, kind)
+          : Promise.resolve([]),
+      ]).then(async ([questionsResult, attemptResult, localResult, cachedQuestionsResult]) => {
         if (!active) return;
         if (localResult.status === 'rejected')
           throw new Error('Unable to read the local test draft. Please retry.');
         const local = localResult.value;
         const loadedQuestions =
-          questionsResult.status === 'fulfilled' ? questionsResult.value : (local?.questions ?? []);
+          questionsResult.status === 'fulfilled'
+            ? questionsResult.value
+            : (local?.questions ??
+              (cachedQuestionsResult.status === 'fulfilled' ? cachedQuestionsResult.value : []));
         const server = attemptResult.status === 'fulfilled' ? attemptResult.value : null;
-        if (server && (server.userId !== userId || server.assessment !== kind))
+        if (
+          server &&
+          (server.userId !== userId ||
+            server.assessment !== kind ||
+            (server.lessonAttemptId ?? undefined) !== scope?.lessonAttemptId)
+        )
           throw new Error('The test belongs to another session.');
         // A validated local draft carries the immutable question snapshot for
         // this attempt. Remote question loading may legitimately fail while
@@ -184,8 +253,13 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
           );
           setSyncNotice(navigator.onLine ? 'pending' : 'offline');
         } else {
-          if (attemptResult.status === 'rejected' || loadedQuestions.length === 0)
-            throw new Error('Unable to load the test. Connect to the internet and try again.');
+          if (attemptResult.status === 'rejected') throw attemptResult.reason;
+          if (loadedQuestions.length === 0) {
+            if (questionsResult.status === 'rejected') throw questionsResult.reason;
+            throw new Error(
+              `No questions are available for this ${kind} in the lesson's pinned assessment version.`,
+            );
+          }
           for (const question of loadedQuestions) {
             assessmentQuestionSchema.parse(question);
             if (question.assessment !== kind)
@@ -194,7 +268,9 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
           setQuestions(loadedQuestions);
           setAttempt(null);
         }
-      })
+      });
+    };
+    void load()
       .catch((cause: unknown) => {
         if (active)
           setBootstrapError(
@@ -207,20 +283,32 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
     return () => {
       active = false;
     };
-  }, [applyDraft, persist, kind, userId, reload]);
+  }, [applyDraft, persist, kind, userId, reload, scope]);
 
   const draftId = draft?.id;
   useEffect(() => {
-    if (!draftId || loading || bootstrapError) return;
+    // Lesson assessments are replayed by the shared app worker, including while this page is open.
+    if (localLessonAssessment || !draftId || loading || bootstrapError) return;
+    const isCurrent = captureSyncSession(userId);
+    const check = () => requireSyncSession(isCurrent);
     let active = true;
     const synchronizer = new AssessmentDraftSynchronizer({
+      isCurrent,
+      attemptId: draftRef.current?.attemptId,
       load: async () => {
         await localSaveQueueRef.current.catch(() => undefined);
         const current = draftRef.current;
         return current?.id === draftId ? current : null;
       },
-      read: () => getAssessmentAttempt(userId, kind),
-      sync: syncAssessmentDraft,
+      read: () => getAssessmentAttempt(userId, kind, scope),
+      start: (current) => startAssessment(userId, kind, scope, current.attemptId, check),
+      acknowledgeStart: async (snapshot, server) => {
+        await localSaveQueueRef.current;
+        if (!active || !isCurrent()) return;
+        const next = await acknowledgeAssessmentStart(snapshot, server);
+        if (active && isCurrent()) applyDraft(next);
+      },
+      sync: (current) => syncAssessmentDraft(current, check),
       beforeSync: async (snapshot) => {
         const current = draftRef.current;
         if (!active || !current || !snapshot.mutationId) return;
@@ -232,7 +320,8 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
           false,
         ).catch(() => undefined);
       },
-      complete: (current) => completeAssessment(userId, kind, current.attemptId, current.revision),
+      complete: (current) =>
+        completeAssessment(userId, kind, current.attemptId, current.revision, scope, check),
       acknowledge: async (snapshot) => {
         const current = draftRef.current;
         if (!active || !current || current.id !== snapshot.id) return;
@@ -250,7 +339,7 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         await persist(acknowledged, false).catch(() => undefined);
       },
       onCompleted: async (snapshot, completed) => {
-        if (!active) return;
+        if (!active || !isCurrent()) return;
         if (
           completed.id !== snapshot.attemptId ||
           completed.userId !== userId ||
@@ -259,7 +348,7 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         )
           throw new Error('Unable to confirm this result.');
         await localSaveQueueRef.current.catch(() => undefined);
-        if (!active) return;
+        if (!active || !isCurrent()) return;
         let cleared = false;
         if (
           completed.submittedRevision === snapshot.revision &&
@@ -275,7 +364,7 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
             /* Keep the authoritative result and report failed cleanup. */
           }
         }
-        if (!active) return;
+        if (!active || !isCurrent()) return;
         if (!cleared)
           setCompletionWarning(
             'Your official result is saved. An unconfirmed local draft has been kept on this device.',
@@ -313,9 +402,21 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
       window.removeEventListener('focus', retry);
       document.removeEventListener('visibilitychange', retryVisible);
     };
-  }, [applyDraft, persist, draftId, kind, userId, loading, bootstrapError]);
+  }, [
+    applyDraft,
+    persist,
+    draftId,
+    kind,
+    userId,
+    loading,
+    bootstrapError,
+    scope,
+    localLessonAssessment,
+  ]);
 
   const title = kind === 'pre-test' ? 'Pre-test' : 'Post-test';
+  const waitingForConnection =
+    !navigator.onLine || syncNotice === 'offline' || syncNotice === 'pending';
   const placeholders = useMemo(
     () => questions.some((question) => question.isPlaceholder),
     [questions],
@@ -337,27 +438,120 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         >
           Try again
         </Button>
-        <Link className="button button--secondary" to="/">
-          Return home
+        <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
+          {scope ? 'Return to lesson' : 'Return home'}
         </Link>
       </section>
     );
   if (attempt?.status === 'submitted')
     return (
       <>
-        <AssessmentResult title={title} kind={kind} attempt={attempt} />
+        <AssessmentResult
+          title={title}
+          kind={kind}
+          attempt={attempt}
+          continueLesson={
+            scope
+              ? async () => {
+                  await queueAttemptStageTransition(
+                    userId,
+                    scope.lessonId,
+                    scope.lessonAttemptId,
+                    kind,
+                  );
+                  navigate(`/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`, {
+                    replace: true,
+                  });
+                }
+              : undefined
+          }
+        />
         {completionWarning && <p role="status">{completionWarning}</p>}
       </>
     );
+  if (draft?.syncStatus === 'pending_submission') {
+    if (localLessonAssessment && scope) {
+      return (
+        <section className="assessment-shell panel">
+          <p className="assessment-kicker">{title}</p>
+          <h1>Answers saved on this device</h1>
+          <p role="status">
+            {kind === 'post-test'
+              ? 'Your answers are saved on this device. Your results will be available once you’re back online.'
+              : 'You can continue your lesson. Your official result will be available once your answers sync.'}
+          </p>
+          {error && <p role="alert">{error}</p>}
+          <Button
+            onClick={() => {
+              navigate(
+                kind === 'post-test'
+                  ? `/lessons/${scope.lessonId}`
+                  : `/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`,
+                {
+                  replace: true,
+                },
+              );
+            }}
+            disabled={submitting || durability !== 'saved'}
+          >
+            {kind === 'post-test' ? 'Return to lesson' : 'Continue Lesson'}
+          </Button>
+        </section>
+      );
+    }
+    return (
+      <section className="assessment-shell panel">
+        <p className="assessment-kicker">{title}</p>
+        <h1>Submission saved</h1>
+        <LoadingState
+          variant="page"
+          message={
+            waitingForConnection
+              ? 'Submission is pending. It is saved on this device. Reconnect to confirm your result.'
+              : 'Confirming your saved result…'
+          }
+        />
+        {waitingForConnection && (
+          <Button variant="quiet" onClick={() => synchronizerRef.current?.requestSync()}>
+            Retry sync
+          </Button>
+        )}
+        <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
+          {scope ? 'Return to lesson' : 'Return home'}
+        </Link>
+      </section>
+    );
+  }
 
   const begin = async () => {
     if (starting) return;
     setStarting(true);
     setError('');
     try {
-      const created = await startAssessment(userId, kind);
+      if (localLessonAssessment && scope) {
+        const next = createOfflineAssessmentDraft(
+          userId,
+          kind,
+          scope.lessonId,
+          scope.lessonAttemptId,
+          questions,
+        );
+        await saveAssessmentDraft(next);
+        if (mounted.current) {
+          applyDraft(next);
+          setQuestionIndex(0);
+          setSyncNotice('pending');
+        }
+        return;
+      }
+      if (!navigator.onLine) throw new Error('Connect to the internet to start this test.');
+      const created = await startAssessment(userId, kind, scope);
       if (!mounted.current) return;
-      if (created.userId !== userId || created.assessment !== kind)
+      if (
+        created.userId !== userId ||
+        created.assessment !== kind ||
+        (created.lessonAttemptId ?? undefined) !== scope?.lessonAttemptId
+      )
         throw new Error('The test belongs to another session.');
       if (created.status === 'submitted') {
         setAttempt(created);
@@ -383,17 +577,24 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         error={error}
         starting={starting}
         begin={begin}
+        exitPath={scope ? `/lessons/${scope.lessonId}` : '/'}
       />
     );
 
   const question = questions[questionIndex];
-  const finalizing = submitting || draft.syncStatus === 'pending_submission';
+  const finalizing = submitting;
   const selected = attempt.answers.find(
     (answer) => answer.questionId === question?.id,
   )?.selectedChoiceId;
   const choose = (choiceId: string) => {
     const current = draftRef.current;
-    if (!current || !question || current.syncStatus === 'pending_submission') return;
+    if (
+      !current ||
+      !question ||
+      submissionInFlightRef.current ||
+      current.syncStatus === 'pending_submission'
+    )
+      return;
     setError('');
     void persist(updateDraftAnswer(current, question.id, choiceId), true).catch(() => undefined);
   };
@@ -412,21 +613,40 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
     if (nextButton instanceof HTMLButtonElement) nextButton.focus();
     choose(question.choices[nextIndex].id);
   };
-  const move = (index: number) => {
+  const move = async (index: number) => {
     const current = draftRef.current;
-    if (!current || current.syncStatus === 'pending_submission') return;
+    if (!current || submissionInFlightRef.current) return;
     const next = Math.max(0, Math.min(questions.length - 1, index));
-    setQuestionIndex(next);
-    void persist(updateDraftPosition(current, next), false).catch(() => undefined);
+    try {
+      await persist(updateDraftPosition(current, next), false);
+      if (mounted.current) setQuestionIndex(next);
+    } catch {
+      if (mounted.current) setError('Could not save your place on this device. Please try again.');
+    }
   };
   const submit = async () => {
     const current = draftRef.current;
-    if (!current || submitting || !selected) return;
+    if (!current || submissionInFlightRef.current) return;
+    if (!selected) {
+      setError('Choose an answer before submitting.');
+      return;
+    }
     setSubmitting(true);
+    submissionInFlightRef.current = true;
     setError('');
     const pending = markDraftPendingSubmission(current);
     try {
-      await persist(pending, false).catch(() => undefined);
+      if (localLessonAssessment) {
+        await localSaveQueueRef.current;
+        const saved = await submitLocalLessonAssessment(current);
+        if (!mounted.current) return;
+        applyDraft(saved);
+        setDurability('saved');
+        setSyncNotice(navigator.onLine ? 'pending' : 'offline');
+        synchronizerRef.current?.requestSync();
+        return;
+      }
+      await persist(pending, false);
       if (!navigator.onLine) {
         setSyncNotice('offline');
         setError('Submission is pending. Reconnect to confirm your official result.');
@@ -441,6 +661,7 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
         cause instanceof Error ? cause.message : 'Submission is not yet confirmed. Please retry.',
       );
     } finally {
+      submissionInFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -454,8 +675,8 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
       return;
     try {
       await localSaveQueueRef.current.catch(() => undefined);
-      const local = await getAssessmentDraft(userId, kind);
-      const server = await getAssessmentAttempt(userId, kind);
+      const local = await getAssessmentDraft(userId, kind, db, scope?.lessonAttemptId);
+      const server = await getAssessmentAttempt(userId, kind, scope);
       if (!mounted.current) return;
       if (!server || server.id !== draft.attemptId)
         throw new Error('Unable to confirm the saved test.');
@@ -490,7 +711,7 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
   return (
     <section className="assessment-player page-enter" aria-labelledby="assessment-question">
       <header className="assessment-player__header">
-        <Link to="/">← Save and exit</Link>
+        <Link to={scope ? `/lessons/${scope.lessonId}` : '/'}>← Save and exit</Link>
         <div>
           <span>{title}</span>
           <strong>
@@ -562,8 +783,8 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
             variant="quiet"
             onPointerDown={playNeutralClickOnPointerDown}
             onKeyDown={playNeutralClickOnKeyDown}
-            onClick={() => move(questionIndex - 1)}
-            disabled={questionIndex === 0 || finalizing}
+            onClick={() => void move(questionIndex - 1)}
+            disabled={questionIndex === 0 || submitting}
           >
             Previous
           </Button>
@@ -571,8 +792,8 @@ function AssessmentSession({ userId, kind }: { userId: string; kind: AssessmentK
           <Button
             onPointerDown={playNeutralClickOnPointerDown}
             onKeyDown={playNeutralClickOnKeyDown}
-            onClick={() => (finalQuestion ? void submit() : move(questionIndex + 1))}
-            disabled={!selected || submitting || syncNotice === 'conflict'}
+            onClick={() => (finalQuestion ? void submit() : void move(questionIndex + 1))}
+            disabled={submitting || syncNotice === 'conflict' || (!selected && !finalQuestion)}
             aria-busy={submitting}
           >
             {submitting ? 'Submitting…' : finalQuestion ? 'Submit test' : 'Next question'}
@@ -591,6 +812,7 @@ function AssessmentIntroduction({
   error,
   starting,
   begin,
+  exitPath,
 }: {
   title: string;
   kind: 'pre-test' | 'post-test';
@@ -599,6 +821,7 @@ function AssessmentIntroduction({
   error: string;
   starting: boolean;
   begin: () => Promise<void>;
+  exitPath: string;
 }) {
   return (
     <section className="assessment-shell panel page-enter">
@@ -623,7 +846,7 @@ function AssessmentIntroduction({
       )}
       {error && <p className="form-error">{error}</p>}
       <div className="assessment-actions">
-        <Link className="button button--quiet" to="/">
+        <Link className="button button--quiet" to={exitPath}>
           Not now
         </Link>
         <Button
@@ -643,12 +866,16 @@ function AssessmentResult({
   title,
   kind,
   attempt,
+  continueLesson,
 }: {
   title: string;
   kind: 'pre-test' | 'post-test';
   attempt: AssessmentAttempt;
+  continueLesson?: () => Promise<void>;
 }) {
   const completionPlayedRef = useRef<string | null>(null);
+  const [continuing, setContinuing] = useState(false);
+  const [continueError, setContinueError] = useState('');
 
   // This component is mounted only by the final result-render branch. Keeping
   // the trigger here means loading/error/retry branches cannot play it. The
@@ -661,8 +888,7 @@ function AssessmentResult({
       attempt.score !== null &&
       completionPlayedRef.current !== attempt.id
     ) {
-      const status =
-        attempt.score === 100 ? playReward(attempt.id) : playCompletion(attempt.id);
+      const status = attempt.score === 100 ? playReward(attempt.id) : playCompletion(attempt.id);
       pending = status === 'pending';
       if (!pending) completionPlayedRef.current = attempt.id;
     }
@@ -697,14 +923,40 @@ function AssessmentResult({
         <p className="assessment-note">
           Correct answers are hidden while the research is in progress.
         </p>
-        <Link
-          className="button button--primary assessment-result__return"
-          to="/"
-          onPointerDown={playNeutralClickOnPointerDown}
-          onKeyDown={playNeutralClickOnKeyDown}
-        >
-          Return home
-        </Link>
+        {continueLesson ? (
+          <Button
+            className="assessment-result__return"
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+            disabled={continuing}
+            onClick={() => {
+              setContinuing(true);
+              setContinueError('');
+              void continueLesson().catch((cause: unknown) => {
+                setContinuing(false);
+                setContinueError(
+                  cause instanceof Error ? cause.message : 'Unable to continue the lesson.',
+                );
+              });
+            }}
+          >
+            {continuing
+              ? 'Continuing…'
+              : kind === 'pre-test'
+                ? 'Continue to first chapter'
+                : 'Finish lesson'}
+          </Button>
+        ) : (
+          <Link
+            className="button button--primary assessment-result__return"
+            to="/"
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+          >
+            Return home
+          </Link>
+        )}
+        {continueError && <p className="form-error">{continueError}</p>}
       </div>
     </section>
   );

@@ -73,6 +73,19 @@ export const lessonAttemptSchema = z.object({
   starCount: z.number().int().min(0).max(3).nullable(),
   cleared: z.boolean().nullable(),
   xpImprovement: z.number().int().nonnegative(),
+  flowStage: z
+    .enum([
+      'legacy-activity',
+      'pre-test',
+      'chapter-teaching',
+      'chapter-activity',
+      'post-test',
+      'ready-to-complete',
+    ])
+    .optional(),
+  currentChapterId: z.string().nullable().optional(),
+  preAssessmentVersion: z.number().int().positive().nullable().optional(),
+  postAssessmentVersion: z.number().int().positive().nullable().optional(),
 });
 
 export type StoredSection = z.infer<typeof storedSectionSchema>;

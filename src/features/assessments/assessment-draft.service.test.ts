@@ -4,15 +4,25 @@ import type { AssessmentAttempt, AssessmentDraft, AssessmentQuestion } from '@/t
 import {
   ASSESSMENT_SYNC_RETRY_DELAYS,
   AssessmentDraftSynchronizer,
+  acknowledgeAssessmentStart,
   createAssessmentDraft,
+  createOfflineAssessmentDraft,
   deleteAssessmentDraft,
+  discoverPendingAssessmentDrafts,
   getAssessmentDraft,
   markDraftPendingSubmission,
   reconcileAssessmentDraft,
   saveAssessmentDraft,
+  submitLocalLessonAssessment,
   updateDraftAnswer,
   validateLocalDraft,
 } from './assessment-draft.service';
+import { packagedContent } from '@/features/lessons/content/packaged-content';
+import {
+  createLessonDraft,
+  getLessonDraft,
+  saveLessonDraft,
+} from '@/features/lessons/attempts/lesson-draft.service';
 
 const questions: AssessmentQuestion[] = [
   {
@@ -47,6 +57,75 @@ const attempt = (): AssessmentAttempt => ({
   submittedRevision: null,
 });
 const draft = () => updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q', 'a');
+
+it.each(['pre-test', 'post-test'] as const)(
+  'atomically submits a local %s and advances once, preserving pending intent against a late acknowledgement',
+  async (kind) => {
+    const database = new AltrasDatabase(`pre-submit-${crypto.randomUUID()}`);
+    try {
+      const lesson = {
+        ...packagedContent.lessons[0],
+        assessments: { preTest: 'pre-test' as const },
+      };
+      const snapshot = questions.map((question) => ({ ...question, assessment: kind }));
+      await saveLessonDraft(
+        createLessonDraft(
+          {
+            id: attemptId,
+            userId,
+            lessonId: lesson.id,
+            contentVersion: lesson.contentVersion,
+            status: 'active',
+            startedAt: 1,
+            lastUpdatedAt: 1,
+            completedAt: null,
+            abandonedAt: null,
+            answers: [],
+            finalScore: null,
+            starCount: null,
+            cleared: null,
+            xpImprovement: 0,
+            flowStage: kind,
+            preAssessmentVersion: 1,
+            postAssessmentVersion: 1,
+          },
+          lesson,
+          0,
+          { [kind]: snapshot },
+        ),
+        database,
+      );
+      const local = updateDraftAnswer(
+        createOfflineAssessmentDraft(userId, kind, lesson.id, attemptId, snapshot),
+        'q',
+        'a',
+      );
+      await saveAssessmentDraft(local, database);
+      await Promise.all([
+        submitLocalLessonAssessment(local, database),
+        submitLocalLessonAssessment(local, database),
+      ]);
+      await saveAssessmentDraft(
+        { ...local, syncStatus: 'synced', syncedRevision: local.revision },
+        database,
+      );
+      expect(await getAssessmentDraft(userId, kind, database, attemptId)).toMatchObject({
+        syncStatus: 'pending_submission',
+      });
+      const saved = await getLessonDraft(userId, lesson.id, attemptId, database);
+      expect(saved?.attempt.flowStage).toBe(
+        kind === 'pre-test' ? 'chapter-teaching' : 'ready-to-complete',
+      );
+      expect(saved?.pendingCompletion).toBe(kind === 'post-test');
+      expect(saved?.pendingStageTransitions).toHaveLength(1);
+      expect(saved?.attempt.finalScore).toBeNull();
+      expect(saved?.attempt.xpImprovement).toBe(0);
+    } finally {
+      database.close();
+      await database.delete();
+    }
+  },
+);
 function harness(initial = draft()) {
   let current: AssessmentDraft | null = initial;
   let server = attempt();
@@ -132,6 +211,55 @@ afterEach(() => {
 });
 
 describe('logical assessment drafts', () => {
+  it('creates a safe offline lesson assessment and acknowledges its stable server ID', async () => {
+    const database = new AltrasDatabase(`offline-start-${crypto.randomUUID()}`);
+    try {
+      const local = createOfflineAssessmentDraft(
+        userId,
+        'pre-test',
+        'lesson-operation-signals',
+        '40000000-0000-4000-8000-000000000004',
+        questions,
+        10,
+      );
+      await saveAssessmentDraft(local, database);
+      const started: AssessmentAttempt = {
+        ...attempt(),
+        id: local.attemptId,
+        lessonId: local.lessonId,
+        lessonAttemptId: local.lessonAttemptId,
+        startedAt: 20,
+      };
+
+      const acknowledged = await acknowledgeAssessmentStart(local, started, database);
+
+      expect(acknowledged).toMatchObject({
+        attemptId: local.attemptId,
+        pendingStart: false,
+        syncStatus: 'synced',
+        startedAt: 20,
+      });
+    } finally {
+      await database.delete();
+    }
+  });
+
+  it('preserves corrupt assessment drafts without blocking valid discovery', async () => {
+    const database = new AltrasDatabase(`assessment-discovery-${crypto.randomUUID()}`);
+    try {
+      const valid = draft();
+      const invalid = { ...valid, id: 'invalid-draft' };
+      await database.assessmentDrafts.bulkPut([valid, invalid]);
+
+      const discovery = await discoverPendingAssessmentDrafts(userId, database);
+
+      expect(discovery.drafts.map((item) => item.id)).toEqual([valid.id]);
+      expect(discovery.invalidDraftIds).toEqual(['invalid-draft']);
+      expect(await database.assessmentDrafts.get('invalid-draft')).toBeDefined();
+    } finally {
+      await database.delete();
+    }
+  });
   it('ignores clock skew and late server timestamps when restoring unsynced answers', () => {
     const local = updateDraftAnswer(createAssessmentDraft(attempt(), questions), 'q', 'b', 1);
     const remote = {
@@ -174,6 +302,42 @@ describe('logical assessment drafts', () => {
       expect(
         await deleteAssessmentDraft(newer.id, newer.revision, newer.mutationId, database),
       ).toBe(true);
+    } finally {
+      await database.delete();
+    }
+  });
+  it('isolates lesson-owned drafts by lesson attempt', async () => {
+    const database = new AltrasDatabase(`lesson-draft-${crypto.randomUUID()}`);
+    const firstLessonAttemptId = '40000000-0000-4000-8000-000000000004';
+    const secondLessonAttemptId = '50000000-0000-4000-8000-000000000005';
+    try {
+      const first = createAssessmentDraft(
+        {
+          ...attempt(),
+          lessonId: 'lesson-one',
+          lessonAttemptId: firstLessonAttemptId,
+        },
+        questions,
+      );
+      const second = createAssessmentDraft(
+        {
+          ...attempt(),
+          id: '60000000-0000-4000-8000-000000000006',
+          lessonId: 'lesson-two',
+          lessonAttemptId: secondLessonAttemptId,
+        },
+        questions,
+      );
+      await saveAssessmentDraft(first, database);
+      await saveAssessmentDraft(second, database);
+
+      expect(await getAssessmentDraft(userId, 'pre-test', database)).toBeNull();
+      expect(
+        (await getAssessmentDraft(userId, 'pre-test', database, firstLessonAttemptId))?.attemptId,
+      ).toBe(first.attemptId);
+      expect(
+        (await getAssessmentDraft(userId, 'pre-test', database, secondLessonAttemptId))?.attemptId,
+      ).toBe(second.attemptId);
     } finally {
       await database.delete();
     }
@@ -324,7 +488,7 @@ describe('serialized assessment coordinator', () => {
     expect(h.sync).toHaveBeenCalledTimes(2);
     h.coordinator.dispose();
   });
-  it('maintains one timer, clears it on triggers/flush/dispose and bounds automatic retries', async () => {
+  it('maintains one timer and continues with a low-frequency retry after the fast burst', async () => {
     vi.useFakeTimers();
     const h = harness();
     h.read.mockRejectedValue(new Error('offline'));
@@ -336,15 +500,17 @@ describe('serialized assessment coordinator', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(vi.getTimerCount()).toBe(1);
     for (const delay of ASSESSMENT_SYNC_RETRY_DELAYS) await vi.advanceTimersByTimeAsync(delay);
-    expect(vi.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(1);
     expect(h.read).toHaveBeenCalledTimes(7);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.read).toHaveBeenCalledTimes(8);
     await h.coordinator.flush();
     expect(vi.getTimerCount()).toBe(1);
     h.coordinator.dispose();
     expect(vi.getTimerCount()).toBe(0);
     h.coordinator.requestSync();
     await vi.advanceTimersByTimeAsync(60000);
-    expect(h.read).toHaveBeenCalledTimes(8);
+    expect(h.read).toHaveBeenCalledTimes(9);
   });
   it('catches load failures and ignores in-flight responses after disposal', async () => {
     const h = harness();
