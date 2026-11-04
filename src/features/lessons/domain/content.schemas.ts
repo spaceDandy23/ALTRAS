@@ -84,9 +84,26 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     }
   });
 
+export const chooseCorrectTranslationActivitySchema = activityBaseSchema
+  .extend({
+    type: z.literal('choose-correct-translation'),
+    choices: z.array(activityChoiceSchema).min(2),
+    correctChoiceId: z.string().min(1),
+  })
+  .superRefine((activity, context) => {
+    const choiceIds = activity.choices.map((choice) => choice.id);
+    if (new Set(choiceIds).size !== choiceIds.length) {
+      context.addIssue({ code: 'custom', message: 'Choice IDs must be unique.' });
+    }
+    if (!choiceIds.includes(activity.correctChoiceId)) {
+      context.addIssue({ code: 'custom', message: 'The correct choice must exist.' });
+    }
+  });
+
 export const activitySchema = z.discriminatedUnion('type', [
   findWordActivitySchema,
   organizeTranslateActivitySchema,
+  chooseCorrectTranslationActivitySchema,
 ]);
 
 export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
@@ -234,6 +251,10 @@ export const publicActivitySchema = z.discriminatedUnion('type', [
     ...organizeTranslateActivitySchema.shape,
     correctTokenSequence: z.array(z.string()).optional(),
   }),
+  z.object({
+    ...chooseCorrectTranslationActivitySchema.shape,
+    correctChoiceId: z.string().optional(),
+  }),
 ]);
 export const publicLessonChapterSchema = z.object({
   id: z.string().min(1),
@@ -253,6 +274,10 @@ export type FindWordActivity = Extract<z.infer<typeof publicActivitySchema>, { t
 export type OrganizeTranslateActivity = Extract<
   z.infer<typeof publicActivitySchema>,
   { type: 'organize-translate' }
+>;
+export type ChooseCorrectTranslationActivity = Extract<
+  z.infer<typeof publicActivitySchema>,
+  { type: 'choose-correct-translation' }
 >;
 export type LessonActivity = z.infer<typeof publicActivitySchema>;
 export type InstructionalContentBlock = z.infer<typeof instructionalContentBlockSchema>;

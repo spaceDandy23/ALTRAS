@@ -7,6 +7,10 @@ export function evaluateActivity(activity: LessonActivity, answer: ActivityAnswe
     return typeof answer === 'string' && answer === activity.correctChoiceId;
   }
 
+  if (activity.type === 'choose-correct-translation') {
+    return typeof answer === 'string' && answer === activity.correctChoiceId;
+  }
+
   return (
     Array.isArray(answer) &&
     activity.correctTokenSequence !== undefined &&

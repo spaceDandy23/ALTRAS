@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { packagedContent } from '../content/packaged-content';
-import { packagedContentSchema } from './content.schemas';
+import { activitySchema, packagedContentSchema, publicActivitySchema } from './content.schemas';
 
 describe('learning content schema', () => {
-  it('accepts the bundled unit and both supported activity types', () => {
+  it('accepts the bundled unit and all supported activity types', () => {
     const parsed = packagedContentSchema.parse(packagedContent);
     const playable = parsed.lessons.find((lesson) => lesson.contentStatus === 'playable');
 
@@ -14,6 +14,26 @@ describe('learning content schema', () => {
     expect(
       playable?.activities.filter((activity) => activity.type === 'organize-translate'),
     ).toHaveLength(3);
+  });
+
+  it('accepts a choice-based verbal phrase translation without exposing its answer key', () => {
+    const activity = {
+      id: 'translate-sum-five',
+      type: 'choose-correct-translation',
+      title: 'Choose the matching expression',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'choice-a', label: 'n + 5' },
+        { id: 'choice-b', label: 'n - 5' },
+      ],
+      correctChoiceId: 'choice-a',
+      explanation: { title: 'Addition', body: 'Sum means add.' },
+    };
+
+    expect(activitySchema.safeParse(activity).success).toBe(true);
+    const { correctChoiceId: answerKey, ...publicFields } = activity;
+    void answerKey;
+    expect(publicActivitySchema.parse(publicFields)).not.toHaveProperty('correctChoiceId');
   });
 
   it('provides five stable, supported Order Matters activities and verified examples', () => {

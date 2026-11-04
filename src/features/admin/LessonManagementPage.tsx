@@ -558,7 +558,11 @@ export function LessonManagementPage() {
                       <details key={activity.id} className="admin-activity">
                         <summary>
                           Activity {activityIndex + 1} ·{' '}
-                          {activity.type === 'find-word' ? 'Find the word' : 'Organize & translate'} ·{' '}
+                          {activity.type === 'find-word'
+                            ? 'Find the word'
+                            : activity.type === 'organize-translate'
+                              ? 'Organize & translate'
+                              : 'Choose the correct translation'} ·{' '}
                           <span className="admin-activity-summary__preview">
                             {activity.title || activity.prompt || 'Untitled activity'}
                           </span>

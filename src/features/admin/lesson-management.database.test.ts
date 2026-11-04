@@ -11,7 +11,7 @@ import {
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
-import { publicLessonSchema } from '@/features/lessons/domain/content.schemas';
+import { activitySchema, publicLessonSchema } from '@/features/lessons/domain/content.schemas';
 
 let pg: PGlite;
 const adminId = randomUUID(),
@@ -25,6 +25,7 @@ const phase3Migration = '202610300003_lesson_offline_transitions.sql';
 const offlineAssessmentMigration = '202610310001_offline_assessment_start.sql';
 const lessonScopedAssessmentMigration = '202611040001_lesson_scoped_assessments.sql';
 const completedActiveTimeMigration = '202611040002_reconcile_completed_attempt_active_time.sql';
+const chooseTranslationMigration = '202611040003_choose_correct_translation_activity.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -141,6 +142,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', offlineAssessmentMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonScopedAssessmentMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', completedActiveTimeMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', chooseTranslationMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -162,6 +164,57 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('saves, publishes, restores, and privately grades translation choices', async () => {
+    const activity = activitySchema.parse({
+      id: 'translate-sum-five',
+      type: 'choose-correct-translation',
+      title: 'Choose the correct translation',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'sum-expression', label: 'n + 5' },
+        { id: 'difference-expression', label: 'n - 5' },
+        { id: 'reversed-expression', label: '5 - n' },
+      ],
+      correctChoiceId: 'sum-expression',
+      explanation: { title: 'Sum means addition', body: 'Add five to n.' },
+    });
+    if (activity.type !== 'choose-correct-translation') throw new Error('Invalid activity fixture.');
+    const authored = draft({ prerequisiteLessonId: undefined, activities: [activity] });
+    const saved = await save(authored);
+    expect(saved.draft.activities[0]).toMatchObject({
+      type: 'choose-correct-translation',
+      prompt: 'The sum of a number and five',
+    });
+    const published = await publish(saved);
+    await asUser(studentId);
+    const content = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, null]);
+    expect(content.activities[0]).toMatchObject({
+      type: 'choose-correct-translation',
+      choices: expect.arrayContaining([{ id: 'sum-expression', label: 'n + 5' }]),
+    });
+    expect(content.activities[0]).not.toHaveProperty('correctChoiceId');
+    expect(publicLessonSchema.safeParse(content).success).toBe(true);
+
+    let attempt = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    const correct = await rpc<{ is_correct: boolean }>('submit_lesson_activity_answer', [
+      attempt.id,
+      activity.id,
+      'sum-expression',
+    ]);
+    expect(correct.is_correct).toBe(true);
+    const restored = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, attempt.id]);
+    expect(restored.activities[0]).toHaveProperty('correctChoiceId', 'sum-expression');
+    await rpc('complete_lesson_attempt', [attempt.id]);
+
+    attempt = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    const incorrect = await rpc<{ is_correct: boolean }>('submit_lesson_activity_answer', [
+      attempt.id,
+      activity.id,
+      'difference-expression',
+    ]);
+    expect(incorrect.is_correct).toBe(false);
+  });
+
   it('starts a new attempt on the latest published pre-test after restart', async () => {
     const authored = draft({
       prerequisiteLessonId: undefined,

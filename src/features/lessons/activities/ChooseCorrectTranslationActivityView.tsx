@@ -1,0 +1,110 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import type { SubmittedActivityAnswer } from '@/types/learning';
+import type { ChooseCorrectTranslationActivity } from '../domain/content.schemas';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
+
+export function ChooseCorrectTranslationActivityView({
+  activity,
+  submitted,
+  pendingAnswer,
+  onSubmit,
+  onHintVisibilityChange,
+}: {
+  activity: ChooseCorrectTranslationActivity;
+  submitted?: SubmittedActivityAnswer;
+  pendingAnswer?: string;
+  onSubmit: (answer: string) => Promise<void>;
+  onHintVisibilityChange?: (visible: boolean) => void;
+}) {
+  const [selected, setSelected] = useState('');
+  const [hintVisible, setHintVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const visibleAnswer = submitted?.answer ?? pendingAnswer ?? selected;
+
+  const submit = async () => {
+    if (!selected || submitted || pendingAnswer) return;
+    setSaving(true);
+    try {
+      await onSubmit(selected);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleHint = () => {
+    setHintVisible((visible) => {
+      const next = !visible;
+      onHintVisibilityChange?.(next);
+      return next;
+    });
+  };
+
+  return (
+    <div className="activity-card activity-card--choose-translation">
+      <div className="activity-heading">
+        <span className="activity-kind">Choose the correct translation</span>
+        <h1>{activity.title}</h1>
+      </div>
+      <fieldset className="find-word-fieldset" disabled={Boolean(submitted || pendingAnswer)}>
+        <legend>{activity.prompt}</legend>
+        <div className="choice-grid">
+          {activity.choices.map((choice) => {
+            const selectedChoice = visibleAnswer === choice.id;
+            const submittedState = submitted
+              ? selectedChoice
+                ? submitted.isCorrect
+                  ? 'choice-option--correct'
+                  : 'choice-option--incorrect'
+                : choice.id === activity.correctChoiceId
+                  ? 'choice-option--answer'
+                  : ''
+              : '';
+            return (
+              <label
+                key={choice.id}
+                className={`choice-option ${selected === choice.id ? 'choice-option--selected' : ''} ${submittedState}`}
+                onPointerDown={playNeutralClickOnPointerDown}
+              >
+                <input
+                  type="radio"
+                  name={activity.id}
+                  value={choice.id}
+                  checked={visibleAnswer === choice.id}
+                  onKeyDown={playNeutralClickOnKeyDown}
+                  onChange={() => setSelected(choice.id)}
+                />
+                <span>{choice.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+      {!submitted && !pendingAnswer && (
+        <div className="activity-actions">
+          {activity.hint && (
+            <Button variant="quiet" onClick={toggleHint}>
+              {hintVisible ? 'Hide hint' : 'Show hint'}
+            </Button>
+          )}
+          <Button
+            disabled={!selected || saving}
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+            onClick={() => void submit()}
+          >
+            {saving ? 'Checking…' : 'Submit answer'}
+          </Button>
+        </div>
+      )}
+      {hintVisible && !submitted && !pendingAnswer && (
+        <p className="activity-hint" role="status">
+          <strong>Hint:</strong> {activity.hint?.body}
+        </p>
+      )}
+    </div>
+  );
+}

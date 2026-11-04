@@ -42,9 +42,9 @@ describe('research data integrity migration', () => {
       for (const activity of lesson.activities) {
         expect(migration).toContain(`'${activity.id}', '${activity.type}'`);
         const correctAnswer =
-          activity.type === 'find-word'
-            ? activity.correctChoiceId
-            : activity.correctTokenSequence;
+          activity.type === 'organize-translate'
+            ? activity.correctTokenSequence
+            : activity.correctChoiceId;
         expect(migration).toContain(`'${JSON.stringify(correctAnswer)}'`);
       }
     }

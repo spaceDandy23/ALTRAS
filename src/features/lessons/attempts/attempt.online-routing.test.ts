@@ -266,9 +266,9 @@ describe('Supabase-only lesson attempt routing', () => {
       createLessonDraft(attempt, lesson),
       lesson.activities[0].id,
       lesson.activities[0].type,
-      lesson.activities[0].type === 'find-word'
-        ? lesson.activities[0].choices[0].id
-        : lesson.activities[0].tokens.map((token) => token.id),
+      lesson.activities[0].type === 'organize-translate'
+        ? lesson.activities[0].tokens.map((token) => token.id)
+        : lesson.activities[0].choices[0].id,
       1,
     );
     await saveLessonDraft(pending);
@@ -302,9 +302,9 @@ describe('Supabase-only lesson attempt routing', () => {
     const lesson = structuredClone(packagedContent.lessons[0]);
     const secondAttempt = { ...attempt, id: '10000000-0000-4000-8000-000000000009' };
     const answer =
-      lesson.activities[0].type === 'find-word'
-        ? lesson.activities[0].choices[0].id
-        : lesson.activities[0].tokens.map((token) => token.id);
+      lesson.activities[0].type === 'organize-translate'
+        ? lesson.activities[0].tokens.map((token) => token.id)
+        : lesson.activities[0].choices[0].id;
     await saveLessonDraft(
       queueLessonAnswer(
         createLessonDraft(attempt, lesson),
@@ -358,9 +358,9 @@ describe('Supabase-only lesson attempt routing', () => {
   it('coalesces overlapping global replay requests for the same attempt', async () => {
     const lesson = structuredClone(packagedContent.lessons[0]);
     const answer =
-      lesson.activities[0].type === 'find-word'
-        ? lesson.activities[0].choices[0].id
-        : lesson.activities[0].tokens.map((token) => token.id);
+      lesson.activities[0].type === 'organize-translate'
+        ? lesson.activities[0].tokens.map((token) => token.id)
+        : lesson.activities[0].choices[0].id;
     await saveLessonDraft(
       queueLessonAnswer(
         createLessonDraft(attempt, lesson),

@@ -235,7 +235,9 @@ describe('final lesson result actions', () => {
         activityId: activity.id,
         activityType: activity.type,
         answer:
-          activity.type === 'find-word' ? activity.correctChoiceId : activity.correctTokenSequence,
+          activity.type === 'organize-translate'
+            ? activity.correctTokenSequence
+            : activity.correctChoiceId,
         isCorrect: true,
         submittedAt: index + 1,
       })),

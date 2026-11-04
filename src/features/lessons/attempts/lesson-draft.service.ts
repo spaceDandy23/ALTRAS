@@ -15,7 +15,7 @@ export type LessonDraftSyncStatus = 'synced' | 'pending' | 'pending_completion';
 
 export interface LessonPendingAnswer {
   activityId: string;
-  activityType: 'find-word' | 'organize-translate';
+  activityType: 'find-word' | 'organize-translate' | 'choose-correct-translation';
   answer: ActivityAnswer;
   queuedAt: number;
   sequence?: number;
@@ -126,6 +126,12 @@ function validateLessonDraft(draft: LessonDraft): void {
       const activity = draft.lesson.activities.find((item) => item.id === answer.activityId);
       if (!activity || activity.type !== answer.activityType) return true;
       if (activity.type === 'find-word') {
+        return (
+          typeof answer.answer !== 'string' ||
+          !activity.choices.some((choice) => choice.id === answer.answer)
+        );
+      }
+      if (activity.type === 'choose-correct-translation') {
         return (
           typeof answer.answer !== 'string' ||
           !activity.choices.some((choice) => choice.id === answer.answer)

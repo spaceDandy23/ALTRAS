@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { packagedContent } from '../content/packaged-content';
+import { activitySchema } from './content.schemas';
 import { evaluateActivity } from './evaluation';
 
 const activities = packagedContent.lessons[0].activities;
@@ -21,11 +22,13 @@ describe('activity evaluation', () => {
 
     for (const activity of lesson.activities) {
       const correctAnswer =
-        activity.type === 'find-word' ? activity.correctChoiceId : activity.correctTokenSequence;
+        activity.type === 'organize-translate'
+          ? activity.correctTokenSequence
+          : activity.correctChoiceId;
       const incorrectAnswer =
-        activity.type === 'find-word'
-          ? activity.choices.find((choice) => choice.id !== activity.correctChoiceId)?.id
-          : [...activity.correctTokenSequence].reverse();
+        activity.type === 'organize-translate'
+          ? [...activity.correctTokenSequence].reverse()
+          : activity.choices.find((choice) => choice.id !== activity.correctChoiceId)?.id;
 
       expect(evaluateActivity(activity, correctAnswer), activity.id).toBe(true);
       expect(evaluateActivity(activity, incorrectAnswer ?? 'incorrect'), activity.id).toBe(false);
@@ -38,5 +41,24 @@ describe('activity evaluation', () => {
 
     expect(evaluateActivity(activity, activity.correctTokenSequence)).toBe(true);
     expect(evaluateActivity(activity, [...activity.correctTokenSequence].reverse())).toBe(false);
+  });
+
+  it('evaluates Choose-the-Correct-Translation by stable choice ID', () => {
+    const activity = activitySchema.parse({
+      id: 'choose-translation',
+      type: 'choose-correct-translation',
+      title: 'Translate the phrase',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'sum', label: 'n + 5' },
+        { id: 'difference', label: 'n - 5' },
+      ],
+      correctChoiceId: 'sum',
+      explanation: { title: 'Sum means addition', body: 'Add five to n.' },
+    });
+
+    expect(evaluateActivity(activity, 'sum')).toBe(true);
+    expect(evaluateActivity(activity, 'difference')).toBe(false);
+    expect(evaluateActivity(activity, ['sum'])).toBe(false);
   });
 });

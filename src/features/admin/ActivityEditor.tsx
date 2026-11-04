@@ -1,4 +1,5 @@
 import { FormField } from '@/components/ui/FormField';
+import { ChoiceRowsEditor } from './ChoiceRowsEditor';
 import { moveItem, newActivity, type AuthoredLesson } from './lesson-management.service';
 type Activity = AuthoredLesson['activities'][number];
 
@@ -9,9 +10,9 @@ export function ActivityEditor({
   activity: Activity;
   onChange: (a: Activity) => void;
 }) {
-  const options = activity.type === 'find-word' ? activity.choices : activity.tokens;
+  const options = activity.type === 'organize-translate' ? activity.tokens : activity.choices;
   const setOptions = (next: typeof options) => {
-    if (activity.type === 'find-word')
+    if (activity.type !== 'organize-translate')
       onChange({
         ...activity,
         choices: next,
@@ -35,19 +36,27 @@ export function ActivityEditor({
         Activity type
         <select
           value={activity.type}
-          onChange={(e) =>
+          onChange={(e) => {
+            const nextType = e.target.value as Activity['type'];
+            const next = newActivity(nextType);
+            const mathStatement =
+              activity.type === 'choose-correct-translation' ? undefined : activity.mathStatement;
             onChange({
-              ...newActivity(e.target.value as Activity['type']),
+              ...next,
               id: activity.id,
               title: activity.title,
               prompt: activity.prompt,
-              mathStatement: activity.mathStatement,
               explanation: activity.explanation,
-            })
-          }
+              ...(nextType !== 'choose-correct-translation' && mathStatement !== undefined
+                ? { mathStatement }
+                : {}),
+              ...(activity.hint ? { hint: activity.hint } : {}),
+            });
+          }}
         >
           <option value="find-word">Find the word</option>
           <option value="organize-translate">Organize & translate</option>
+          <option value="choose-correct-translation">Choose the correct translation</option>
         </select>
       </label>
       <FormField
@@ -56,15 +65,17 @@ export function ActivityEditor({
         onChange={(e) => onChange({ ...activity, title: e.target.value })}
       />
       <FormField
-        label="Prompt / instructions"
+        label={activity.type === 'choose-correct-translation' ? 'Verbal phrase' : 'Prompt / instructions'}
         value={activity.prompt}
         onChange={(e) => onChange({ ...activity, prompt: e.target.value })}
       />
-      <FormField
-        label="Mathematical expression"
-        value={activity.mathStatement}
-        onChange={(e) => onChange({ ...activity, mathStatement: e.target.value })}
-      />
+      {activity.type !== 'choose-correct-translation' && (
+        <FormField
+          label="Mathematical expression"
+          value={activity.mathStatement}
+          onChange={(e) => onChange({ ...activity, mathStatement: e.target.value })}
+        />
+      )}
       {activity.type === 'find-word' && (
         <>
           <FormField
@@ -79,70 +90,23 @@ export function ActivityEditor({
           />
         </>
       )}
-      <fieldset className="admin-options">
-        <legend>
-          {activity.type === 'find-word' ? 'Answer choices' : 'Phrase tokens (display order)'}
-        </legend>
-        {options.map((option, index) => (
-          <div key={option.id} className="admin-option">
-            <FormField
-              label={`${activity.type === 'find-word' ? 'Choice' : 'Token'} ${index + 1}`}
-              value={option.label}
-              onChange={(e) =>
-                setOptions(
-                  options.map((o) => (o.id === option.id ? { ...o, label: e.target.value } : o)),
-                )
-              }
-            />
-            <button
-              type="button"
-              disabled={index === 0}
-              aria-label={`Move option ${index + 1} up`}
-              onClick={() => setOptions(moveItem(options, index, -1))}
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              disabled={index === options.length - 1}
-              aria-label={`Move option ${index + 1} down`}
-              onClick={() => setOptions(moveItem(options, index, 1))}
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              disabled={options.length <= 2}
-              aria-label={`Remove option ${index + 1}`}
-              onClick={() => setOptions(options.filter((o) => o.id !== option.id))}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          disabled={options.length >= 20}
-          onClick={() => setOptions([...options, { id: crypto.randomUUID(), label: '' }])}
-        >
-          Add {activity.type === 'find-word' ? 'choice' : 'token'}
-        </button>
-      </fieldset>
-      {activity.type === 'find-word' ? (
-        <label>
-          Correct answer
-          <select
-            value={activity.correctChoiceId}
-            onChange={(e) => onChange({ ...activity, correctChoiceId: e.target.value })}
-          >
-            {options.map((option, index) => (
-              <option key={option.id} value={option.id}>
-                {option.label || `Choice ${index + 1}`}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
+      <ChoiceRowsEditor
+        choices={options}
+        onChange={setOptions}
+        legend={activity.type === 'organize-translate' ? 'Phrase tokens (display order)' : 'Answer choices'}
+        choiceLabel={activity.type === 'organize-translate' ? 'Token' : activity.type === 'choose-correct-translation' ? 'Expression choice' : 'Choice'}
+        controlLabel="option"
+        addLabel={`Add ${activity.type === 'organize-translate' ? 'token' : 'choice'}`}
+        maxChoices={20}
+        radioGroupName={`correct-activity-${activity.id}`}
+        correctChoiceId={activity.type === 'organize-translate' ? undefined : activity.correctChoiceId}
+        onCorrectChoiceChange={
+          activity.type === 'organize-translate'
+            ? undefined
+            : (choiceId) => onChange({ ...activity, correctChoiceId: choiceId })
+        }
+      />
+      {activity.type === 'organize-translate' && (
         <fieldset className="admin-options">
           <legend>Correct token order</legend>
           <ol className="admin-token-order">

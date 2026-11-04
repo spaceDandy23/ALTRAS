@@ -5,6 +5,7 @@ import {
   type AdminAssessmentQuestion,
 } from './assessment-management.service';
 import type { AssessmentKind } from '@/types/assessment';
+import { ChoiceRowsEditor } from './ChoiceRowsEditor';
 
 export function LessonAssessmentQuestionsEditor({
   assessment,
@@ -83,78 +84,35 @@ export function LessonAssessmentQuestionsEditor({
                         }
                       />
                     </label>
-                    <fieldset className="admin-assessment-choices">
-                      <legend>Answer choices</legend>
-                      {question.choices.map((choice, choiceIndex) => (
-                        <div className="admin-assessment-choice" key={choice.id}>
-                          <label className="admin-correct-choice">
-                            <input
-                              type="radio"
-                              name={`correct-${question.id}`}
-                              checked={question.correctChoiceId === choice.id}
-                              onChange={() =>
-                                updateQuestion(question.id, (item) => ({
-                                  ...item,
-                                  correctChoiceId: choice.id,
-                                }))
-                              }
-                            />
-                            Correct
-                          </label>
-                          <label>
-                            <span>Choice {choiceIndex + 1}</span>
-                            <input
-                              maxLength={1000}
-                              required
-                              value={choice.label}
-                              onChange={(event) =>
-                                updateQuestion(question.id, (item) => ({
-                                  ...item,
-                                  choices: item.choices.map((old) =>
-                                    old.id === choice.id
-                                      ? { ...old, label: event.target.value }
-                                      : old,
-                                  ),
-                                  isPlaceholder: false,
-                                }))
-                              }
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            disabled={question.choices.length <= 2}
-                            onClick={() =>
-                              updateQuestion(question.id, (item) => ({
-                                ...item,
-                                choices: item.choices.filter((old) => old.id !== choice.id),
-                                correctChoiceId:
-                                  item.correctChoiceId === choice.id
-                                    ? (item.choices.find((old) => old.id !== choice.id)?.id ?? '')
-                                    : item.correctChoiceId,
-                              }))
-                            }
-                          >
-                            Delete choice
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        disabled={question.choices.length >= 10}
-                        onClick={() =>
-                          updateQuestion(question.id, (item) => ({
-                            ...item,
-                            choices: [
-                              ...item.choices,
-                              { id: `choice-${crypto.randomUUID()}`, label: '' },
-                            ],
-                            isPlaceholder: false,
-                          }))
-                        }
-                      >
-                        Add answer choice
-                      </button>
-                    </fieldset>
+                    <ChoiceRowsEditor
+                      choices={question.choices}
+                      legend="Answer choices"
+                      choiceLabel="Choice"
+                      controlLabel="choice"
+                      addLabel="Add choice"
+                      maxChoices={10}
+                      choiceMaxLength={1000}
+                      choiceRequired
+                      choiceIdPrefix="choice-"
+                      radioGroupName={`correct-${question.id}`}
+                      correctChoiceId={question.correctChoiceId}
+                      onCorrectChoiceChange={(choiceId) =>
+                        updateQuestion(question.id, (item) => ({
+                          ...item,
+                          correctChoiceId: choiceId,
+                        }))
+                      }
+                      onChange={(choices) =>
+                        updateQuestion(question.id, (item) => ({
+                          ...item,
+                          choices,
+                          correctChoiceId: choices.some((choice) => choice.id === item.correctChoiceId)
+                            ? item.correctChoiceId
+                            : (choices[0]?.id ?? ''),
+                          isPlaceholder: false,
+                        }))
+                      }
+                    />
                   </div>
                 </details>
               </li>

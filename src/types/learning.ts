@@ -52,7 +52,7 @@ export const lessonProgressSchema = z.object({
 
 export const submittedActivityAnswerSchema = z.object({
   activityId: z.string().min(1),
-  activityType: z.enum(['find-word', 'organize-translate']),
+  activityType: z.enum(['find-word', 'organize-translate', 'choose-correct-translation']),
   answer: z.union([z.string(), z.array(z.string())]),
   isCorrect: z.boolean(),
   submittedAt: z.number().int().nonnegative(),

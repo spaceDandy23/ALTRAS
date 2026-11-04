@@ -472,9 +472,9 @@ describe('assessment UX and bootstrap', () => {
           activityId: activity.id,
           activityType: activity.type,
           answer:
-            activity.type === 'find-word'
-              ? activity.correctChoiceId
-              : (activity.correctTokenSequence ?? []),
+            activity.type === 'organize-translate'
+              ? (activity.correctTokenSequence ?? [])
+              : activity.correctChoiceId,
           isCorrect: true,
           submittedAt: 2,
         })),

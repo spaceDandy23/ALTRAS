@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageLoadError } from '@/components/ui/PageLoadError';
 import { ActivityCharacterAssistant } from '@/features/characters/components/ActivityCharacterAssistant';
+import { ChooseCorrectTranslationActivityView } from './activities/ChooseCorrectTranslationActivityView';
 import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
@@ -607,13 +608,26 @@ export function ActiveLessonPage() {
                   setHintActivityId(visible ? activity.id : null)
                 }
               />
-            ) : (
+            ) : activity.type === 'organize-translate' ? (
               <OrganizeTranslateActivityView
                 key={activity.id}
                 activity={activity}
                 submitted={visibleSubmitted}
                 pendingAnswer={
                   Array.isArray(visiblePendingAnswer) ? visiblePendingAnswer : undefined
+                }
+                onSubmit={submit}
+                onHintVisibilityChange={(visible) =>
+                  setHintActivityId(visible ? activity.id : null)
+                }
+              />
+            ) : (
+              <ChooseCorrectTranslationActivityView
+                key={activity.id}
+                activity={activity}
+                submitted={visibleSubmitted}
+                pendingAnswer={
+                  typeof visiblePendingAnswer === 'string' ? visiblePendingAnswer : undefined
                 }
                 onSubmit={submit}
                 onHintVisibilityChange={(visible) =>

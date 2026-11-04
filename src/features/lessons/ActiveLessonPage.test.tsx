@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import { packagedContent } from './content/packaged-content';
+import { activitySchema, type ChooseCorrectTranslationActivity } from './domain/content.schemas';
 import { getLesson } from './content/content.service';
 import {
   completeAttempt,
@@ -46,6 +47,86 @@ describe('active lesson loading failures', () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     useAuthStore.setState({ status: 'guest', user: null });
     useContentStore.setState({ status: 'idle', error: null });
+  });
+
+  it('renders and submits a Choose-the-Correct-Translation activity in the active lesson flow', async () => {
+    const activity: ChooseCorrectTranslationActivity = (() => {
+      const parsed = activitySchema.parse({
+        id: 'active-translation',
+        type: 'choose-correct-translation',
+        title: 'Choose the correct expression',
+        prompt: 'The sum of a number and five',
+        choices: [
+          { id: 'sum', label: 'n + 5' },
+          { id: 'difference', label: 'n - 5' },
+        ],
+        correctChoiceId: 'sum',
+        explanation: { title: 'Sum means addition', body: 'Add five to n.' },
+      });
+      if (parsed.type !== 'choose-correct-translation') throw new Error('Invalid test activity.');
+      return parsed;
+    })();
+    const lesson = {
+      ...structuredClone(packagedContent.lessons[0]),
+      activities: [activity],
+    };
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const activeAttempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: [],
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+    };
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(activeAttempt);
+    vi.mocked(submitActivityAnswer).mockResolvedValue({
+      ...activeAttempt,
+      answers: [
+        {
+          activityId: activity.id,
+          activityType: activity.type,
+          answer: 'sum',
+          isCorrect: true,
+          submittedAt: 2,
+        },
+      ],
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'student',
+        displayName: 'Student',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(activity.prompt)).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'n + 5' }));
+    await user.click(screen.getByRole('button', { name: 'Submit answer' }));
+    expect(await screen.findByText('Correct')).toBeVisible();
+    expect(submitActivityAnswer).toHaveBeenCalledWith(db, attemptId, activity.id, 'sum', expect.anything());
   });
 
   it.each([
@@ -505,7 +586,7 @@ describe('active lesson loading failures', () => {
         localDraft,
         activity.id,
         activity.type,
-        activity.type === 'find-word' ? activity.correctChoiceId : activity.correctTokenSequence,
+        activity.type === 'organize-translate' ? activity.correctTokenSequence : activity.correctChoiceId,
         index,
       );
     }

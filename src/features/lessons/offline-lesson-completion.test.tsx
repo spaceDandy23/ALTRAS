@@ -303,9 +303,9 @@ async function finishLocally() {
       saved,
       activity.id,
       activity.type,
-      activity.type === 'find-word'
-        ? activity.choices[0].id
-        : activity.tokens.map((token) => token.id),
+      activity.type === 'organize-translate'
+        ? activity.tokens.map((token) => token.id)
+        : activity.choices[0].id,
       0,
     ),
   );

@@ -173,6 +173,59 @@ describe('Basic Lesson Management editor and preview', () => {
     });
     expect(screen.getByRole('group', { name: 'Correct token order' })).toBeInTheDocument();
   });
+  it('creates and saves a Choose the Correct Translation activity in the collapsed editor', async () => {
+    const row = item();
+    row.draft.chapters[0].activities = [];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(
+      async (name: string, args?: { p_lesson: ManagedLesson['draft'] }) => ({
+        error: null,
+        data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+      }),
+    );
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(screen.getByText(/Chapter 1: Chapter 1/));
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity to Chapter 1' }));
+
+    const activityCard = document.querySelector<HTMLElement>('.admin-activity')!;
+    fireEvent.click(activityCard.querySelector('summary')!);
+    fireEvent.change(within(activityCard).getByLabelText('Activity type'), {
+      target: { value: 'choose-correct-translation' },
+    });
+    fireEvent.change(within(activityCard).getByLabelText('Verbal phrase'), {
+      target: { value: 'The sum of a number and five' },
+    });
+    fireEvent.change(within(activityCard).getByLabelText('Expression choice 1'), {
+      target: { value: 'n + 5' },
+    });
+    fireEvent.change(within(activityCard).getByLabelText('Expression choice 2'), {
+      target: { value: 'n - 5' },
+    });
+    expect(within(activityCard).queryByLabelText('Correct answer')).not.toBeInTheDocument();
+    fireEvent.click(within(activityCard).getAllByRole('radio', { name: 'Correct' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    expect(await screen.findByText('Draft saved.')).toBeInTheDocument();
+    expect(client.rpc).toHaveBeenCalledWith(
+      'save_admin_lesson',
+      expect.objectContaining({
+        p_lesson: expect.objectContaining({
+          activities: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'choose-correct-translation',
+              prompt: 'The sum of a number and five',
+              choices: expect.arrayContaining([
+                expect.objectContaining({ label: 'n + 5' }),
+                expect.objectContaining({ label: 'n - 5' }),
+              ]),
+              correctChoiceId: 'choice-2',
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
   it('creates, edits, reorders and confirms deletion of ordered chapters', async () => {
     const row = item();
     row.draft.chapters[0].activities = [];
@@ -285,6 +338,38 @@ describe('Basic Lesson Management editor and preview', () => {
         }),
       ),
     );
+  });
+  it('edits assessment choices as reorderable compact rows with a per-choice correct selector', async () => {
+    const row = item();
+    client.rpc.mockImplementation(
+      async (name: string, args?: { p_lesson: ManagedLesson['draft'] }) => ({
+        error: null,
+        data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+      }),
+    );
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    const preTest = container.querySelector<HTMLElement>('[aria-label="Lesson Pre-test"]')!;
+    fireEvent.click(preTest.querySelector('summary')!);
+    const question = preTest.querySelector<HTMLElement>('.admin-assessment-question')!;
+    fireEvent.click(question.querySelector('summary')!);
+
+    fireEvent.click(within(question).getByRole('button', { name: 'Add choice' }));
+    fireEvent.change(within(question).getByLabelText('Choice 3'), {
+      target: { value: 'C' },
+    });
+    fireEvent.click(within(question).getAllByRole('radio', { name: 'Correct' })[2]);
+    fireEvent.click(within(question).getByRole('button', { name: 'Move choice 3 up' }));
+    fireEvent.click(within(question).getByRole('button', { name: 'Remove choice 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(client.rpc).toHaveBeenCalledWith('save_admin_lesson', expect.anything()));
+    const saved = client.rpc.mock.calls.find(([name]) => name === 'save_admin_lesson')?.[1] as {
+      p_lesson: ManagedLesson['draft'];
+    };
+    const savedQuestion = saved.p_lesson.assessmentQuestions['pre-test'][0];
+    expect(savedQuestion.choices.map((choice) => choice.label)).toEqual(['A', 'C']);
+    expect(savedQuestion.correctChoiceId).toBe(savedQuestion.choices[1].id);
   });
   it('keeps test sections and question editors collapsed with count and prompt summaries', async () => {
     const row = item();

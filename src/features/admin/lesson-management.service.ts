@@ -35,7 +35,7 @@ export const publishableLessonSchema = lessonSchema.superRefine((lesson, ctx) =>
   if (lesson.activities.length > MAX_ACTIVITIES)
     ctx.addIssue({ code: 'custom', message: 'A lesson supports at most 10 activities.' });
   for (const activity of lesson.activities) {
-    const options = activity.type === 'find-word' ? activity.choices : activity.tokens;
+    const options = activity.type === 'organize-translate' ? activity.tokens : activity.choices;
     if (options.length > 20)
       ctx.addIssue({ code: 'custom', message: 'Use at most 20 choices or tokens.' });
   }
@@ -169,19 +169,29 @@ export function totalLessonActivities(lesson: Pick<AuthoredLesson, 'chapters'>):
   return lesson.chapters.reduce((total, chapter) => total + chapter.activities.length, 0);
 }
 export function newActivity(
-  type: 'find-word' | 'organize-translate',
+  type: 'find-word' | 'organize-translate' | 'choose-correct-translation',
 ): AuthoredLesson['activities'][number] {
   const base = {
     id: `activity-${crypto.randomUUID()}`,
     title: '',
     prompt: '',
-    mathStatement: '',
     explanation: { title: '', body: '' },
   };
+  if (type === 'choose-correct-translation')
+    return {
+      ...base,
+      type,
+      choices: [
+        { id: 'choice-1', label: '' },
+        { id: 'choice-2', label: '' },
+      ],
+      correctChoiceId: 'choice-1',
+    };
   if (type === 'find-word')
     return {
       ...base,
       type,
+      mathStatement: '',
       sentenceBefore: '',
       sentenceAfter: '',
       choices: [
@@ -193,6 +203,7 @@ export function newActivity(
   return {
     ...base,
     type,
+    mathStatement: '',
     tokens: [
       { id: 'token-1', label: '' },
       { id: 'token-2', label: '' },

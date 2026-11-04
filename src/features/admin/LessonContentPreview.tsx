@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FindWordActivityView } from '@/features/lessons/activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from '@/features/lessons/activities/OrganizeTranslateActivityView';
+import { ChooseCorrectTranslationActivityView } from '@/features/lessons/activities/ChooseCorrectTranslationActivityView';
 import { evaluateActivity } from '@/features/lessons/domain/evaluation';
 import { TeachingContentRenderer } from '@/features/lessons/components/TeachingContentRenderer';
 import type { SubmittedActivityAnswer } from '@/types/learning';
@@ -50,8 +51,15 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
           submitted={answer}
           onSubmit={submit}
         />
-      ) : (
+      ) : activity.type === 'organize-translate' ? (
         <OrganizeTranslateActivityView
+          key={activity.id}
+          activity={activity}
+          submitted={answer}
+          onSubmit={submit}
+        />
+      ) : (
+        <ChooseCorrectTranslationActivityView
           key={activity.id}
           activity={activity}
           submitted={answer}

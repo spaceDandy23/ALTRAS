@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AltrasDatabase } from '@/db/database';
 import { packagedContent } from '../content/packaged-content';
+import { activitySchema, publicActivitySchema } from '../domain/content.schemas';
 import type { LessonAttempt } from '@/types/learning';
 import {
   LessonDraftSynchronizer,
@@ -82,6 +83,56 @@ describe('offline lesson drafts', () => {
     await expect(
       getLessonDraft('30000000-0000-4000-8000-000000000003', lesson.id, attemptId, local),
     ).resolves.toBeNull();
+  });
+
+  it('persists a queued translation choice and restores it after reopening the app database', async () => {
+    const name = `lesson-translation-resume-${crypto.randomUUID()}`;
+    const first = new AltrasDatabase(name);
+    const privateActivity = activitySchema.parse({
+      id: 'translate-resume',
+      type: 'choose-correct-translation',
+      title: 'Choose the expression',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'answer-key-id', label: 'n + 5' },
+        { id: 'wrong-option-id', label: 'n - 5' },
+      ],
+      correctChoiceId: 'answer-key-id',
+      explanation: { title: 'Sum', body: 'Sum means addition.' },
+    });
+    if (privateActivity.type !== 'choose-correct-translation') throw new Error('Invalid test activity.');
+    const { correctChoiceId: _correctChoiceId, ...publicFields } = privateActivity;
+    const offlineLesson = {
+      ...structuredClone(lesson),
+      activities: [publicActivitySchema.parse(publicFields)],
+    };
+    const initial = createLessonDraft(attempt(), offlineLesson);
+    await saveLessonDraft(
+      queueLessonAnswer(
+        initial,
+        privateActivity.id,
+        privateActivity.type,
+        'answer-key-id',
+        0,
+        100,
+      ),
+      first,
+    );
+    first.close();
+
+    const restoredDatabase = new AltrasDatabase(name);
+    databases.push(restoredDatabase);
+    await expect(
+      getLessonDraft(userId, lesson.id, attemptId, restoredDatabase),
+    ).resolves.toMatchObject({
+      pendingAnswers: [
+        {
+          activityId: 'translate-resume',
+          activityType: 'choose-correct-translation',
+          answer: 'answer-key-id',
+        },
+      ],
+    });
   });
 
   it('persists pending active time across a refresh', async () => {
@@ -214,9 +265,9 @@ describe('offline lesson drafts', () => {
       activityStage,
       activity.id,
       activity.type,
-      activity.type === 'find-word'
-        ? activity.choices[0].id
-        : activity.tokens.map((token) => token.id),
+      activity.type === 'organize-translate'
+        ? activity.tokens.map((token) => token.id)
+        : activity.choices[0].id,
       0,
       200,
     );
@@ -640,9 +691,9 @@ describe('offline lesson drafts', () => {
             activityId: activity.id,
             activityType: activity.type,
             answer:
-              activity.type === 'find-word'
-                ? activity.choices[0].id
-                : activity.tokens.map((token) => token.id),
+              activity.type === 'organize-translate'
+                ? activity.tokens.map((token) => token.id)
+                : activity.choices[0].id,
             isCorrect: false,
             submittedAt: index + 1,
           })),

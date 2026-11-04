@@ -17,7 +17,7 @@ import { classifyLessonAttemptLaunch, type LessonAttemptLaunchMode } from './att
 
 const remoteAnswerSchema = z.object({
   activity_id: z.string(),
-  activity_type: z.enum(['find-word', 'organize-translate']),
+  activity_type: z.enum(['find-word', 'organize-translate', 'choose-correct-translation']),
   submitted_answer: z.union([z.string(), z.array(z.string())]),
   is_correct: z.boolean(),
   submitted_at: z.string(),

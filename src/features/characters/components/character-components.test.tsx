@@ -13,7 +13,9 @@ function answer(isCorrect: boolean, submittedAt = 1): SubmittedActivityAnswer {
     activityId: activity.id,
     activityType: activity.type,
     answer:
-      activity.type === 'find-word' ? activity.correctChoiceId : activity.correctTokenSequence,
+      activity.type === 'organize-translate'
+        ? activity.correctTokenSequence
+        : activity.correctChoiceId,
     isCorrect,
     submittedAt,
   };
