@@ -11,6 +11,8 @@ import { getActiveAttempt, startOrResumeAttempt } from './attempts/attempt.servi
 import { getLesson } from './content/content.service';
 import { packagedContent } from './content/packaged-content';
 import { getLessonProgress } from './progress/progress.service';
+import { db } from '@/db/database';
+import { createLessonDraft, saveLessonDraft } from './attempts/lesson-draft.service';
 
 vi.mock('./attempts/attempt.service', () => ({
   getActiveAttempt: vi.fn(),
@@ -30,10 +32,75 @@ function RouteDriver({ destination }: { destination: string }) {
 }
 
 describe('lesson overview transitions', () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.clearAllMocks();
+    await db.lessonDrafts.clear();
     useAuthStore.setState({ status: 'guest', user: null });
     useContentStore.setState({ status: 'idle', error: null });
+  });
+
+  it('shows View Results and Restart Lesson without Resume for a completed attempt', async () => {
+    const lesson = packagedContent.lessons[0];
+    const userId = '20000000-0000-4000-8000-000000000008';
+    const completedAttempt: LessonAttempt = {
+      id: '10000000-0000-4000-8000-000000000008',
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'completed',
+      startedAt: 1,
+      lastUpdatedAt: 2,
+      completedAt: 2,
+      abandonedAt: null,
+      answers: [],
+      finalScore: 100,
+      starCount: 3,
+      cleared: true,
+      xpImprovement: 100,
+    };
+    await saveLessonDraft(createLessonDraft(completedAttempt, lesson));
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getLessonProgress).mockResolvedValue({
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'cleared',
+      bestScore: 100,
+      bestStarCount: 3,
+      attemptCount: 1,
+      xpAwarded: 100,
+      firstStartedAt: 1,
+      lastAttemptedAt: 2,
+      clearedAt: 2,
+    });
+    vi.mocked(getActiveAttempt).mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'completed_test',
+        displayName: 'Completed Test',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<p>Results page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('link', { name: 'View Results' })).toHaveAttribute(
+      'href',
+      `/lessons/${lesson.id}/result/${completedAttempt.id}`,
+    );
+    expect(screen.getByRole('button', { name: 'Restart Lesson' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Resume lesson' })).not.toBeInTheDocument();
   });
 
   it('resumes an already loaded attempt immediately without repeating the remote lookup', async () => {

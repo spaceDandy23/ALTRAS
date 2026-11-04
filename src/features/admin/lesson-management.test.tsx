@@ -265,6 +265,8 @@ describe('Basic Lesson Management editor and preview', () => {
     const { container } = page();
     fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
     const preTest = container.querySelector<HTMLElement>('[aria-label="Lesson Pre-test"]')!;
+    fireEvent.click(preTest.querySelector('summary')!);
+    fireEvent.click(preTest.querySelector('.admin-assessment-question summary')!);
     fireEvent.change(within(preTest).getByLabelText('Question text'), {
       target: { value: 'Lesson-specific pre-test wording' },
     });
@@ -283,6 +285,35 @@ describe('Basic Lesson Management editor and preview', () => {
         }),
       ),
     );
+  });
+  it('keeps test sections and question editors collapsed with count and prompt summaries', async () => {
+    const row = item();
+    client.rpc.mockResolvedValue({ data: [row], error: null });
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+
+    const preTest = container.querySelector<HTMLElement>('[aria-label="Lesson Pre-test"]')!;
+    const postTest = container.querySelector<HTMLElement>('[aria-label="Lesson Post-test"]')!;
+    expect(preTest.querySelector('details')).not.toHaveAttribute('open');
+    expect(postTest.querySelector('details')).not.toHaveAttribute('open');
+    expect(within(preTest).getByText('1 question')).toBeInTheDocument();
+    expect(within(postTest).getByText('1 question')).toBeInTheDocument();
+
+    fireEvent.click(preTest.querySelector('summary')!);
+    const question = preTest.querySelector<HTMLElement>('.admin-assessment-question')!;
+    expect(question).not.toHaveAttribute('open');
+    expect(within(question).getByText('Question 1')).toBeInTheDocument();
+    expect(question.querySelector('.admin-assessment-question__preview')).toHaveTextContent(
+      'Question pre-question',
+    );
+    expect(within(question).getByLabelText('Question text')).not.toBeVisible();
+    expect(within(question).getByRole('button', { name: 'Delete question 1' })).not.toBeVisible();
+
+    fireEvent.click(question.querySelector('summary')!);
+    expect(within(question).getByLabelText('Question text')).toBeVisible();
+    expect(within(question).getAllByRole('radio', { name: 'Correct' })[0]).toBeChecked();
+    expect(within(question).getByRole('button', { name: 'Move question 1 down' })).toBeVisible();
+    expect(within(question).getByRole('button', { name: 'Delete question 1' })).toBeVisible();
   });
   it('keeps correct-token rows distinct while preserving token reordering', async () => {
     const activity = newActivity('organize-translate') as Extract<

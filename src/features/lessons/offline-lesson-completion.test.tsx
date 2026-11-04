@@ -32,6 +32,7 @@ import {
   discoverPendingAssessmentDrafts,
 } from '@/features/assessments/assessment-draft.service';
 import { syncPendingAssessmentDrafts } from '@/features/assessments/assessment-sync.service';
+import { getLessonProgress } from './progress/progress.service';
 
 const api = vi.hoisted(() => ({
   prepare: vi.fn(),
@@ -234,6 +235,19 @@ beforeEach(async () => {
   });
   api.time.mockResolvedValue(undefined);
   api.xp.mockResolvedValue(60);
+  vi.mocked(getLessonProgress).mockResolvedValue({
+    id: `${userId}:${lesson.id}`,
+    userId,
+    lessonId: lesson.id,
+    status: 'in-progress',
+    bestScore: 0,
+    bestStarCount: 0,
+    attemptCount: 0,
+    xpAwarded: 0,
+    firstStartedAt: 1,
+    lastAttemptedAt: 1,
+    clearedAt: null,
+  });
   api.hub.mockResolvedValue({
     section: packagedContent.sections[0],
     unit: packagedContent.units[0],

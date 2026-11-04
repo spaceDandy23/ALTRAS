@@ -17,6 +17,7 @@ import {
   queueAttemptStageTransition,
 } from '@/features/lessons/attempts/attempt.service';
 import {
+  createOfflineAssessmentDraft,
   createAssessmentDraft,
   getAssessmentDraft,
   markDraftPendingSubmission,
@@ -30,6 +31,7 @@ import {
   startAssessment,
   syncAssessmentDraft,
 } from './assessment.service';
+import { flushPendingAssessmentDraft } from './assessment-sync.service';
 
 const audio = vi.hoisted(() => ({
   cancelPendingResultSfx: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock('@/features/lessons/attempts/attempt.service', () => ({
   flushPendingLessonAttempt: vi.fn(),
   queueAttemptStageTransition: vi.fn(),
 }));
+vi.mock('./assessment-sync.service', () => ({ flushPendingAssessmentDraft: vi.fn() }));
 const userId = '20000000-0000-4000-8000-000000000002';
 const questions: AssessmentQuestion[] = [
   {
@@ -143,6 +146,7 @@ function renderLessonAssessment(kind: 'pre-test' | 'post-test' = 'pre-test') {
         />
         <Route path="/lessons/:lessonId/play/:attemptId" element={<p>Lesson player resumed</p>} />
         <Route path="/lessons/:lessonId" element={<p>Lesson overview</p>} />
+        <Route path="/lessons/:lessonId/result/:attemptId" element={<p>Official lesson result</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -209,6 +213,7 @@ beforeEach(() => {
   });
   vi.mocked(queueAttemptStageTransition).mockResolvedValue({} as never);
   vi.mocked(flushPendingLessonAttempt).mockResolvedValue(undefined);
+  vi.mocked(flushPendingAssessmentDraft).mockResolvedValue(undefined);
 });
 afterEach(async () => {
   cleanup();
@@ -221,6 +226,71 @@ afterEach(async () => {
 });
 
 describe('assessment UX and bootstrap', () => {
+  it.each(['pre-test', 'post-test'] as const)(
+    'shows readable choice markers without exposing internal IDs in the %s',
+    async (kind) => {
+      const ids = ['choice-11aa1111-1111-4111-8111-111111111111', 'choice-22bb2222-2222-4222-8222-222222222222'];
+      const question = {
+        ...questions[0],
+        assessment: kind,
+        choices: questions[0].choices.map((choice, index) => ({ ...choice, id: ids[index] })),
+      };
+      server = { ...attempt(), assessment: kind };
+      vi.mocked(getAssessmentQuestions).mockResolvedValue([question]);
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+      renderAssessment(kind);
+
+      const choice = await screen.findByRole('radio', { name: 'The sum of two values' });
+      await userEvent.setup().click(choice);
+      expect(choice).toHaveAttribute('aria-checked', 'true');
+      expect(choice).toHaveTextContent('A');
+      for (const id of ids) expect(document.body.textContent?.toLowerCase()).not.toContain(id);
+      expect(await screen.findByText('Saved on this device.')).toBeVisible();
+      expect(screen.queryByRole('button', { name: /retry sync/i })).not.toBeInTheDocument();
+    },
+  );
+  it.each(['pre-test', 'post-test'] as const)(
+    'shows no sync banner after an online %s answer syncs successfully',
+    async (kind) => {
+      server = { ...attempt(), assessment: kind };
+      vi.mocked(getAssessmentQuestions).mockResolvedValue(
+        questions.map((question) => ({ ...question, assessment: kind })),
+      );
+      const user = userEvent.setup();
+      renderAssessment(kind);
+
+      await user.click(await screen.findByRole('radio', { name: 'The sum of two values' }));
+      await waitFor(async () => {
+        expect(await getAssessmentDraft(userId, kind)).toMatchObject({ syncStatus: 'synced' });
+      });
+      expect(screen.queryByText(/Saved on this device|Synced to your account/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /retry sync/i })).not.toBeInTheDocument();
+    },
+  );
+  it.each(['pre-test', 'post-test'] as const)(
+    'clears the offline %s save note when connectivity returns',
+    async (kind) => {
+      const lessonId = packagedContent.lessons[0].id;
+      const lessonAttemptId = '40000000-0000-4000-8000-000000000004';
+      const kindQuestions = questions.map((question) => ({ ...question, assessment: kind }));
+      const local = updateDraftAnswer(
+        createOfflineAssessmentDraft(userId, kind, lessonId, lessonAttemptId, kindQuestions),
+        'q1',
+        'a',
+      );
+      await saveAssessmentDraft(local);
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+      renderLessonAssessment(kind);
+
+      expect(await screen.findByText('Saved on this device.')).toBeVisible();
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+      act(() => window.dispatchEvent(new Event('online')));
+
+      await waitFor(() =>
+        expect(screen.queryByText('Saved on this device.')).not.toBeInTheDocument(),
+      );
+    },
+  );
   it('finishes a cached pre-test offline, restores it, and continues into Chapter 1 without a request', async () => {
     await cacheLessonPreTest(twoQuestions);
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -377,7 +447,7 @@ describe('assessment UX and bootstrap', () => {
   });
 
   it.each([true, false])(
-    'finishes the cached Post-test locally and restores pending results (online=%s)',
+    'finishes the cached Post-test with the appropriate online/offline result flow (online=%s)',
     async (online) => {
       Object.defineProperty(navigator, 'onLine', { value: online, configurable: true });
       const lesson = structuredClone(packagedContent.lessons[0]);
@@ -459,9 +529,22 @@ describe('assessment UX and bootstrap', () => {
       await user.click(screen.getByRole('button', { name: 'Next question' }));
       await screen.findByText('Question 2 of 2');
       await user.click(await screen.findByRole('radio', { name: 'The quotient of two values' }));
+      const confirmation = online ? deferred<void>() : null;
+      if (confirmation)
+        vi.mocked(flushPendingAssessmentDraft).mockReturnValueOnce(confirmation.promise);
       await user.click(screen.getByRole('button', { name: 'Submit test' }));
       const notice =
         'Your answers are saved on this device. Your results will be available once you’re back online.';
+      if (online) {
+        expect(await screen.findByText('Confirming your official result…')).toBeVisible();
+        expect(screen.queryByText(/Answers saved on this device/)).toBeNull();
+        await act(async () => confirmation!.resolve());
+        expect(await screen.findByText('Official lesson result')).toBeVisible();
+        expect(flushPendingAssessmentDraft).toHaveBeenCalledOnce();
+        expect(flushPendingLessonAttempt).toHaveBeenCalledWith(userId, lesson.id, lessonAttemptId);
+        expect(screen.queryByText(notice)).toBeNull();
+        return;
+      }
       expect(await screen.findByText(notice)).toBeVisible();
       expect(completeAssessment).not.toHaveBeenCalled();
       expect(await getLessonDraft(userId, lesson.id, lessonAttemptId)).toMatchObject({
@@ -623,7 +706,7 @@ describe('assessment UX and bootstrap', () => {
       screen.getByText('Correct answers are hidden while the research is in progress.')
         .parentElement,
     ).toHaveClass('result-actions', 'assessment-result__actions');
-    expect(audio.playReward).toHaveBeenCalledWith(attempt().id);
+    await waitFor(() => expect(audio.playReward).toHaveBeenCalledWith(attempt().id));
     expect(audio.playCompletion).not.toHaveBeenCalled();
     expect(audio.playSfx).not.toHaveBeenCalledWith('correct');
     expect(audio.playSfx).not.toHaveBeenCalledWith('incorrect');
@@ -716,7 +799,7 @@ describe('assessment UX and bootstrap', () => {
     vi.mocked(syncAssessmentDraft).mockReturnValue(sync.promise);
     renderLessonAssessment();
 
-    expect(await screen.findByText('Answers saved on this device')).toBeInTheDocument();
+    expect(await screen.findByText('Submission saved')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: twoQuestions[0].prompt })).not.toBeInTheDocument();
 
     await act(async () => sync.resolve(accept(pending)));
@@ -866,7 +949,7 @@ describe('assessment UX and bootstrap', () => {
         await screen.findByRole('radio', { name: 'The quotient of two values' }),
       ).toHaveAttribute('aria-checked', 'true');
       expect(
-        await screen.findByText('Saved on this device. Account sync is pending.'),
+        await screen.findByText('Saved on this device.'),
       ).toBeInTheDocument();
       expect(
         screen.queryByRole('heading', { name: 'We couldn’t load this test' }),

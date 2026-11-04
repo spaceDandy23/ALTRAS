@@ -59,15 +59,20 @@ export function LessonsPage() {
   }, [contentStatus, loadKey, user, completedKey]);
 
   const visibleHub = loadedFor.startsWith(`${user?.id}:`) ? hub : null;
+  // Local drafts are a recovery source, not an online catalog. Rendering them
+  // while the hub request is still resolving produces a partial path and stale
+  // status markers before the authoritative list arrives.
   const entries =
     visibleHub?.entries ??
-    [...(drafts?.values() ?? [])].map((draft) => ({
-      lesson: draft.lesson,
-      progress: null,
-    }));
+    (!navigator.onLine
+      ? [...(drafts?.values() ?? [])].map((draft) => ({
+          lesson: draft.lesson,
+          progress: null,
+        }))
+      : []);
   const canShowLessons = visibleHub !== null || entries.length > 0;
 
-  if (loadedFor === loadKey && loadError && !drafts?.size) {
+  if (loadedFor === loadKey && loadError && (navigator.onLine || !drafts?.size)) {
     return (
       <ContentState>
         <PageLoadError
@@ -178,7 +183,7 @@ export function LessonsPage() {
                           {pending
                             ? 'View saved attempt'
                             : result
-                              ? 'View Results'
+                              ? 'Lesson overview'
                               : lesson.contentStatus === 'preview'
                                 ? 'View lesson'
                                 : displayStatus === 'in-progress'
@@ -198,9 +203,7 @@ export function LessonsPage() {
                   <li key={lesson.id}>{body}</li>
                 ) : (
                   <li key={lesson.id}>
-                    <Link to={result ? `/lessons/${lesson.id}/result/${result.id}` : destination}>
-                      {body}
-                    </Link>
+                    <Link to={destination}>{body}</Link>
                   </li>
                 );
               })}

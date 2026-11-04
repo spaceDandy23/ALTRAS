@@ -24,6 +24,7 @@ const phase2Migration = '202610300002_lesson_chapter_runtime.sql';
 const phase3Migration = '202610300003_lesson_offline_transitions.sql';
 const offlineAssessmentMigration = '202610310001_offline_assessment_start.sql';
 const lessonScopedAssessmentMigration = '202611040001_lesson_scoped_assessments.sql';
+const completedActiveTimeMigration = '202611040002_reconcile_completed_attempt_active_time.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -139,6 +140,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', phase3Migration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', offlineAssessmentMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonScopedAssessmentMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', completedActiveTimeMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -969,6 +971,31 @@ describe('Basic Lesson Management SQL and RLS', () => {
     const segments = await pg.query<{ count: number }>(
       'select count(*)::int as count from public.lesson_active_time_segments where attempt_id=$1',
       [attempt.id],
+    );
+    expect(segments.rows[0].count).toBe(1);
+  });
+
+  it('replays a durable active-time segment after the lesson result is confirmed', async () => {
+    await asUser(studentId);
+    const completed = await pg.query<{ id: string; active_seconds: number }>(
+      "select id, active_seconds from public.lesson_attempts where user_id=$1 and status='completed' limit 1",
+      [studentId],
+    );
+    const attempt = completed.rows[0];
+    const segmentId = randomUUID();
+
+    await rpc('add_attempt_active_seconds', [attempt.id, 12, segmentId]);
+    await rpc('add_attempt_active_seconds', [attempt.id, 12, segmentId]);
+
+    await pg.exec('reset role');
+    const recorded = await pg.query<{ active_seconds: number }>(
+      'select active_seconds from public.lesson_attempts where id=$1',
+      [attempt.id],
+    );
+    expect(recorded.rows[0].active_seconds).toBe(attempt.active_seconds + 12);
+    const segments = await pg.query<{ count: number }>(
+      'select count(*)::int as count from public.lesson_active_time_segments where segment_id=$1',
+      [segmentId],
     );
     expect(segments.rows[0].count).toBe(1);
   });

@@ -305,8 +305,38 @@
   border-left: 3px solid var(--blue);
   padding-left: 1rem;
 }
-.admin-lesson-assessment > h3 {
-  margin-bottom: 0.75rem;
+.admin-assessment-details > summary,
+.admin-assessment-question > summary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  font-weight: 750;
+}
+.admin-assessment-summary__count {
+  color: var(--muted);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+.admin-assessment-content {
+  padding-top: 0.85rem;
+}
+.admin-assessment-question > summary {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.admin-assessment-question__preview {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-assessment-question__content {
+  padding-top: 1rem;
 }
 .lesson-preview-navigation {
   display: grid;

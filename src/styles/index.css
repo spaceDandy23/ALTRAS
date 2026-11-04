@@ -1331,7 +1331,7 @@ h3 {
 
 .assessment-choices button {
   display: grid;
-  grid-template-columns: 38px 1fr;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 0.8rem;
   width: 100%;
@@ -1349,7 +1349,7 @@ h3 {
   background: rgba(255, 220, 82, 0.08);
 }
 
-.assessment-choices button > span {
+.assessment-choice__marker {
   display: grid;
   width: 34px;
   height: 34px;
@@ -1360,7 +1360,12 @@ h3 {
   font-weight: 900;
 }
 
-.assessment-choices button.is-selected > span {
+.assessment-choice__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.assessment-choices button.is-selected > .assessment-choice__marker {
   background: var(--yellow);
 }
 
@@ -4588,7 +4593,7 @@ a.almanac-option:hover {
   background: #176eaa;
 }
 
-:root[data-theme='light'] .assessment-choices button.is-selected > span {
+:root[data-theme='light'] .assessment-choices button.is-selected > .assessment-choice__marker {
   color: #176eaa;
   background: #ffffff;
 }

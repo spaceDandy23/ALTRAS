@@ -16,6 +16,7 @@ import {
 } from './attempts/attempt.service';
 import {
   createLessonDraft,
+  discoverPendingLessonDrafts,
   getLessonDraft,
   markLessonDraftPendingCompletion,
   queueLessonAnswer,
@@ -400,7 +401,7 @@ describe('active lesson loading failures', () => {
     expect(getAttempt).not.toHaveBeenCalled();
   });
 
-  it('allows Continue after the local save while an online answer request is still in flight', async () => {
+  it('waits for the online answer acknowledgement before showing feedback', async () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000002';
     const attemptId = '10000000-0000-4000-8000-000000000001';
@@ -452,9 +453,8 @@ describe('active lesson loading failures', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: 'sum' })).toBeDisabled());
 
     expect(screen.getByText('Saving…')).toBeVisible();
-    expect(screen.getByText('Saved on this device')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
+    expect(screen.queryByText('Saved on this device')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
 
     await act(async () => {
       resolveSubmission({
@@ -472,12 +472,12 @@ describe('active lesson loading failures', () => {
       await submission;
     });
 
-    expect(screen.queryByText('Correct')).not.toBeInTheDocument();
-    expect(playSfx).not.toHaveBeenCalledWith('correct');
-    expect(screen.getByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
+    expect(await screen.findByText('Correct')).toBeVisible();
+    expect(playSfx).toHaveBeenCalledWith('correct');
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
-  it('does not flash the final activity result while an offline completion is syncing', async () => {
+  it('leaves no pending work for global sync after completing a lesson online', async () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000002';
     const attemptId = '10000000-0000-4000-8000-000000000001';
@@ -497,6 +497,8 @@ describe('active lesson loading failures', () => {
       cleared: null,
       xpImprovement: 0,
     };
+    let now = 1_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
     let localDraft = createLessonDraft(activeAttempt, lesson);
     for (const [index, activity] of lesson.activities.entries()) {
       localDraft = queueLessonAnswer(
@@ -543,7 +545,7 @@ describe('active lesson loading failures', () => {
       },
     });
     useContentStore.setState({ status: 'ready', error: null });
-    render(
+    const view = render(
       <MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}>
         <Routes>
           <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
@@ -564,6 +566,7 @@ describe('active lesson loading failures', () => {
       document.querySelector('.choice-option--incorrect, .translation-builder--incorrect'),
     ).not.toBeInTheDocument();
     expect(playSfx).not.toHaveBeenCalled();
+    now = 5_000;
     await act(async () =>
       finish({
         ...activeAttempt,
@@ -575,11 +578,21 @@ describe('active lesson loading failures', () => {
         completedAt: 10,
       }),
     );
+    view.unmount();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     await waitFor(async () =>
       expect(await getLessonDraft(userId, lesson.id, attemptId)).toMatchObject({
         pendingCompletion: false,
+        pendingActiveTimeSegments: [],
         attempt: { status: 'completed', finalScore: 0 },
       }),
     );
+    await expect(discoverPendingLessonDrafts(userId)).resolves.toEqual({
+      drafts: [],
+      invalidDraftIds: [],
+    });
   });
 });

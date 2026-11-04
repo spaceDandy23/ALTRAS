@@ -251,6 +251,10 @@ export function ActiveLessonPage() {
       complete: (snapshot) => completeAttempt(db, snapshot.attemptId),
       onCompleted: async (snapshot, completed) => {
         if (!canApply()) return;
+        // The synchronizer has already drained every queued time segment
+        // before completion. Stop the live timer before route cleanup so it
+        // cannot create a new segment for an attempt the server just closed.
+        activeSegmentStartedAt.current = null;
         await acknowledgeLessonCompletion(snapshot, completed);
         if (!canApply()) return;
         navigate(`/lessons/${snapshot.lessonId}/result/${snapshot.attemptId}`, { replace: true });
@@ -368,7 +372,7 @@ export function ActiveLessonPage() {
       await flushActiveTime();
       const next = await queueLessonStageTransition(draft.id);
       applyDraft(next);
-      setSaveState('pending');
+      setSaveState(navigator.onLine ? 'saving' : 'pending');
       if (navigator.onLine) synchronizerRef.current?.requestSync();
     } catch {
       setSaveState('error');
@@ -456,6 +460,8 @@ export function ActiveLessonPage() {
   const submitted = attempt.answers.find((answer) => answer.activityId === activity.id);
   const pending = draft.pendingAnswers.find((answer) => answer.activityId === activity.id);
   const completingSyncedLesson = draft.pendingCompletion && saveState === 'saving';
+  const showPendingFeedback =
+    Boolean(pending) && (!navigator.onLine || saveState === 'pending' || saveState === 'error');
   const visibleSubmitted = completingSyncedLesson ? undefined : submitted;
   const visiblePendingAnswer =
     pending?.answer ?? (completingSyncedLesson ? submitted?.answer : undefined);
@@ -471,7 +477,7 @@ export function ActiveLessonPage() {
         queueLessonAnswer(current, activity.id, activity.type, answer, activityIndex),
       );
       applyDraft(next);
-      setSaveState('pending');
+      setSaveState(navigator.onLine ? 'saving' : 'pending');
       if (navigator.onLine) {
         audibleAnswerIdRef.current = activity.id;
         synchronizerRef.current?.requestSync();
@@ -511,7 +517,7 @@ export function ActiveLessonPage() {
         await flushActiveTime();
         const next = await queueLessonStageTransition(draft.id);
         applyDraft(next);
-        setSaveState('pending');
+        setSaveState(navigator.onLine ? 'saving' : 'pending');
         if (navigator.onLine) synchronizerRef.current?.requestSync();
       } catch {
         setSaveState('error');
@@ -530,7 +536,9 @@ export function ActiveLessonPage() {
         await saveLessonDraft(next);
         applyDraft(next);
         setSaveState(navigator.onLine ? 'saving' : 'pending');
-        await flushActiveTime();
+        // Include the final active segment in the ordered sync, then pause
+        // tracking. Completion closes the server attempt immediately after.
+        await flushActiveTime(Date.now(), true);
         if (navigator.onLine) await synchronizerRef.current?.flush();
       } catch {
         setSaveState('error');
@@ -614,7 +622,7 @@ export function ActiveLessonPage() {
               />
             )}
           </div>
-          {(submitted || pending) && !completingSyncedLesson && (
+          {(submitted || showPendingFeedback) && !completingSyncedLesson && (
             <aside
               className={`answer-feedback ${submitted ? `answer-feedback--${submitted.isCorrect ? 'correct' : 'incorrect'}` : ''}`}
               role="status"

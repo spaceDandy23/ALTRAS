@@ -44,8 +44,10 @@ export function LessonOverviewPage() {
     remoteActive.id !== local.attemptId &&
     remoteActive.startedAt >= local.attempt.startedAt;
   const result = local?.attempt.status === 'completed' && !newerActive ? local.attempt : null;
-  const cached =
-    local && (local.pendingCompletion || result || !navigator.onLine) ? local : undefined;
+  // A completed local draft is only a recovery source offline. Online, wait
+  // for the authoritative progress/attempt read so the overview does not
+  // briefly show stale status, stars, or actions before reconciling.
+  const cached = local && (local.pendingCompletion || !navigator.onLine) ? local : undefined;
   const lesson = cached?.lesson ?? remoteLesson;
   const progress = cached ? null : remoteProgress;
   const active = cached
@@ -195,7 +197,7 @@ export function LessonOverviewPage() {
                       View Results
                     </Link>
                     <Button onClick={restart} disabled={transitionBusy}>
-                      Try again
+                      Restart Lesson
                     </Button>
                   </div>
                 ) : progress?.status === 'locked' ? (

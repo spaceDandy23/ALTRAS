@@ -1,13 +1,15 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
+import { db } from '@/db/database';
 import { packagedContent } from './content/packaged-content';
 import { getLessonHubData, getTotalXp } from './progress/progress.service';
 import { LessonsPage } from './LessonsPage';
 import type { LessonHubData } from './progress/progress.service';
+import { createLessonDraft, saveLessonDraft } from './attempts/lesson-draft.service';
 
 vi.mock('./progress/progress.service', () => ({
   getLessonHubData: vi.fn(),
@@ -39,11 +41,72 @@ function authenticate(id = userId) {
 }
 
 describe('lesson hub authoritative progress', () => {
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
     vi.resetAllMocks();
+    await db.lessonDrafts.clear();
     useAuthStore.setState({ status: 'guest', user: null });
     useContentStore.setState({ status: 'idle', error: null });
+  });
+
+  it('waits for the authoritative online catalog instead of flashing a partial local draft list', async () => {
+    const remote = deferred<LessonHubData>();
+    const lesson = packagedContent.lessons[0];
+    await saveLessonDraft(
+      createLessonDraft({
+        id: '40000000-0000-4000-8000-000000000004',
+        userId,
+        lessonId: lesson.id,
+        contentVersion: lesson.contentVersion,
+        status: 'active',
+        startedAt: 1,
+        lastUpdatedAt: 1,
+        completedAt: null,
+        abandonedAt: null,
+        answers: [],
+        finalScore: null,
+        starCount: null,
+        cleared: null,
+        xpImprovement: 0,
+      }, lesson),
+    );
+    vi.mocked(getLessonHubData).mockReturnValue(remote.promise);
+    vi.mocked(getTotalXp).mockResolvedValue(0);
+    authenticate();
+
+    render(<MemoryRouter><LessonsPage /></MemoryRouter>);
+
+    expect(await screen.findByText(/Loading your lesson path/)).toBeVisible();
+    expect(screen.queryByRole('heading', { name: lesson.title })).toBeNull();
+    expect(screen.queryByText('In progress')).toBeNull();
+
+    await act(async () => {
+      remote.resolve({
+        section: packagedContent.sections[0],
+        unit: packagedContent.units[0],
+        entries: packagedContent.lessons.map((item) => ({
+          lesson: item,
+          progress: {
+            id: `${userId}:${item.id}`,
+            userId,
+            lessonId: item.id,
+            status: item === lesson ? 'in-progress' : 'locked',
+            bestScore: 0,
+            bestStarCount: 0,
+            attemptCount: 0,
+            xpAwarded: 0,
+            firstStartedAt: null,
+            lastAttemptedAt: null,
+            clearedAt: null,
+          },
+        })),
+      });
+      await remote.promise;
+    });
+
+    expect(await screen.findAllByRole('heading', { level: 2 })).toHaveLength(
+      packagedContent.lessons.length,
+    );
   });
 
   it('keeps Lesson 2 cleared after navigating away and loading the hub again', async () => {
@@ -162,6 +225,64 @@ describe('lesson hub authoritative progress', () => {
     expect(await screen.findByText('Needs retry')).toBeVisible();
     expect(screen.getByText('Try lesson again')).toBeVisible();
     expect(screen.queryByText('Not started')).not.toBeInTheDocument();
+  });
+
+  it('opens the overview from a completed lesson card instead of bypassing to results', async () => {
+    const lesson = packagedContent.lessons[0];
+    const completedAttempt = {
+      id: '40000000-0000-4000-8000-000000000014',
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'completed' as const,
+      startedAt: 1,
+      lastUpdatedAt: 2,
+      completedAt: 2,
+      abandonedAt: null,
+      answers: [],
+      finalScore: 100,
+      starCount: 3,
+      cleared: true,
+      xpImprovement: 100,
+    };
+    await saveLessonDraft(createLessonDraft(completedAttempt, lesson));
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [{
+        lesson,
+        progress: {
+          id: `${userId}:${lesson.id}`,
+          userId,
+          lessonId: lesson.id,
+          status: 'cleared',
+          bestScore: 100,
+          bestStarCount: 3,
+          attemptCount: 1,
+          xpAwarded: 100,
+          firstStartedAt: 1,
+          lastAttemptedAt: 2,
+          clearedAt: 2,
+        },
+      }],
+    });
+    vi.mocked(getTotalXp).mockResolvedValue(100);
+    authenticate();
+
+    render(
+      <MemoryRouter initialEntries={['/lessons']}>
+        <Routes>
+          <Route path="/lessons" element={<LessonsPage />} />
+          <Route path="/lessons/:lessonId" element={<p>Lesson overview destination</p>} />
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<p>Results destination</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.setup().click(await screen.findByRole('link', { name: /Lesson 1/ }));
+
+    expect(await screen.findByText('Lesson overview destination')).toBeVisible();
+    expect(screen.queryByText('Results destination')).not.toBeInTheDocument();
   });
 
   it('shows a stable empty state when no lessons are published', async () => {

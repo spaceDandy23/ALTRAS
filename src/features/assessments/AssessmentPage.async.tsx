@@ -12,7 +12,10 @@ import {
 } from '@/services/audio/click.handlers';
 import { useAuthStore } from '@/stores/auth.store';
 import { db } from '@/db/database';
-import { queueAttemptStageTransition } from '@/features/lessons/attempts/attempt.service';
+import {
+  flushPendingLessonAttempt,
+  queueAttemptStageTransition,
+} from '@/features/lessons/attempts/attempt.service';
 import {
   assessmentKindSchema,
   assessmentQuestionSchema,
@@ -38,6 +41,7 @@ import {
   updateDraftPosition,
   validateLocalDraft,
 } from './assessment-draft.service';
+import { flushPendingAssessmentDraft } from './assessment-sync.service';
 import {
   getCachedLessonAssessmentQuestions,
   getLessonDraft,
@@ -105,12 +109,22 @@ function AssessmentSession({
   const [bootstrapError, setBootstrapError] = useState('');
   const [reload, setReload] = useState(0);
   const [durability, setDurability] = useState<'saving' | 'saved' | 'failed'>('saved');
+  const [connectionOnline, setConnectionOnline] = useState(() => navigator.onLine);
   const [completionWarning, setCompletionWarning] = useState('');
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    const updateConnection = () => setConnectionOnline(navigator.onLine);
+    window.addEventListener('online', updateConnection);
+    window.addEventListener('offline', updateConnection);
+    return () => {
+      window.removeEventListener('online', updateConnection);
+      window.removeEventListener('offline', updateConnection);
     };
   }, []);
   const draftRef = useRef<AssessmentDraft | null>(null);
@@ -474,17 +488,22 @@ function AssessmentSession({
       </>
     );
   if (draft?.syncStatus === 'pending_submission') {
+    if (localLessonAssessment && navigator.onLine && submitting) {
+      return <LoadingState variant="page" message="Confirming your official result…" />;
+    }
     if (localLessonAssessment && scope) {
       return (
         <section className="assessment-shell assessment-state panel">
           <p className="assessment-kicker">{title}</p>
-          <h1>Answers saved on this device</h1>
-          <p role="status">
-            {kind === 'post-test'
-              ? 'Your answers are saved on this device. Your results will be available once you’re back online.'
-              : 'You can continue your lesson. Your official result will be available once your answers sync.'}
-          </p>
-          {error && <p role="alert">{error}</p>}
+          <h1>{connectionOnline ? 'Submission saved' : 'Answers saved on this device'}</h1>
+          {!connectionOnline && (
+            <p role="status">
+              {kind === 'post-test'
+                ? 'Your answers are saved on this device. Your results will be available once you’re back online.'
+                : 'You can continue your lesson. Your official result will be available once your answers sync.'}
+            </p>
+          )}
+          {error && (!localLessonAssessment || !connectionOnline) && <p role="alert">{error}</p>}
           <div className="result-actions">
             <Button
               onClick={() => {
@@ -518,11 +537,6 @@ function AssessmentSession({
           }
         />
         <div className="result-actions">
-          {waitingForConnection && (
-            <Button variant="quiet" onClick={() => synchronizerRef.current?.requestSync()}>
-              Retry sync
-            </Button>
-          )}
           <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
             {scope ? 'Return to lesson' : 'Return home'}
           </Link>
@@ -650,8 +664,31 @@ function AssessmentSession({
         if (!mounted.current) return;
         applyDraft(saved);
         setDurability('saved');
-        setSyncNotice(navigator.onLine ? 'pending' : 'offline');
-        synchronizerRef.current?.requestSync();
+        if (!navigator.onLine) {
+          setSyncNotice('offline');
+          return;
+        }
+
+        // A live connection can confirm this frozen local submission now.
+        // Keep the local-first write for durability, but do not expose the
+        // offline pending screen while the authoritative result is available.
+        setSyncNotice('syncing');
+        await flushPendingAssessmentDraft(saved);
+        if (!mounted.current) return;
+        if (kind === 'post-test') {
+          await flushPendingLessonAttempt(userId, scope!.lessonId, scope!.lessonAttemptId);
+          if (!mounted.current) return;
+          navigate(`/lessons/${scope!.lessonId}/result/${scope!.lessonAttemptId}`, {
+            replace: true,
+          });
+          return;
+        }
+        const completed = await getAssessmentAttempt(userId, kind, scope);
+        if (!completed || completed.status !== 'submitted')
+          throw new Error('Unable to confirm this result. Please retry.');
+        applyDraft(null);
+        setAttempt(completed);
+        setSyncNotice('none');
         return;
       }
       await persist(pending, false);
@@ -707,15 +744,12 @@ function AssessmentSession({
   const syncMessage =
     durability === 'failed'
       ? 'Local saving failed. Your answers remain in this window; keep it open until account sync is confirmed.'
-      : durability === 'saving'
-        ? 'Saving on this device…'
-        : syncNotice === 'conflict'
-          ? 'This test changed in another tab or device. Your local answers are preserved. Resolve the conflict before submitting.'
-          : syncNotice === 'syncing'
-            ? 'Saved on this device. Syncing to your account…'
-            : syncNotice === 'offline' || syncNotice === 'pending' || draft.syncStatus !== 'synced'
-              ? 'Saved on this device. Account sync is pending.'
-              : 'Synced to your account.';
+      : syncNotice === 'conflict'
+        ? 'This test changed in another tab or device. Your local answers are preserved. Resolve the conflict before submitting.'
+        : !connectionOnline &&
+            (syncNotice === 'offline' || syncNotice === 'pending' || draft.syncStatus !== 'synced')
+          ? 'Saved on this device.'
+          : '';
   return (
     <section className="assessment-player page-enter" aria-labelledby="assessment-question">
       <header className="assessment-player__header">
@@ -762,8 +796,10 @@ function AssessmentSession({
               onKeyDown={(event) => handleChoiceKeyDown(event, choiceIndex)}
               onClick={() => choose(choice.id)}
             >
-              <span aria-hidden="true">{choice.id.toUpperCase()}</span>
-              {choice.label}
+              <span className="assessment-choice__marker" aria-hidden="true">
+                {String.fromCharCode(65 + choiceIndex)}
+              </span>
+              <span className="assessment-choice__label">{choice.label}</span>
             </button>
           ))}
         </div>
@@ -774,11 +810,6 @@ function AssessmentSession({
         )}
         {durability === 'failed' && syncNotice === 'none' && draft.syncStatus === 'synced' && (
           <p role="status">Account sync is confirmed; local recovery is unavailable.</p>
-        )}
-        {(syncNotice === 'pending' || syncNotice === 'offline') && (
-          <Button variant="quiet" onClick={() => synchronizerRef.current?.requestSync()}>
-            Retry sync
-          </Button>
         )}
         {syncNotice === 'conflict' && (
           <Button variant="quiet" onClick={() => void resolveConflict()}>
