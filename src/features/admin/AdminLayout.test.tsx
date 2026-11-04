@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { AdminLayout } from './AdminLayout';
 
 describe('Admin workspace navigation', () => {
-  it.each(['/admin/users', '/admin/lessons', '/admin/assessments'])(
+  it.each(['/admin/users', '/admin/lessons'])(
     'renders the sidebar with the correct active route for %s',
     (path) => {
       render(
@@ -13,7 +13,6 @@ describe('Admin workspace navigation', () => {
             <Route path="/admin" element={<AdminLayout />}>
               <Route path="users" element={<h1>Users page</h1>} />
               <Route path="lessons" element={<h1>Lessons page</h1>} />
-              <Route path="assessments" element={<h1>Assessments page</h1>} />
             </Route>
           </Routes>
         </MemoryRouter>,
@@ -24,16 +23,11 @@ describe('Admin workspace navigation', () => {
         'href',
         '/admin/lessons',
       );
-      expect(screen.getByRole('link', { name: 'Assessment Management' })).toHaveAttribute(
-        'href',
-        '/admin/assessments',
-      );
+      expect(screen.queryByRole('link', { name: 'Assessment Management' })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Home' })).not.toBeInTheDocument();
       const active = path.endsWith('/users')
         ? 'Users'
-        : path.endsWith('/lessons')
-          ? 'Lesson Management'
-          : 'Assessment Management';
+        : 'Lesson Management';
       expect(screen.getByRole('link', { name: active })).toHaveAttribute('aria-current', 'page');
       expect(screen.getByText('Administrator workspace')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();

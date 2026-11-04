@@ -16,16 +16,21 @@ const remoteLessonResultSchema = z.object({
 const remoteParticipantResultSchema = z.object({
   participant_code: z.string().regex(/^ALT-[A-F0-9]{8}$/),
   username: z.string().regex(/^[a-z0-9_-]{3,24}$/),
-  pre_test_status: assessmentStatusSchema,
-  pre_test_score: z.coerce.number().int().min(0).max(100).nullable(),
-  pre_test_completed_at: z.string().nullable(),
-  post_test_status: assessmentStatusSchema,
-  post_test_score: z.coerce.number().int().min(0).max(100).nullable(),
-  post_test_completed_at: z.string().nullable(),
+
   lessons_completed: z.coerce.number().int().nonnegative(),
   lessons_available: z.coerce.number().int().nonnegative(),
   latest_activity_at: z.string().nullable(),
   lesson_results: z.array(remoteLessonResultSchema),
+});
+const remoteLessonAssessmentResultSchema = z.object({
+  participant_code: z.string().regex(/^ALT-[A-F0-9]{8}$/),
+  username: z.string().regex(/^[a-z0-9_-]{3,24}$/),
+  lesson_id: z.string().min(1),
+  lesson_title: z.string().min(1),
+  pre_test_status: assessmentStatusSchema,
+  pre_test_score: z.coerce.number().int().min(0).max(100).nullable(),
+  post_test_status: assessmentStatusSchema,
+  post_test_score: z.coerce.number().int().min(0).max(100).nullable(),
 });
 
 export type AssessmentProgress = z.infer<typeof assessmentStatusSchema>;
@@ -43,35 +48,25 @@ export interface ResearcherLessonResult {
 export interface ResearcherParticipantResult {
   participantCode: string;
   username: string;
-  preTestStatus: AssessmentProgress;
-  preTestScore: number | null;
-  preTestCompletedAt: number | null;
-  postTestStatus: AssessmentProgress;
-  postTestScore: number | null;
-  postTestCompletedAt: number | null;
+
   lessonsCompleted: number;
   lessonsAvailable: number;
   latestActivityAt: number | null;
   lessonResults: ResearcherLessonResult[];
 }
 
-export interface ResearcherSummary {
-  participantCount: number;
-  preTestCompletedCount: number;
-  postTestCompletedCount: number;
-  bothCompletedCount: number;
-  averagePreTestScore: number | null;
-  averagePostTestScore: number | null;
-  averageScoreChange: number | null;
-  assessmentCompletionRate: number | null;
-  allLessonsCompletedCount: number;
+export interface ResearcherLessonAssessmentResult {
+  participantCode: string;
+  username: string;
+  lessonId: string;
+  lessonTitle: string;
+  preTestStatus: AssessmentProgress;
+  preTestScore: number | null;
+  postTestStatus: AssessmentProgress;
+  postTestScore: number | null;
 }
 
-export interface ResearcherScoreDistributionBin {
-  label: string;
-  preTestCount: number;
-  postTestCount: number;
-}
+
 
 export interface ResearcherLessonSummary {
   lessonId: string;
@@ -81,14 +76,6 @@ export interface ResearcherLessonSummary {
   averageScore: number | null;
   averageAttempts: number | null;
 }
-
-const scoreDistributionRanges = [
-  { label: '0–59', minimum: 0, maximum: 59 },
-  { label: '60–69', minimum: 60, maximum: 69 },
-  { label: '70–84', minimum: 70, maximum: 84 },
-  { label: '85–99', minimum: 85, maximum: 99 },
-  { label: '100', minimum: 100, maximum: 100 },
-] as const;
 
 export class ResearcherAccessError extends Error {
   constructor(message: string) {
@@ -116,12 +103,7 @@ export function toResearcherParticipantResult(input: unknown): ResearcherPartici
   return {
     participantCode: record.participant_code,
     username: record.username,
-    preTestStatus: record.pre_test_status,
-    preTestScore: record.pre_test_score,
-    preTestCompletedAt: timestamp(record.pre_test_completed_at),
-    postTestStatus: record.post_test_status,
-    postTestScore: record.post_test_score,
-    postTestCompletedAt: timestamp(record.post_test_completed_at),
+
     lessonsCompleted: record.lessons_completed,
     lessonsAvailable: record.lessons_available,
     latestActivityAt: timestamp(record.latest_activity_at),
@@ -142,53 +124,7 @@ function average(values: number[]): number | null {
   return values.reduce((total, value) => total + value, 0) / values.length;
 }
 
-export function calculateResearcherSummary(
-  participants: ResearcherParticipantResult[],
-): ResearcherSummary {
-  const preTestScores = participants.flatMap((participant) =>
-    participant.preTestScore === null ? [] : [participant.preTestScore],
-  );
-  const postTestScores = participants.flatMap((participant) =>
-    participant.postTestScore === null ? [] : [participant.postTestScore],
-  );
-  const scoreChanges = participants.flatMap((participant) =>
-    participant.preTestScore === null || participant.postTestScore === null
-      ? []
-      : [participant.postTestScore - participant.preTestScore],
-  );
 
-  return {
-    participantCount: participants.length,
-    preTestCompletedCount: preTestScores.length,
-    postTestCompletedCount: postTestScores.length,
-    bothCompletedCount: scoreChanges.length,
-    averagePreTestScore: average(preTestScores),
-    averagePostTestScore: average(postTestScores),
-    averageScoreChange: average(scoreChanges),
-    assessmentCompletionRate:
-      participants.length === 0 ? null : (scoreChanges.length / participants.length) * 100,
-    allLessonsCompletedCount: participants.filter(
-      (participant) =>
-        participant.lessonsAvailable > 0 &&
-        participant.lessonsCompleted === participant.lessonsAvailable,
-    ).length,
-  };
-}
-
-export function calculateScoreDistribution(
-  participants: ResearcherParticipantResult[],
-): ResearcherScoreDistributionBin[] {
-  return scoreDistributionRanges.map((range) => {
-    const includes = (score: number | null) =>
-      score !== null && score >= range.minimum && score <= range.maximum;
-    return {
-      label: range.label,
-      preTestCount: participants.filter((participant) => includes(participant.preTestScore)).length,
-      postTestCount: participants.filter((participant) => includes(participant.postTestScore))
-        .length,
-    };
-  });
-}
 
 export function calculateLessonSummaries(
   participants: ResearcherParticipantResult[],
@@ -237,4 +173,24 @@ export async function getResearcherResults(): Promise<ResearcherParticipantResul
     );
   }
   return parsed.data.map(toResearcherParticipantResult);
+}
+
+export async function getResearcherLessonAssessmentResults(): Promise<ResearcherLessonAssessmentResult[]> {
+  const { data, error } = await getSupabaseClient().rpc('get_researcher_lesson_assessment_results');
+  if (error) throw new ResearcherAccessError(researcherResultsErrorMessage(error.code));
+  const parsed = z.array(remoteLessonAssessmentResultSchema).safeParse(data);
+  if (!parsed.success)
+    throw new ResearcherAccessError(
+      'The lesson assessment response does not match this ALTRAS version. Apply the latest Supabase migrations.',
+    );
+  return parsed.data.map((row) => ({
+    participantCode: row.participant_code,
+    username: row.username,
+    lessonId: row.lesson_id,
+    lessonTitle: row.lesson_title,
+    preTestStatus: row.pre_test_status,
+    preTestScore: row.pre_test_score,
+    postTestStatus: row.post_test_status,
+    postTestScore: row.post_test_score,
+  }));
 }

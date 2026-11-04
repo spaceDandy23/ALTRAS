@@ -2,19 +2,18 @@ import { useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useResearcherData } from './ResearcherDataContext';
 import { ResearcherContentLoading } from './ResearcherContentLoading';
-import {
-  calculateLessonSummaries,
-  calculateResearcherSummary,
-  calculateScoreDistribution,
-} from './researcher.service';
-import { ScoreComparisonChart, ScoreDistributionChart, SummaryCard } from './ResearcherResultsPage';
-import { formatResearchPercent, formatResearchPoints } from './researcher-format';
+import { calculateLessonSummaries } from './researcher.service';
+import { formatResearchPercent } from './researcher-format';
 
 export function ResearcherDashboardPage() {
   const { participants, loading, error, retry } = useResearcherData();
-  const summary = useMemo(() => calculateResearcherSummary(participants), [participants]);
-  const distribution = useMemo(() => calculateScoreDistribution(participants), [participants]);
   const lessons = useMemo(() => calculateLessonSummaries(participants), [participants]);
+  const fullyCompleted = useMemo(
+    () => participants.filter((participant) =>
+      participant.lessonsAvailable > 0 && participant.lessonsCompleted === participant.lessonsAvailable
+    ).length,
+    [participants],
+  );
   if (loading) return <ResearcherContentLoading message="Loading research dashboard…" />;
   if (error)
     return (
@@ -31,43 +30,25 @@ export function ResearcherDashboardPage() {
         <div>
           <p className="researcher-kicker">Research dashboard</p>
           <h1 id="research-dashboard-title">Study overview</h1>
-          <p>High-level authorized participant outcomes and learning progress.</p>
+          <p>Authorized participant counts and lesson completion.</p>
         </div>
       </header>
       {participants.length === 0 ? (
         <div className="researcher-empty panel">
           <h2>No participant data yet</h2>
-          <p>Metrics and charts will appear after participants begin activity.</p>
+          <p>Lesson progress will appear after participants begin activity.</p>
         </div>
       ) : (
         <>
           <section className="researcher-summary" aria-label="Research summary">
-            <SummaryCard label="Total participants" value={summary.participantCount} />
-            <SummaryCard label="Pre-test completed" value={summary.preTestCompletedCount} />
-            <SummaryCard label="Post-test completed" value={summary.postTestCompletedCount} />
-            <SummaryCard
-              label="Average pre-test"
-              value={formatResearchPercent(summary.averagePreTestScore)}
-            />
-            <SummaryCard
-              label="Average post-test"
-              value={formatResearchPercent(summary.averagePostTestScore)}
-            />
-            <SummaryCard
-              label="Average improvement"
-              value={formatResearchPoints(summary.averageScoreChange)}
-            />
-            <SummaryCard
-              label="Overall completion"
-              value={formatResearchPercent(summary.assessmentCompletionRate)}
-            />
-          </section>
-          <section className="researcher-charts" aria-label="Research analytics">
-            <ScoreComparisonChart
-              preTestAverage={summary.averagePreTestScore}
-              postTestAverage={summary.averagePostTestScore}
-            />
-            <ScoreDistributionChart distribution={distribution} />
+            <article className="researcher-summary__card panel">
+              <span>Total participants</span>
+              <strong>{participants.length}</strong>
+            </article>
+            <article className="researcher-summary__card panel">
+              <span>All available lessons completed</span>
+              <strong>{fullyCompleted}</strong>
+            </article>
           </section>
           <section
             className="researcher-chart researcher-chart--lessons panel"

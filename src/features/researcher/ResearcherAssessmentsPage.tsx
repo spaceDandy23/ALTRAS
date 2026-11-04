@@ -1,115 +1,86 @@
-import { useMemo, useState } from 'react';
-import { useResearcherData } from './ResearcherDataContext';
+import { useEffect, useState } from 'react';
 import { ResearcherContentLoading } from './ResearcherContentLoading';
-import { calculateResearcherSummary, calculateScoreDistribution } from './researcher.service';
-import { ScoreComparisonChart, ScoreDistributionChart } from './ResearcherResultsPage';
+import {
+  getResearcherLessonAssessmentResults,
+  type ResearcherLessonAssessmentResult,
+} from './researcher.service';
 import { formatResearchPercent, formatResearchPoints } from './researcher-format';
 
 export function ResearcherAssessmentsPage() {
-  const { participants, loading, error } = useResearcherData();
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'complete' | 'incomplete'>('all');
-  const summary = useMemo(() => calculateResearcherSummary(participants), [participants]);
-  const distribution = useMemo(() => calculateScoreDistribution(participants), [participants]);
-  const rows = useMemo(
-    () =>
-      participants.filter((participant) => {
-        const complete =
-          participant.preTestStatus === 'completed' && participant.postTestStatus === 'completed';
-        return (
-          (participant.participantCode.toLowerCase().includes(query.trim().toLowerCase()) ||
-            participant.username.toLowerCase().includes(query.trim().toLowerCase())) &&
-          (filter === 'all' || (filter === 'complete' ? complete : !complete))
-        );
-      }),
-    [filter, participants, query],
-  );
-  if (loading) return <ResearcherContentLoading message="Loading assessment analysis…" />;
+  const [lessonResults, setLessonResults] = useState<ResearcherLessonAssessmentResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    void getResearcherLessonAssessmentResults()
+      .then((results) => {
+        if (active) setLessonResults(results);
+      })
+      .catch((reason: Error) => {
+        if (active) setError(reason.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (loading) return <ResearcherContentLoading message="Loading lesson assessment results…" />;
   if (error)
     return (
-      <div className="researcher-empty panel">
-        <h2>Assessment data unavailable</h2>
+      <section className="researcher-state panel" role="alert">
+        <p className="researcher-kicker">Assessments</p>
+        <h1>Lesson assessment results unavailable</h1>
         <p>{error}</p>
-      </div>
+      </section>
     );
+
   return (
     <section className="researcher-results page-enter" aria-labelledby="assessment-analysis-title">
       <header className="researcher-results__heading">
         <div>
           <p className="researcher-kicker">Assessments</p>
-          <h1 id="assessment-analysis-title">Pre-test and post-test performance</h1>
-          <p>Compare assessment outcomes and completion across authorized participants.</p>
+          <h1 id="assessment-analysis-title">Lesson assessment results</h1>
+          <p>Compare each lesson’s Pre-test and Post-test separately.</p>
         </div>
       </header>
-      <section className="researcher-charts">
-        <ScoreComparisonChart
-          preTestAverage={summary.averagePreTestScore}
-          postTestAverage={summary.averagePostTestScore}
-        />
-        <ScoreDistributionChart distribution={distribution} />
-      </section>
-      <section className="researcher-directory panel">
+      <section className="researcher-directory panel" aria-labelledby="lesson-assessment-results-title">
         <div className="researcher-directory__heading">
           <div>
-            <h2>Assessment results</h2>
-            <p>{rows.length} matching participant(s)</p>
+            <h2 id="lesson-assessment-results-title">Per-lesson comparison</h2>
+            <p>Only assessments attached to a lesson are shown here.</p>
           </div>
-          <label className="researcher-search">
-            <span>Find participant code or username</span>
-            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
-          </label>
         </div>
-        <div className="researcher-controls">
-          <label>
-            <span>Completion</span>
-            <select
-              value={filter}
-              onChange={(event) => setFilter(event.target.value as typeof filter)}
-            >
-              <option value="all">All participants</option>
-              <option value="complete">Both completed</option>
-              <option value="incomplete">Incomplete</option>
-            </select>
-          </label>
-        </div>
-        {rows.length === 0 ? (
+        {lessonResults.length === 0 ? (
           <div className="researcher-empty">
-            <h2>No matching assessment results</h2>
-            <p>No completed data matches the current filters.</p>
+            <h3>No lesson assessment results yet</h3>
+            <p>Results will appear here after students complete lesson assessments.</p>
           </div>
         ) : (
           <div className="researcher-table-wrap" tabIndex={0}>
             <table>
               <thead>
                 <tr>
+                  <th>Lesson</th>
                   <th>Participant</th>
-                  <th>Pre-test score</th>
-                  <th>Pre-test status</th>
-                  <th>Post-test score</th>
-                  <th>Post-test status</th>
-                  <th>Improvement</th>
-                  <th>Completion</th>
+                  <th>Pre-test</th>
+                  <th>Post-test</th>
+                  <th>Change</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p) => (
-                  <tr key={p.participantCode}>
+                {lessonResults.map((result) => (
+                  <tr key={`${result.lessonId}:${result.participantCode}`}>
+                    <td>{result.lessonTitle}</td>
+                    <td><strong>{result.participantCode}</strong> · {result.username}</td>
+                    <td>{formatScore(result.preTestScore)} · {formatStatus(result.preTestStatus)}</td>
+                    <td>{formatScore(result.postTestScore)} · {formatStatus(result.postTestStatus)}</td>
                     <td>
-                      <strong>{p.participantCode}</strong> · {p.username}
-                    </td>
-                    <td>{formatScore(p.preTestScore)}</td>
-                    <td>{formatStatus(p.preTestStatus)}</td>
-                    <td>{formatScore(p.postTestScore)}</td>
-                    <td>{formatStatus(p.postTestStatus)}</td>
-                    <td>
-                      {p.preTestScore === null || p.postTestScore === null
+                      {result.preTestScore === null || result.postTestScore === null
                         ? 'Not available'
-                        : formatResearchPoints(p.postTestScore - p.preTestScore)}
-                    </td>
-                    <td>
-                      {p.preTestStatus === 'completed' && p.postTestStatus === 'completed'
-                        ? 'Complete'
-                        : 'Incomplete'}
+                        : formatResearchPoints(result.postTestScore - result.preTestScore)}
                     </td>
                   </tr>
                 ))}

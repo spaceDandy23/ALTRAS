@@ -25,13 +25,22 @@ import {
 
 const client = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('@/services/supabase.client', () => ({ getSupabaseClient: () => client }));
-const item = (): ManagedLesson => ({
-  lesson_id: packagedContent.lessons[0].id,
-  draft: normalizeAuthoredLesson(structuredClone(packagedContent.lessons[0])),
-  revision: 1,
-  published: true,
-  published_version: 1,
-});
+const item = (): ManagedLesson => {
+  const draft = normalizeAuthoredLesson(structuredClone(packagedContent.lessons[0]));
+  draft.assessments = { preTest: 'pre-test', postTest: 'post-test' };
+  const question = (id: string) => ({
+    id,
+    prompt: `Question ${id}`,
+    choices: [{ id: `${id}-a`, label: 'A' }, { id: `${id}-b`, label: 'B' }],
+    correctChoiceId: `${id}-a`,
+    isPlaceholder: false,
+  });
+  draft.assessmentQuestions = {
+    'pre-test': [question('pre-question')],
+    'post-test': [question('post-question')],
+  };
+  return { lesson_id: draft.id, draft, revision: 1, published: true, published_version: 1 };
+};
 beforeEach(() => {
   vi.clearAllMocks();
   applyExperienceScope('neutral');
@@ -131,6 +140,7 @@ describe('Basic Lesson Management editor and preview', () => {
     client.rpc.mockResolvedValue({ data: [row], error: null });
     const { container } = page();
     fireEvent.click(await screen.findByText(`Edit ${row.draft.title}`, { selector: 'button' }));
+    fireEvent.click(container.querySelector('.admin-chapter-details summary')!);
     const add = screen.getByText('Add activity to Chapter 1', { selector: 'button' });
     fireEvent.click(add);
     expect(add).toBeDisabled();
@@ -143,9 +153,13 @@ describe('Basic Lesson Management editor and preview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Create lesson' }));
     expect(screen.getByRole('checkbox', { name: 'Require lesson pre-test' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Require lesson post-test' })).toBeChecked();
+    fireEvent.click(screen.getByText(/Chapter 1: Chapter 1/));
     const add = screen.getByRole('button', { name: 'Add activity to Chapter 1' });
     fireEvent.click(add);
     fireEvent.click(add);
+    const activityCards = document.querySelectorAll<HTMLElement>('.admin-activity');
+    fireEvent.click(within(activityCards[0]).getByText(/Activity 1 ·/));
+    fireEvent.click(within(activityCards[1]).getByText(/Activity 2 ·/));
     const activities = screen.getAllByLabelText('Activity title');
     fireEvent.change(activities[0], { target: { value: 'First' } });
     fireEvent.change(activities[1], { target: { value: 'Second' } });
@@ -168,6 +182,7 @@ describe('Basic Lesson Management editor and preview', () => {
     page();
     fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
     fireEvent.click(screen.getByRole('button', { name: 'Add chapter' }));
+    screen.getAllByText(/Chapter \d: /).forEach((summary) => fireEvent.click(summary));
     const titles = screen.getAllByLabelText('Chapter title');
     fireEvent.change(titles[1], { target: { value: 'Applications' } });
     fireEvent.click(screen.getByRole('button', { name: 'Move chapter 2 up' }));
@@ -213,7 +228,9 @@ describe('Basic Lesson Management editor and preview', () => {
     );
     page();
     fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(screen.getByText(/Chapter 1: Chapter 1/));
     fireEvent.click(screen.getByRole('button', { name: 'Add teaching content to Chapter 1' }));
+    fireEvent.click(screen.getByText(/Content 1 · Explanation · Untitled content/));
     fireEvent.change(screen.getByLabelText('Teaching content title'), {
       target: { value: 'Variables' },
     });
@@ -232,6 +249,36 @@ describe('Basic Lesson Management editor and preview', () => {
                 instructionalContent: [expect.objectContaining({ title: 'Variables' })],
               }),
             ],
+          }),
+        }),
+      ),
+    );
+  });
+  it('authors lesson-scoped Pre-test and Post-test questions in the lesson draft', async () => {
+    const row = item();
+    client.rpc.mockImplementation(
+      async (name: string, args?: { p_lesson: ManagedLesson['draft'] }) => ({
+        error: null,
+        data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+      }),
+    );
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    const preTest = container.querySelector<HTMLElement>('[aria-label="Lesson Pre-test"]')!;
+    fireEvent.change(within(preTest).getByLabelText('Question text'), {
+      target: { value: 'Lesson-specific pre-test wording' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(client.rpc).toHaveBeenCalledWith(
+        'save_admin_lesson',
+        expect.objectContaining({
+          p_lesson: expect.objectContaining({
+            assessmentQuestions: expect.objectContaining({
+              'pre-test': [expect.objectContaining({ prompt: 'Lesson-specific pre-test wording' })],
+              'post-test': [expect.objectContaining({ id: 'post-question' })],
+            }),
           }),
         }),
       ),
@@ -285,6 +332,9 @@ describe('Basic Lesson Management editor and preview', () => {
     const before = await Promise.all(db.tables.map((t) => t.count()));
     const user = userEvent.setup();
     render(<LessonContentPreview lesson={item().draft} />);
+    expect(document.querySelectorAll('.chapter-teaching__block')).toHaveLength(
+      item().draft.chapters.reduce((count, chapter) => count + chapter.instructionalContent.length, 0),
+    );
     const activity = screen
       .getByRole('heading', { name: item().draft.activities[0].title })
       .closest('.activity-card')! as HTMLElement;
@@ -296,6 +346,41 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(client.rpc).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalled();
     expect(await Promise.all(db.tables.map((t) => t.count()))).toEqual(before);
+  });
+  it('keeps chapter and teaching-content forms collapsed until their summaries are opened', async () => {
+    const lesson = normalizeAuthoredLesson(item().draft);
+    render(<LessonContentPreview lesson={lesson} />);
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${lesson.title}` }));
+
+    const chapter = document.querySelector<HTMLElement>('.admin-chapter-details')!;
+    expect(chapter).not.toHaveAttribute('open');
+    fireEvent.click(within(chapter).getByText(/Chapter 1:/));
+    const teaching = document.querySelector<HTMLElement>('.admin-instruction')!;
+    expect(teaching).not.toHaveAttribute('open');
+    expect(within(teaching).getByLabelText('Teaching content title')).not.toBeVisible();
+    expect(within(teaching).getByRole('button', { name: 'Delete content 1' })).not.toBeVisible();
+    fireEvent.click(within(teaching).getByText(/Content 1/));
+    expect(within(teaching).getByLabelText('Teaching content title')).toBeVisible();
+    expect(within(teaching).getByRole('button', { name: 'Delete content 1' })).toBeVisible();
+  });
+  it('keeps activity editors and actions collapsed behind a type/title summary', async () => {
+    const row = item();
+    client.rpc.mockResolvedValue({ data: [row], error: null });
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(container.querySelector('.admin-chapter-details summary')!);
+
+    const activity = container.querySelector<HTMLElement>('.admin-activity')!;
+    const summary = within(activity).getByText(/Activity 1 · Find the word/);
+    expect(summary).toHaveTextContent(row.draft.activities[0].title);
+    expect(activity).not.toHaveAttribute('open');
+    expect(within(activity).getByLabelText('Activity title')).not.toBeVisible();
+    expect(within(activity).getByRole('button', { name: 'Delete activity 1' })).not.toBeVisible();
+
+    fireEvent.click(summary);
+    expect(within(activity).getByLabelText('Activity title')).toBeVisible();
+    expect(within(activity).getByRole('button', { name: 'Delete activity 1' })).toBeVisible();
   });
   it.each([false, true])(
     'waits for server admin membership before rendering (allowed=%s)',

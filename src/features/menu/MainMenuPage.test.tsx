@@ -150,6 +150,7 @@ describe('main menu loading failures', () => {
     expect(
       screen.queryByRole('link', { name: /Start|Continue|Review lesson/i }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Take the (pre-test|post-test)/i })).not.toBeInTheDocument();
   });
 
   it('uses needs-retry copy with the matching retry action for an uncleared attempt', async () => {

@@ -42,6 +42,7 @@ import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateAct
 import type { ActivityAnswer } from './domain/evaluation';
 import { chapterActivityPosition, lessonChapters } from './domain/lesson-flow';
 import { ContentState } from './components/ContentState';
+import { TeachingContentRenderer } from './components/TeachingContentRenderer';
 import { playSfx } from '@/services/audio/audio.manager';
 import {
   playNeutralClickOnKeyDown,
@@ -402,19 +403,7 @@ export function ActiveLessonPage() {
             <p className="assessment-kicker">Chapter {chapterIndex + 1}</p>
             <h1 id="chapter-teaching-title">{currentChapter.title}</h1>
             {currentChapter.description && <p>{currentChapter.description}</p>}
-            <div className="chapter-teaching__content">
-              {currentChapter.instructionalContent.map((block) => (
-                <article
-                  key={block.id}
-                  className={`chapter-teaching__block chapter-teaching__block--${block.type}`}
-                >
-                  <h2>{block.type === 'example' ? block.phrase : block.title}</h2>
-                  <p>
-                    {block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}
-                  </p>
-                </article>
-              ))}
-            </div>
+            <TeachingContentRenderer blocks={currentChapter.instructionalContent} />
             <div className="chapter-teaching__actions">
               <Button
                 onPointerDown={playNeutralClickOnPointerDown}

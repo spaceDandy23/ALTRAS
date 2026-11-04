@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FindWordActivityView } from '@/features/lessons/activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from '@/features/lessons/activities/OrganizeTranslateActivityView';
 import { evaluateActivity } from '@/features/lessons/domain/evaluation';
+import { TeachingContentRenderer } from '@/features/lessons/components/TeachingContentRenderer';
 import type { SubmittedActivityAnswer } from '@/types/learning';
 import { publishableLessonSchema, type AuthoredLesson } from './lesson-management.service';
 
@@ -31,15 +32,15 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
       <p>Preview only — no attempts, progress, XP or streaks are recorded.</p>
       <p>{lesson.shortDescription}</p>
       {lesson.chapters.map((chapter) => (
-        <section key={chapter.id} aria-labelledby={`${chapter.id}-preview-title`}>
+        <section
+          key={chapter.id}
+          className="chapter-teaching panel admin-preview__chapter"
+          aria-labelledby={`${chapter.id}-preview-title`}
+        >
+          <p className="assessment-kicker">Chapter</p>
           <h3 id={`${chapter.id}-preview-title`}>{chapter.title}</h3>
           {chapter.description && <p>{chapter.description}</p>}
-          {chapter.instructionalContent.map((block) => (
-            <article key={block.id}>
-              <h4>{block.type === 'example' ? block.phrase : block.title}</h4>
-              <p>{block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}</p>
-            </article>
-          ))}
+          <TeachingContentRenderer blocks={chapter.instructionalContent} />
         </section>
       ))}
       {activity.type === 'find-word' ? (

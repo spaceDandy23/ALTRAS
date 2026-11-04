@@ -66,7 +66,7 @@ export function AssessmentPage() {
   );
   if (!kind)
     return (
-      <section className="assessment-shell panel">
+      <section className="assessment-shell assessment-state panel">
         <h1>Assessment not found</h1>
         <Link to="/">Return home</Link>
       </section>
@@ -193,11 +193,13 @@ function AssessmentSession({
         if (localResult.status === 'rejected')
           throw new Error('Unable to read the local test draft. Please retry.');
         const local = localResult.value;
-        const loadedQuestions =
-          questionsResult.status === 'fulfilled'
-            ? questionsResult.value
-            : (local?.questions ??
-              (cachedQuestionsResult.status === 'fulfilled' ? cachedQuestionsResult.value : []));
+        const remoteQuestions =
+          questionsResult.status === 'fulfilled' ? questionsResult.value : [];
+        const cachedQuestions =
+          local?.questions.length
+            ? local.questions
+            : cachedQuestionsResult.status === 'fulfilled' ? cachedQuestionsResult.value : [];
+        const loadedQuestions = remoteQuestions.length > 0 ? remoteQuestions : cachedQuestions;
         const server = attemptResult.status === 'fulfilled' ? attemptResult.value : null;
         if (
           server &&
@@ -210,7 +212,7 @@ function AssessmentSession({
         // this attempt. Remote question loading may legitimately fail while
         // offline, so only fail when neither source supplied usable content.
         if (loadedQuestions.length === 0)
-          throw new Error('Unable to load the assessment result. Please retry.');
+          throw new Error('Unable to load the test questions. Please retry.');
         if (server?.status === 'submitted') {
           if (
             local &&
@@ -425,22 +427,24 @@ function AssessmentSession({
     return <LoadingState variant="page" message={`Preparing the ${title.toLowerCase()}…`} />;
   if (bootstrapError)
     return (
-      <section className="assessment-shell panel">
+      <section className="assessment-shell assessment-state panel">
         <p className="assessment-kicker">{title}</p>
-        <h1>We couldn’t load this test</h1>
+        <h1>We couldn&rsquo;t load this test</h1>
         <p role="alert">{bootstrapError}</p>
-        <Button
-          onClick={() => {
-            setLoading(true);
-            setBootstrapError('');
-            setReload((value) => value + 1);
-          }}
-        >
-          Try again
-        </Button>
-        <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
-          {scope ? 'Return to lesson' : 'Return home'}
-        </Link>
+        <div className="result-actions">
+          <Button
+            onClick={() => {
+              setLoading(true);
+              setBootstrapError('');
+              setReload((value) => value + 1);
+            }}
+          >
+            Try again
+          </Button>
+          <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
+            {scope ? 'Return to lesson' : 'Return home'}
+          </Link>
+        </div>
       </section>
     );
   if (attempt?.status === 'submitted')
@@ -472,7 +476,7 @@ function AssessmentSession({
   if (draft?.syncStatus === 'pending_submission') {
     if (localLessonAssessment && scope) {
       return (
-        <section className="assessment-shell panel">
+        <section className="assessment-shell assessment-state panel">
           <p className="assessment-kicker">{title}</p>
           <h1>Answers saved on this device</h1>
           <p role="status">
@@ -481,26 +485,28 @@ function AssessmentSession({
               : 'You can continue your lesson. Your official result will be available once your answers sync.'}
           </p>
           {error && <p role="alert">{error}</p>}
-          <Button
-            onClick={() => {
-              navigate(
-                kind === 'post-test'
-                  ? `/lessons/${scope.lessonId}`
-                  : `/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`,
-                {
-                  replace: true,
-                },
-              );
-            }}
-            disabled={submitting || durability !== 'saved'}
-          >
-            {kind === 'post-test' ? 'Return to lesson' : 'Continue Lesson'}
-          </Button>
+          <div className="result-actions">
+            <Button
+              onClick={() => {
+                navigate(
+                  kind === 'post-test'
+                    ? `/lessons/${scope.lessonId}`
+                    : `/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`,
+                  {
+                    replace: true,
+                  },
+                );
+              }}
+              disabled={submitting || durability !== 'saved'}
+            >
+              {kind === 'post-test' ? 'Return to lesson' : 'Continue Lesson'}
+            </Button>
+          </div>
         </section>
       );
     }
     return (
-      <section className="assessment-shell panel">
+      <section className="assessment-shell assessment-state panel">
         <p className="assessment-kicker">{title}</p>
         <h1>Submission saved</h1>
         <LoadingState
@@ -511,14 +517,16 @@ function AssessmentSession({
               : 'Confirming your saved result…'
           }
         />
-        {waitingForConnection && (
-          <Button variant="quiet" onClick={() => synchronizerRef.current?.requestSync()}>
-            Retry sync
-          </Button>
-        )}
-        <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
-          {scope ? 'Return to lesson' : 'Return home'}
-        </Link>
+        <div className="result-actions">
+          {waitingForConnection && (
+            <Button variant="quiet" onClick={() => synchronizerRef.current?.requestSync()}>
+              Retry sync
+            </Button>
+          )}
+          <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
+            {scope ? 'Return to lesson' : 'Return home'}
+          </Link>
+        </div>
       </section>
     );
   }
@@ -898,7 +906,7 @@ function AssessmentResult({
   }, [attempt.id, attempt.score, attempt.status]);
 
   return (
-    <section className="assessment-shell assessment-result panel page-enter">
+    <section className="assessment-shell assessment-state assessment-result panel page-enter">
       <p className="assessment-kicker">{title} complete</p>
       <h1>{attempt.score}%</h1>
       <p>Your official score has been saved to your account.</p>

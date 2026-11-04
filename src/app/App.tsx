@@ -29,7 +29,6 @@ import { AdminRoute } from '@/features/admin/AdminRoute';
 import { AdminLayout } from '@/features/admin/AdminLayout';
 import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
 import { UserManagementPage } from '@/features/admin/UserManagementPage';
-import { AssessmentManagementPage } from '@/features/admin/AssessmentManagementPage';
 import { NotFoundPage } from './NotFoundPage';
 import {
   GuestOnlyRoute,
@@ -68,7 +67,7 @@ export function App() {
             <Route index element={<Navigate to="/admin/users" replace />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="lessons" element={<LessonManagementPage />} />
-            <Route path="assessments" element={<AssessmentManagementPage />} />
+            <Route path="assessments" element={<Navigate to="/admin/lessons" replace />} />
           </Route>
           <Route
             path="/login"
@@ -103,7 +102,7 @@ export function App() {
               }
             >
               <Route index element={<MainMenuPage />} />
-              <Route path="assessments/:kind" element={<AssessmentPage />} />
+              <Route path="assessments/:kind" element={<Navigate to="/lessons" replace />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="lessons" element={<LessonsPage />} />

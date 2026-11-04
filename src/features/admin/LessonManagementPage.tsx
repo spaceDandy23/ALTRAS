@@ -4,6 +4,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminContentLoading } from './AdminContentLoading';
 import { ActivityEditor } from './ActivityEditor';
 import { InstructionalContentEditor } from './InstructionalContentEditor';
+import { LessonAssessmentQuestionsEditor } from './LessonAssessmentQuestionsEditor';
 import { LessonContentPreview } from './LessonContentPreview';
 import {
   listManagedLessons,
@@ -137,7 +138,7 @@ export function LessonManagementPage() {
   return (
     <>
       <p className="researcher-kicker">Administrator workspace</p>
-      <h1>Basic Lesson Management</h1>
+      <h1 className="admin-lesson-management-title">Basic Lesson Management</h1>
       <p>
         Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} lessons and 10
         activities per lesson.
@@ -340,6 +341,34 @@ export function LessonManagementPage() {
                     </label>
                   </div>
                 </fieldset>
+                {draft.assessments?.preTest === 'pre-test' ? (
+                  <LessonAssessmentQuestionsEditor
+                    assessment="pre-test"
+                    questions={draft.assessmentQuestions['pre-test']}
+                    onChange={(questions) =>
+                      change({
+                        ...draft,
+                        assessmentQuestions: { ...draft.assessmentQuestions, 'pre-test': questions },
+                      })
+                    }
+                  />
+                ) : (
+                  <p>Enable the lesson Pre-test to manage its questions.</p>
+                )}
+                {draft.assessments?.postTest === 'post-test' ? (
+                  <LessonAssessmentQuestionsEditor
+                    assessment="post-test"
+                    questions={draft.assessmentQuestions['post-test']}
+                    onChange={(questions) =>
+                      change({
+                        ...draft,
+                        assessmentQuestions: { ...draft.assessmentQuestions, 'post-test': questions },
+                      })
+                    }
+                  />
+                ) : (
+                  <p>Enable the lesson Post-test to manage its questions.</p>
+                )}
                 <div className="admin-section-heading">
                   <div>
                     <h2>Chapters ({draft.chapters.length})</h2>
@@ -357,6 +386,12 @@ export function LessonManagementPage() {
                 {draft.chapters.map((chapter, chapterIndex) => (
                   <fieldset key={chapter.id} className="admin-chapter">
                     <legend>Chapter {chapterIndex + 1}</legend>
+                    <details className="admin-chapter-details">
+                      <summary>
+                        Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'} ·{' '}
+                        {chapter.instructionalContent.length} teaching items · {chapter.activities.length} activities
+                      </summary>
+                      <div className="admin-chapter-content">
                     <div className="admin-actions lesson-actions">
                       <button
                         type="button"
@@ -407,8 +442,12 @@ export function LessonManagementPage() {
                     </div>
                     <h3>Teaching and discussion content</h3>
                     {chapter.instructionalContent.map((block, contentIndex) => (
-                      <fieldset key={block.id} className="admin-instruction">
-                        <legend>Content {contentIndex + 1}</legend>
+                      <details key={block.id} className="admin-instruction">
+                        <summary>
+                          Content {contentIndex + 1} · {block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
+                          {block.type === 'example' ? block.phrase : block.title || 'Untitled content'}
+                        </summary>
+                        <div className="admin-instruction-content">
                         <div className="admin-actions lesson-actions">
                           <button
                             type="button"
@@ -491,7 +530,8 @@ export function LessonManagementPage() {
                             )
                           }
                         />
-                      </fieldset>
+                        </div>
+                      </details>
                     ))}
                     <button
                       type="button"
@@ -515,8 +555,15 @@ export function LessonManagementPage() {
                     </button>
                     <h3>Activities ({chapter.activities.length})</h3>
                     {chapter.activities.map((activity, activityIndex) => (
-                      <fieldset key={activity.id} className="admin-activity">
-                        <legend>Activity {activityIndex + 1}</legend>
+                      <details key={activity.id} className="admin-activity">
+                        <summary>
+                          Activity {activityIndex + 1} ·{' '}
+                          {activity.type === 'find-word' ? 'Find the word' : 'Organize & translate'} ·{' '}
+                          <span className="admin-activity-summary__preview">
+                            {activity.title || activity.prompt || 'Untitled activity'}
+                          </span>
+                        </summary>
+                        <div className="admin-activity-content">
                         <div className="admin-actions lesson-actions">
                           <button
                             type="button"
@@ -622,7 +669,8 @@ export function LessonManagementPage() {
                             )
                           }
                         />
-                      </fieldset>
+                        </div>
+                      </details>
                     ))}
                     <button
                       type="button"
@@ -642,6 +690,8 @@ export function LessonManagementPage() {
                     >
                       Add activity to {chapter.title}
                     </button>
+                      </div>
+                    </details>
                   </fieldset>
                 ))}
                 <div className="admin-actions">

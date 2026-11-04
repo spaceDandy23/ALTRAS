@@ -25,7 +25,6 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeLessonMatch = location.pathname.match(/^\/lessons\/[^/]+\/play\/([^/]+)\/?$/);
-  const globalAssessmentMatch = location.pathname.match(/^\/assessments\/(pre-test|post-test)\/?$/);
   const activeLesson = Boolean(activeLessonMatch);
   useEffect(() => {
     const colorScheme =
@@ -77,11 +76,6 @@ export function AppShell() {
           <GlobalLessonSyncStatus
             userId={user.id}
             excludedAttemptId={activeLessonMatch?.[1]}
-            excludedAssessment={
-              globalAssessmentMatch
-                ? { assessment: globalAssessmentMatch[1] as 'pre-test' | 'post-test' }
-                : undefined
-            }
           />
         )}
         <div className="app-header__tools">

@@ -6,9 +6,23 @@ import {
 } from '@/features/lessons/domain/content.schemas';
 import { catalogShell } from '@/features/lessons/content/catalog-shell';
 import { getSupabaseClient } from '@/services/supabase.client';
+import {
+  adminAssessmentQuestionSchema,
+  publishableAssessmentSchema,
+  type AdminAssessmentQuestion,
+} from './assessment-management.service';
+import type { AssessmentKind } from '@/types/assessment';
 
 type LegacyAuthoredLesson = z.infer<typeof lessonSchema>;
-export type AuthoredLesson = LegacyAuthoredLesson & { chapters: LessonChapter[] };
+export const lessonAssessmentQuestionsSchema = z.object({
+  'pre-test': z.array(adminAssessmentQuestionSchema).max(100),
+  'post-test': z.array(adminAssessmentQuestionSchema).max(100),
+});
+export type LessonAssessmentQuestions = Record<AssessmentKind, AdminAssessmentQuestion[]>;
+export type AuthoredLesson = LegacyAuthoredLesson & {
+  chapters: LessonChapter[];
+  assessmentQuestions: LessonAssessmentQuestions;
+};
 export type AuthoredChapter = LessonChapter;
 export const MAX_ACTIVITIES = 10;
 export const MAX_LESSONS = 8;
@@ -55,6 +69,7 @@ export async function saveManagedLesson(
   const normalized = normalizeAuthoredLesson(draft);
   if (normalized.activities.length > MAX_ACTIVITIES)
     throw new Error('A lesson supports at most 10 activities.');
+  lessonAssessmentQuestionsSchema.parse(normalized.assessmentQuestions);
   return (await call('save_admin_lesson', {
     p_lesson: normalized,
     p_revision: revision,
@@ -64,7 +79,20 @@ export async function publishManagedLesson(
   item: ManagedLesson,
   published: boolean,
 ): Promise<ManagedLesson> {
-  if (published) publishableLessonSchema.parse(item.draft);
+  if (published) {
+    publishableLessonSchema.parse(item.draft);
+    for (const assessment of ['pre-test', 'post-test'] as const) {
+      const enabled =
+        assessment === 'pre-test'
+          ? item.draft.assessments?.preTest === 'pre-test'
+          : item.draft.assessments?.postTest === 'post-test';
+      if (enabled)
+        publishableAssessmentSchema.parse({
+          assessment,
+          questions: item.draft.assessmentQuestions[assessment],
+        });
+    }
+  }
   return (await call('set_lesson_publication', {
     p_lesson_id: item.lesson_id,
     p_publish: published,
@@ -87,6 +115,7 @@ export function newLesson(order: number): AuthoredLesson {
     activities: [],
     chapters: [newChapter(1)],
     assessments: { preTest: 'pre-test', postTest: 'post-test' },
+    assessmentQuestions: { 'pre-test': [], 'post-test': [] },
   });
 }
 
@@ -109,7 +138,9 @@ export function newInstructionalBlock(
   return { id, type, title: '', body: '' };
 }
 
-export function normalizeAuthoredLesson(lesson: LegacyAuthoredLesson): AuthoredLesson {
+export function normalizeAuthoredLesson(
+  lesson: LegacyAuthoredLesson & { assessmentQuestions?: LessonAssessmentQuestions },
+): AuthoredLesson {
   const source = lesson.chapters?.length
     ? lesson.chapters
     : [
@@ -130,6 +161,7 @@ export function normalizeAuthoredLesson(lesson: LegacyAuthoredLesson): AuthoredL
     chapters,
     instructionalContent: chapters.flatMap((chapter) => chapter.instructionalContent),
     activities: chapters.flatMap((chapter) => chapter.activities),
+    assessmentQuestions: lesson.assessmentQuestions ?? { 'pre-test': [], 'post-test': [] },
   };
 }
 

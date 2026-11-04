@@ -23,6 +23,7 @@ const migration = '202610300001_lesson_chapters.sql';
 const phase2Migration = '202610300002_lesson_chapter_runtime.sql';
 const phase3Migration = '202610300003_lesson_offline_transitions.sql';
 const offlineAssessmentMigration = '202610310001_offline_assessment_start.sql';
+const lessonScopedAssessmentMigration = '202611040001_lesson_scoped_assessments.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -137,6 +138,8 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', phase2Migration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', phase3Migration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', offlineAssessmentMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', lessonScopedAssessmentMigration), 'utf8'));
+  await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
     adminOnlyId,
@@ -157,33 +160,118 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
-  it('claims a stable client assessment ID idempotently without exposing answer keys', async () => {
-    await pg.exec(`reset role;
-      update public.lesson_definitions
-      set pre_assessment_version=(select published_version from public.assessment_catalog where assessment='pre-test')
-      where lesson_id='lesson-order-matters';`);
+  it('starts a new attempt on the latest published pre-test after restart', async () => {
+    const authored = draft({
+      prerequisiteLessonId: undefined,
+      assessments: { preTest: 'pre-test' },
+      assessmentQuestions: {
+        'pre-test': [{
+          id: 'restart-question', prompt: 'Original pre-test question',
+          choices: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+          correctChoiceId: 'a', isPlaceholder: false,
+        }],
+        'post-test': [],
+      },
+    });
+    const firstPublished = await publish(await save(authored));
     await asUser(studentId);
-    const attempt = await rpc<{ id: string }>('start_lesson_attempt', ['lesson-order-matters']);
-    const clientId = randomUUID();
+    const first = await rpc<{ id: string; content_version: number }>('start_lesson_attempt', [authored.id]);
+    expect(first.content_version).toBe(firstPublished.published_version);
 
+    await asUser(adminId);
+    authored.assessmentQuestions['pre-test'][0].prompt = 'Updated pre-test question';
+    const latest = await publish(await save(authored, firstPublished.revision));
+    await asUser(studentId);
+    await rpc('abandon_lesson_attempt', [first.id]);
+    const restarted = await rpc<{ id: string; content_version: number; pre_assessment_version: number }>(
+      'start_lesson_attempt', [authored.id],
+    );
+    expect(restarted.id).not.toBe(first.id);
+    expect(restarted.content_version).toBe(latest.published_version);
+    expect(restarted.pre_assessment_version).toBe(latest.published_version);
+    const questions = await pg.query<{ prompt: string }>(
+      'select prompt from public.get_assessment_questions($1,$2)', ['pre-test', restarted.id],
+    );
+    expect(questions.rows).toEqual([{ prompt: 'Updated pre-test question' }]);
+  });
+
+  it('publishes authored pre-test questions for a fresh student before assessment start', async () => {
+    const authored = draft({
+      prerequisiteLessonId: undefined,
+      assessments: { preTest: 'pre-test' },
+      assessmentQuestions: {
+        'pre-test': [{
+          id: 'fresh-pre-question', prompt: 'Which expression represents five more than x?',
+          choices: [{ id: 'a', label: 'x + 5' }, { id: 'b', label: 'x - 5' }],
+          correctChoiceId: 'a', isPlaceholder: false,
+        }],
+        'post-test': [],
+      },
+    });
+    const saved = await save(authored);
+    expect(saved.draft.assessmentQuestions['pre-test'][0].prompt).toBe(authored.assessmentQuestions['pre-test'][0].prompt);
+    const published = await publish(saved);
+
+    await pg.exec('reset role');
+    const freshStudent = randomUUID();
+    await pg.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)', [
+      freshStudent, `${freshStudent}@example.invalid`,
+      { username: `user_${freshStudent.slice(0, 8)}`, display_name: 'Fresh student' },
+    ]);
+    await asUser(freshStudent);
+    const attempt = await rpc<{ id: string; content_version: number; pre_assessment_version: number; flow_stage: string }>(
+      'start_lesson_attempt', [authored.id],
+    );
+    expect(attempt).toMatchObject({
+      content_version: published.published_version,
+      pre_assessment_version: published.published_version,
+      flow_stage: 'pre-test',
+    });
+    const questions = await pg.query<Record<string, unknown>>(
+      'select * from public.get_assessment_questions($1,$2)', ['pre-test', attempt.id],
+    );
+    expect(questions.rows).toHaveLength(1);
+    expect(questions.rows[0]).toMatchObject({
+      prompt: authored.assessmentQuestions['pre-test'][0].prompt,
+      content_version: published.published_version,
+    });
+    expect(questions.rows[0]).not.toHaveProperty('correct_choice_id');
+  });
+
+  it('claims a stable client assessment ID idempotently without exposing answer keys', async () => {
+    const item = await publish(await save(draft({
+      prerequisiteLessonId: undefined,
+      assessments: { preTest: 'pre-test' },
+      assessmentQuestions: {
+        'pre-test': [{
+          id: 'stable-pre-question', prompt: 'Pre-test prompt',
+          choices: [{ id: 'stable-a', label: 'A' }, { id: 'stable-b', label: 'B' }],
+          correctChoiceId: 'stable-a', isPlaceholder: false,
+        }],
+        'post-test': [],
+      },
+    })));
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', [item.lesson_id]);
+    const freshQuestions = await pg.query<{ prompt: string }>(
+      'select prompt from public.get_assessment_questions($1,$2)',
+      ['pre-test', attempt.id],
+    );
+    expect(freshQuestions.rows).toEqual([{ prompt: 'Pre-test prompt' }]);
+    const clientId = randomUUID();
     const first = await rpc<{ id: string }>('start_assessment', ['pre-test', attempt.id, clientId]);
     const retry = await rpc<{ id: string }>('start_assessment', ['pre-test', attempt.id, clientId]);
     const questions = await pg.query<Record<string, unknown>>(
-      'select * from public.get_assessment_questions($1,$2)',
+      "select * from public.get_assessment_questions($1,$2)",
       ['pre-test', attempt.id],
     );
-
     expect(first.id).toBe(clientId);
     expect(retry.id).toBe(clientId);
     expect(questions.rows.length).toBeGreaterThan(0);
     expect(questions.rows.some((question) => 'correct_choice_id' in question)).toBe(false);
     await completeScopedAssessment(attempt.id, 'pre-test');
     await rpc('advance_lesson_attempt_stage', [attempt.id]);
-    const recovered = await rpc<{ id: string }>('start_assessment', [
-      'pre-test',
-      attempt.id,
-      clientId,
-    ]);
+    const recovered = await rpc<{ id: string }>('start_assessment', ['pre-test', attempt.id, clientId]);
     expect(recovered.id).toBe(clientId);
   });
 
@@ -205,6 +293,18 @@ describe('Basic Lesson Management SQL and RLS', () => {
     const lesson = draft({
       prerequisiteLessonId: undefined,
       assessments: { preTest: 'pre-test', postTest: 'post-test' },
+      assessmentQuestions: {
+        'pre-test': [{
+          id: 'pre-question', prompt: 'Pre-test prompt',
+          choices: [{ id: 'pre-a', label: 'A' }, { id: 'pre-b', label: 'B' }],
+          correctChoiceId: 'pre-a', isPlaceholder: false,
+        }],
+        'post-test': [{
+          id: 'post-question', prompt: 'Post-test prompt',
+          choices: [{ id: 'post-a', label: 'A' }, { id: 'post-b', label: 'B' }],
+          correctChoiceId: 'post-a', isPlaceholder: false,
+        }],
+      },
     });
     const first = newChapter(1, 'Foundations');
     const second = newChapter(2, 'Applications');
@@ -326,19 +426,15 @@ describe('Basic Lesson Management SQL and RLS', () => {
       ).rows[0],
     ).toEqual(progressAfterCompletion);
 
-    expect(await rpc('start_assessment', ['pre-test'])).toMatchObject({
-      assessment: 'pre-test',
-      lesson_attempt_id: null,
-    });
+    await pg.exec('savepoint lesson_attempt_required');
+    await expect(rpc('start_assessment', ['pre-test'])).rejects.toThrow('Lesson attempt is required.');
+    await pg.exec('rollback to savepoint lesson_attempt_required');
     await asUser(researcherId);
-    expect(
-      (
-        await pg.query<{ pre_test_status: string; post_test_status: string }>(
-          'select pre_test_status,post_test_status from public.get_researcher_results() where username=$1',
-          ['learner'],
-        )
-      ).rows[0],
-    ).toEqual({ pre_test_status: 'in_progress', post_test_status: 'not_started' });
+    const researcherResult = await pg.query<{ pre_test_status: string; post_test_status: string }>(
+      "select pre_test_status,post_test_status from public.get_researcher_lesson_assessment_results() where username=$1 and lesson_id=$2",
+      ['learner', item.lesson_id],
+    );
+    expect(researcherResult.rows[0]).toEqual({ pre_test_status: 'completed', post_test_status: 'completed' });
   });
 
   it('enforces the eight-lesson limit at the database boundary', async () => {

@@ -198,18 +198,6 @@ export function MainMenuPage() {
               <StarRating count={earnedStarCount} />
             </div>
             <StudentStreak />
-            <div className="home-assessments" aria-label="Assessments">
-              <Link to="/assessments/pre-test">
-                <span>Before the lessons</span>
-                <strong>Take the pre-test</strong>
-                <small>One saved attempt</small>
-              </Link>
-              <Link to="/assessments/post-test">
-                <span>After the lessons</span>
-                <strong>Take the post-test</strong>
-                <small>One saved attempt</small>
-              </Link>
-            </div>
           </section>
         </div>
       )}

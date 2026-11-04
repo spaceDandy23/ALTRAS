@@ -25,7 +25,6 @@ export function AdminLayout() {
         <nav aria-label="Admin navigation">
           <NavLink to="/admin/users">Users</NavLink>
           <NavLink to="/admin/lessons">Lesson Management</NavLink>
-          <NavLink to="/admin/assessments">Assessment Management</NavLink>
         </nav>
         <div className="admin-sidebar__account">
           <span>{user?.displayName ?? 'Administrator'}</span>
@@ -39,7 +38,6 @@ export function AdminLayout() {
         <nav aria-label="Admin navigation mobile">
           <NavLink to="/admin/users">Users</NavLink>
           <NavLink to="/admin/lessons">Lesson Management</NavLink>
-          <NavLink to="/admin/assessments">Assessment Management</NavLink>
         </nav>
         <div className="admin-mobile-nav__account">
           <span>{user?.displayName ?? 'Administrator'}</span>

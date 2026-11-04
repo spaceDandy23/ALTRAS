@@ -299,6 +299,30 @@ describe('assessment UX and bootstrap', () => {
     ).not.toBe('pending_submission');
   });
 
+  it('opens a fresh lesson pre-test when no assessment attempt exists yet', async () => {
+    server = null;
+    renderLessonAssessment();
+
+    expect(await screen.findByRole('heading', { name: 'Check what you know' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start pre-test' })).toBeEnabled();
+    expect(getAssessmentAttempt).toHaveBeenCalledWith(userId, 'pre-test', {
+      lessonId: 'lesson-operation-signals',
+      lessonAttemptId: '40000000-0000-4000-8000-000000000004',
+    });
+    expect(screen.queryByText('Unable to load the assessment result. Please retry.')).not.toBeInTheDocument();
+  });
+  it('uses cached lesson questions when the scoped question lookup returns no rows', async () => {
+    await cacheLessonPreTest();
+    const cached = await getLessonDraft(userId, 'lesson-operation-signals', '40000000-0000-4000-8000-000000000004');
+    expect(cached).not.toBeNull();
+    await saveLessonDraft({ ...cached!, attempt: { ...cached!.attempt, flowStage: 'chapter-teaching' }, revision: cached!.revision + 1 });
+    server = null;
+    vi.mocked(getAssessmentQuestions).mockResolvedValueOnce([]);
+    renderLessonAssessment();
+
+    expect(await screen.findByRole('heading', { name: 'Check what you know' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start pre-test' })).toBeEnabled();
+  });
   it('offers a return link when uncached assessment content is unavailable', async () => {
     server = null;
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -311,6 +335,7 @@ describe('assessment UX and bootstrap', () => {
       'href',
       '/lessons/lesson-operation-signals',
     );
+    expect(screen.getByRole('button', { name: 'Try again' }).parentElement).toHaveClass('result-actions');
   });
 
   it('continues a completed lesson pre-test into the owning lesson attempt', async () => {
