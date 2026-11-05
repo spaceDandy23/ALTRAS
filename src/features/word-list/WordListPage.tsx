@@ -27,6 +27,8 @@ export function WordListPage() {
     );
   }, [entries, search]);
 
+  if (entries === null && !error) return <LoadingState variant="page" />;
+
   return (
     <div className="standard-page word-list-page page-enter">
       <BackLink to="/lessons/almanac" label="Back to Almanac" />
@@ -51,8 +53,6 @@ export function WordListPage() {
           <p>{error}</p>
           <button className="button button--primary" type="button" onClick={load}>Try again</button>
         </section>
-      ) : entries === null ? (
-        <LoadingState variant="page" />
       ) : filtered.length ? (
         <VocabularyTable title="Math Word List" rows={filtered} />
       ) : (

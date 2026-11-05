@@ -1741,7 +1741,7 @@ h3 {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
   border-block: 1px solid var(--line);
 }
 
@@ -4803,6 +4803,16 @@ a.almanac-option:hover {
 }
 
 @media (max-width: 1150px) {
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-section--appearance {
+    grid-column: 1 / -1;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
   .word-list-heading {
     align-items: start;
   }
@@ -5640,6 +5650,10 @@ html[data-experience='student'] .loading-state p {
   .lesson-player__stage:has(.answer-feedback),
   .word-list-groups {
     grid-template-columns: 1fr;
+  }
+
+  .settings-section--appearance {
+    grid-column: auto;
   }
 
   .profile-badge {
