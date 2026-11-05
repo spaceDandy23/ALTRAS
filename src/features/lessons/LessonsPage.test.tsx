@@ -224,7 +224,62 @@ describe('lesson hub authoritative progress', () => {
 
     expect(await screen.findByText('Needs retry')).toBeVisible();
     expect(screen.getByText('Try lesson again')).toBeVisible();
-    expect(screen.queryByText('Not started')).not.toBeInTheDocument();
+    expect(screen.getByText('Needs retry').closest('.lesson-node__title-line')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Almanac' })).not.toBeInTheDocument();
+  });
+
+  it('renders ordered chapter states below an active lesson without inventing chapter scores', async () => {
+    const baseLesson = packagedContent.lessons[0];
+    const chapter = {
+      id: 'chapter-one',
+      title: 'Chapter one',
+      description: baseLesson.shortDescription,
+      displayOrder: 1,
+      instructionalContent: [],
+      activities: baseLesson.activities,
+    };
+    const lesson = {
+      ...baseLesson,
+      chapters: [chapter, { ...chapter, id: 'chapter-two', title: 'Chapter two', displayOrder: 2 }],
+    };
+    const activeAttempt = {
+      id: '40000000-0000-4000-8000-000000000015', userId, lessonId: lesson.id,
+      contentVersion: lesson.contentVersion, status: 'active' as const, startedAt: 1, lastUpdatedAt: 2,
+      completedAt: null, abandonedAt: null, answers: [], finalScore: null, starCount: null,
+      cleared: null, xpImprovement: 0, flowStage: 'chapter-teaching' as const,
+      currentChapterId: 'chapter-two', preAssessmentVersion: null, postAssessmentVersion: null,
+    };
+    await saveLessonDraft(createLessonDraft(activeAttempt, lesson));
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0], unit: packagedContent.units[0], entries: [{
+        lesson,
+        progress: { id: `${userId}:${lesson.id}`, userId, lessonId: lesson.id, status: 'in-progress', bestScore: 0, bestStarCount: 0, attemptCount: 0, xpAwarded: 0, firstStartedAt: 1, lastAttemptedAt: 2, clearedAt: null },
+      }],
+    });
+    vi.mocked(getTotalXp).mockResolvedValue(0);
+    authenticate();
+
+    render(<MemoryRouter><LessonsPage /></MemoryRouter>);
+
+    const chapters = await screen.findByRole('list', { name: `${lesson.title} chapters` });
+    expect(screen.queryByText(/Chapters \(2\)/)).not.toBeInTheDocument();
+    expect(chapters).toHaveTextContent('Chapter 1');
+    expect(chapters).toHaveTextContent('Chapter one');
+    expect(chapters).toHaveTextContent('Completed');
+    expect(chapters).toHaveTextContent('Chapter 2');
+    expect(chapters).toHaveTextContent('Chapter two');
+    expect(chapters).toHaveTextContent('In progress');
+    expect(chapters).not.toHaveTextContent(/Score|star/i);
+    expect(screen.getByText('Completed').closest('.lesson-chapter__title-line')).not.toBeNull();
+
+    const toggle = screen.getByRole('button', { name: `Hide chapters for ${lesson.title}` });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.setup().click(toggle);
+    expect(screen.queryByRole('list', { name: `${lesson.title} chapters` })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: lesson.title })).toBeVisible();
+    expect(screen.getByRole('button', { name: `Show chapters for ${lesson.title}` })).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.setup().click(screen.getByRole('button', { name: `Show chapters for ${lesson.title}` }));
+    expect(await screen.findByRole('list', { name: `${lesson.title} chapters` })).toBeVisible();
   });
 
   it('opens the overview from a completed lesson card instead of bypassing to results', async () => {

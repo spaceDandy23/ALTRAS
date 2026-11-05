@@ -1,5 +1,8 @@
 import { FormField } from '@/components/ui/FormField';
 import { moveItem } from './lesson-management.service';
+import { ReorderableItem, reorderById } from './ReorderableItem';
+import { Fragment, type ReactNode } from 'react';
+import { AdminIconButton } from './AdminIconButton';
 
 export type EditableChoice = { id: string; label: string };
 
@@ -17,6 +20,7 @@ export function ChoiceRowsEditor({
   choiceIdPrefix = '',
   correctChoiceId,
   onCorrectChoiceChange,
+  reorderGroup,
 }: {
   choices: EditableChoice[];
   onChange: (choices: EditableChoice[]) => void;
@@ -31,12 +35,15 @@ export function ChoiceRowsEditor({
   choiceIdPrefix?: string;
   correctChoiceId?: string;
   onCorrectChoiceChange?: (choiceId: string) => void;
+  reorderGroup?: string;
 }) {
   return (
     <fieldset className="admin-options">
       <legend>{legend}</legend>
-      {choices.map((choice, index) => (
-        <div key={choice.id} className="admin-option">
+      {choices.map((choice, index) => {
+        const row = (handle: ReactNode) => (
+        <div className="admin-option">
+          {handle}
           {onCorrectChoiceChange && (
             <label className="admin-correct-choice">
               <input
@@ -61,34 +68,31 @@ export function ChoiceRowsEditor({
               )
             }
           />
-          <button
-            type="button"
+          <AdminIconButton icon="up" label={`Move ${controlLabel} ${index + 1} up`}
             disabled={index === 0}
-            aria-label={`Move ${controlLabel} ${index + 1} up`}
             onClick={() => onChange(moveItem(choices, index, -1))}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
+          />
+          <AdminIconButton icon="down" label={`Move ${controlLabel} ${index + 1} down`}
             disabled={index === choices.length - 1}
-            aria-label={`Move ${controlLabel} ${index + 1} down`}
             onClick={() => onChange(moveItem(choices, index, 1))}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
+          />
+          <AdminIconButton icon="delete" label={`Remove ${controlLabel} ${index + 1}`}
             disabled={choices.length <= 2}
-            aria-label={`Remove ${controlLabel} ${index + 1}`}
             onClick={() => onChange(choices.filter((item) => item.id !== choice.id))}
-          >
-            Remove
-          </button>
+          />
         </div>
-      ))}
+        );
+        return reorderGroup ? (
+          <ReorderableItem key={choice.id} group={reorderGroup} id={choice.id}
+            label={`${choiceLabel.toLowerCase()} ${index + 1}`}
+            onReorder={(source, target, side) => onChange(reorderById(choices, source, target, side, (item) => item.id))}>
+            {row}
+          </ReorderableItem>
+        ) : <Fragment key={choice.id}>{row(null)}</Fragment>;
+      })}
       <button
         type="button"
+        className="admin-add-action"
         disabled={choices.length >= maxChoices}
         onClick={() => onChange([...choices, { id: `${choiceIdPrefix}${crypto.randomUUID()}`, label: '' }])}
       >

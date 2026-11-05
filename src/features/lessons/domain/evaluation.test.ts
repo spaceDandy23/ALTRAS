@@ -43,6 +43,40 @@ describe('activity evaluation', () => {
     expect(evaluateActivity(activity, [...activity.correctTokenSequence].reverse())).toBe(false);
   });
 
+  it('accepts only explicitly configured Arrange Words sequences', () => {
+    const activity = activitySchema.parse({
+      id: 'accepted-orders',
+      type: 'organize-translate',
+      title: 'Arrange the phrase',
+      prompt: 'Temporary validation fixture',
+      mathStatement: 'n - 6',
+      tokens: [
+        { id: 'number', label: 'a number' },
+        { id: 'six', label: 'six' },
+        { id: 'less', label: 'less than' },
+      ],
+      correctTokenSequence: ['six', 'less', 'number'],
+      acceptedTokenSequences: [
+        ['six', 'less', 'number'],
+        ['number', 'less', 'six'],
+      ],
+      explanation: { title: 'Feedback', body: 'Temporary test content.' },
+    });
+    if (activity.type !== 'organize-translate') throw new Error('Invalid activity fixture.');
+
+    expect(evaluateActivity(activity, ['six', 'less', 'number'])).toBe(true);
+    expect(evaluateActivity(activity, ['number', 'less', 'six'])).toBe(true);
+    expect(evaluateActivity(activity, ['number', 'six', 'less'])).toBe(false);
+    expect(() => activitySchema.parse({
+      ...activity,
+      acceptedTokenSequences: [activity.correctTokenSequence, activity.correctTokenSequence],
+    })).toThrow(/different token orders/);
+    expect(() => activitySchema.parse({
+      ...activity,
+      acceptedTokenSequences: [['number', 'missing', 'six']],
+    })).toThrow(/every token exactly once/);
+  });
+
   it('evaluates Choose-the-Correct-Translation by stable choice ID', () => {
     const activity = activitySchema.parse({
       id: 'choose-translation',

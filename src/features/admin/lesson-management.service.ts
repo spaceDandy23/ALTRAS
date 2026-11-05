@@ -40,6 +40,50 @@ export const publishableLessonSchema = lessonSchema.superRefine((lesson, ctx) =>
       ctx.addIssue({ code: 'custom', message: 'Use at most 20 choices or tokens.' });
   }
 });
+
+function lessonValidationMessage(error: z.ZodError): string {
+  const activityFields = new Map<number, Set<string>>();
+  const labels: Record<string, string> = {
+    title: 'title',
+    prompt: 'instructions',
+    mathStatement: 'mathematical expression',
+    body: 'feedback explanation',
+  };
+
+  for (const issue of error.issues) {
+    const path = issue.path;
+    const activityIndex = path[0] === 'activities' && typeof path[1] === 'number'
+      ? path[1]
+      : path[0] === 'chapters' && path[2] === 'activities' && typeof path[3] === 'number'
+        ? path[3]
+        : null;
+    if (activityIndex === null) continue;
+    const leaf = [...path].reverse().find((part): part is string => typeof part === 'string');
+    const optionCollectionIndex = path.findIndex((part) => part === 'choices' || part === 'tokens');
+    const optionIndex = optionCollectionIndex >= 0 ? path[optionCollectionIndex + 1] : undefined;
+    const field = typeof optionIndex === 'number'
+      ? `${path[optionCollectionIndex] === 'tokens' ? 'token' : 'choice'} ${optionIndex + 1} text`
+      : leaf === 'title' && path.includes('explanation')
+        ? 'feedback title'
+        : leaf && labels[leaf]
+          ? labels[leaf]
+          : leaf === 'label'
+            ? 'choice or token text'
+            : issue.message;
+    const fields = activityFields.get(activityIndex) ?? new Set<string>();
+    fields.add(field);
+    activityFields.set(activityIndex, fields);
+  }
+
+  if (activityFields.size > 0) {
+    const details = [...activityFields.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([index, fields]) => `Activity ${index + 1}: ${[...fields].join(', ')}`);
+    return `Complete the required fields before publishing. ${details.join('; ')}.`;
+  }
+
+  return [...new Set(error.issues.map((issue) => issue.message))].join(' ');
+}
 export interface ManagedLesson {
   lesson_id: string;
   draft: AuthoredLesson;
@@ -80,7 +124,12 @@ export async function publishManagedLesson(
   published: boolean,
 ): Promise<ManagedLesson> {
   if (published) {
-    publishableLessonSchema.parse(item.draft);
+    try {
+      publishableLessonSchema.parse(item.draft);
+    } catch (cause) {
+      if (cause instanceof z.ZodError) throw new Error(lessonValidationMessage(cause));
+      throw cause;
+    }
     for (const assessment of ['pre-test', 'post-test'] as const) {
       const enabled =
         assessment === 'pre-test'
@@ -216,6 +265,7 @@ export function newActivity(
       { id: 'token-2', label: '' },
     ],
     correctTokenSequence: ['token-1', 'token-2'],
+    acceptedTokenSequences: [['token-1', 'token-2']],
   };
 }
 export function moveItem<T>(items: T[], index: number, delta: number): T[] {

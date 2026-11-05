@@ -25,6 +25,9 @@ function renderShell(path: string) {
         <Route element={<AppShell />}>
           <Route index element={<p>Student home</p>} />
           <Route path="lessons" element={<p>Lesson hub</p>} />
+          <Route path="lessons/almanac" element={<p>Almanac</p>} />
+          <Route path="profile" element={<p>Profile</p>} />
+          <Route path="settings" element={<p>Settings</p>} />
           <Route path="lessons/:lessonId/play/:attemptId" element={<p>Active lesson</p>} />
         </Route>
       </Routes>
@@ -61,6 +64,41 @@ describe('student shell Home navigation', () => {
 
     expect(screen.getByText('Student home')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('uses the student sidebar for navigation and marks the active destination', () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { id: '10000000-0000-4000-8000-000000000001', normalizedUsername: 'student', displayName: 'Student', createdAt: 1, lastLoginAt: 1 },
+    });
+    useResearcherAccessStore.setState({ status: 'denied', userId: '10000000-0000-4000-8000-000000000001' });
+    renderShell('/lessons');
+
+    const sidebar = screen.getByRole('complementary', { name: 'Student navigation' });
+    expect(sidebar).toContainElement(screen.getByRole('link', { name: 'Home' }));
+    expect(screen.getByRole('link', { name: 'Lessons' })).toHaveAttribute('aria-current', 'page');
+    expect(sidebar).toContainElement(screen.getByRole('link', { name: 'Almanac' }));
+    expect(sidebar).toContainElement(screen.getByRole('link', { name: 'Profile' }));
+    expect(sidebar).toContainElement(screen.getByRole('link', { name: 'Settings' }));
+    expect(sidebar).toContainElement(screen.getByRole('button', { name: 'Mute audio' }));
+    expect(screen.getByRole('button', { name: 'Mute audio' })).toHaveAttribute('title', 'Mute audio');
+    expect(screen.getByRole('button', { name: 'Mute audio' })).toHaveTextContent('Mute audio');
+    expect(document.querySelector('.student-mobile-header .audio-mute-button')).not.toBeInTheDocument();
+  });
+
+  it('opens the responsive navigation drawer', async () => {
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { id: '10000000-0000-4000-8000-000000000001', normalizedUsername: 'student', displayName: 'Student', createdAt: 1, lastLoginAt: 1 },
+    });
+    useResearcherAccessStore.setState({ status: 'denied', userId: '10000000-0000-4000-8000-000000000001' });
+    renderShell('/lessons');
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    expect(screen.getByRole('dialog', { name: 'Student navigation' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Close navigation' }));
+    expect(screen.queryByRole('dialog', { name: 'Student navigation' })).not.toBeInTheDocument();
   });
 
   it('keeps the active-lesson leave confirmation before going Home', async () => {

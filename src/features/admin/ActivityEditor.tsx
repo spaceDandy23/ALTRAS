@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { FormField } from '@/components/ui/FormField';
 import { ChoiceRowsEditor } from './ChoiceRowsEditor';
+import { ReorderableItem, reorderById } from './ReorderableItem';
+import { AdminIconButton } from './AdminIconButton';
 import { moveItem, newActivity, type AuthoredLesson } from './lesson-management.service';
 type Activity = AuthoredLesson['activities'][number];
 
@@ -10,25 +13,34 @@ export function ActivityEditor({
   activity: Activity;
   onChange: (a: Activity) => void;
 }) {
+  const [answerFeedback, setAnswerFeedback] = useState('');
   const options = activity.type === 'organize-translate' ? activity.tokens : activity.choices;
+  const acceptedTokenSequences = activity.type === 'organize-translate'
+    ? activity.acceptedTokenSequences ?? [activity.correctTokenSequence]
+    : [];
+  const updateAcceptedSequences = (sequences: string[][], message: string) => {
+    if (activity.type === 'organize-translate' && sequences.length > 0) {
+      onChange({ ...activity, acceptedTokenSequences: sequences, correctTokenSequence: sequences[0] });
+      setAnswerFeedback(message);
+    }
+  };
   const setOptions = (next: typeof options) => {
-    if (activity.type !== 'organize-translate')
+    if (activity.type !== 'organize-translate') {
       onChange({
         ...activity,
         choices: next,
-        correctChoiceId: next.some((o) => o.id === activity.correctChoiceId)
+        correctChoiceId: next.some((option) => option.id === activity.correctChoiceId)
           ? activity.correctChoiceId
           : next[0].id,
       });
-    else
-      onChange({
-        ...activity,
-        tokens: next,
-        correctTokenSequence: [
-          ...activity.correctTokenSequence.filter((id) => next.some((o) => o.id === id)),
-          ...next.filter((o) => !activity.correctTokenSequence.includes(o.id)).map((o) => o.id),
-        ],
-      });
+      return;
+    }
+    const previous = activity.acceptedTokenSequences ?? [activity.correctTokenSequence];
+    const updated = previous.map((sequence) => [
+      ...sequence.filter((id) => next.some((option) => option.id === id)),
+      ...next.filter((option) => !sequence.includes(option.id)).map((option) => option.id),
+    ]);
+    onChange({ ...activity, tokens: next, acceptedTokenSequences: updated, correctTokenSequence: updated[0] });
   };
   return (
     <div className="admin-fields">
@@ -55,7 +67,7 @@ export function ActivityEditor({
           }}
         >
           <option value="find-word">Find the word</option>
-          <option value="organize-translate">Organize & translate</option>
+          <option value="organize-translate">Organize &amp; translate</option>
           <option value="choose-correct-translation">Choose the correct translation</option>
         </select>
       </label>
@@ -98,6 +110,7 @@ export function ActivityEditor({
         controlLabel="option"
         addLabel={`Add ${activity.type === 'organize-translate' ? 'token' : 'choice'}`}
         maxChoices={20}
+        reorderGroup={activity.type === 'organize-translate' ? `activity-${activity.id}-tokens` : undefined}
         radioGroupName={`correct-activity-${activity.id}`}
         correctChoiceId={activity.type === 'organize-translate' ? undefined : activity.correctChoiceId}
         onCorrectChoiceChange={
@@ -107,46 +120,73 @@ export function ActivityEditor({
         }
       />
       {activity.type === 'organize-translate' && (
-        <fieldset className="admin-options">
-          <legend>Correct token order</legend>
-          <ol className="admin-token-order">
-            {activity.correctTokenSequence.map((id, index) => (
-              <li key={id} className="admin-token-order__item">
-                <span className="admin-token-order__label">
-                  {options.find((o) => o.id === id)?.label || '(empty token)'}
-                </span>
-                <span className="admin-token-order__controls">
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    aria-label={`Move correct token ${index + 1} up`}
-                    onClick={() =>
-                      onChange({
-                        ...activity,
-                        correctTokenSequence: moveItem(activity.correctTokenSequence, index, -1),
-                      })
-                    }
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === options.length - 1}
-                    aria-label={`Move correct token ${index + 1} down`}
-                    onClick={() =>
-                      onChange({
-                        ...activity,
-                        correctTokenSequence: moveItem(activity.correctTokenSequence, index, 1),
-                      })
-                    }
-                  >
-                    ↓
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ol>
-        </fieldset>
+        <section className="admin-accepted-answers" aria-labelledby={`accepted-answers-${activity.id}`}>
+          <h3 id={`accepted-answers-${activity.id}`}>Accepted answers</h3>
+          <p>Add another answer only when a different token order should also be considered correct.</p>
+          {acceptedTokenSequences.map((sequence, answerIndex) => (
+            <fieldset className="admin-options admin-accepted-answer" key={answerIndex}>
+              <legend>Accepted answer {answerIndex + 1}</legend>
+              {acceptedTokenSequences.length > 1 && (
+                <AdminIconButton icon="delete" label={`Remove answer ${answerIndex + 1}`}
+                  onClick={() => updateAcceptedSequences(
+                    acceptedTokenSequences.filter((_, index) => index !== answerIndex),
+                    `Accepted answer ${answerIndex + 1} removed. Save the lesson draft to keep this change.`,
+                  )}
+                />
+              )}
+              <ol className="admin-token-order">
+                {sequence.map((id, index) => (
+                  <ReorderableItem as="li" key={id} group={`activity-${activity.id}-answer-${answerIndex}`}
+                    id={id} label={`token ${index + 1} in accepted answer ${answerIndex + 1}`}
+                    onReorder={(source, target, side) => updateAcceptedSequences(
+                      acceptedTokenSequences.map((current, currentIndex) => currentIndex === answerIndex
+                        ? reorderById(current, source, target, side, (tokenId) => tokenId)
+                        : current),
+                      `Accepted answer ${answerIndex + 1} reordered. Save the lesson draft to keep this change.`,
+                    )}>
+                  {(handle) => <div className="admin-token-order__item">
+                    {handle}
+                    <span className="admin-token-order__label">
+                      {options.find((option) => option.id === id)?.label || '(empty token)'}
+                    </span>
+                    <span className="admin-token-order__controls">
+                      <AdminIconButton icon="up" label={`Move token ${index + 1} in accepted answer ${answerIndex + 1} up`}
+                        disabled={index === 0}
+                        onClick={() => updateAcceptedSequences(
+                          acceptedTokenSequences.map((current, currentIndex) =>
+                            currentIndex === answerIndex ? moveItem(current, index, -1) : current,
+                          ),
+                          `Token moved up in accepted answer ${answerIndex + 1}. Save the lesson draft to keep this change.`,
+                        )}
+                      />
+                      <AdminIconButton icon="down" label={`Move token ${index + 1} in accepted answer ${answerIndex + 1} down`}
+                        disabled={index === options.length - 1}
+                        onClick={() => updateAcceptedSequences(
+                          acceptedTokenSequences.map((current, currentIndex) =>
+                            currentIndex === answerIndex ? moveItem(current, index, 1) : current,
+                          ),
+                          `Token moved down in accepted answer ${answerIndex + 1}. Save the lesson draft to keep this change.`,
+                        )}
+                      />
+                    </span>
+                  </div>}
+                  </ReorderableItem>
+                ))}
+              </ol>
+            </fieldset>
+          ))}
+          <button
+            type="button"
+            className="admin-add-action"
+            onClick={() => updateAcceptedSequences(
+              [...acceptedTokenSequences, [...acceptedTokenSequences[0]]],
+              'Accepted answer added. Choose a distinct token order, then save the lesson draft.',
+            )}
+          >
+            + Add accepted answer
+          </button>
+          {answerFeedback && <p className="admin-accepted-answer__feedback" role="status">{answerFeedback}</p>}
+        </section>
       )}
       <FormField
         label="Hint (optional)"

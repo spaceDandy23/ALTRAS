@@ -80,6 +80,8 @@ describe('authenticated audio mute control', () => {
 
     expect(audio.playMusic).toHaveBeenCalledWith('main');
     const mute = screen.getByRole('button', { name: 'Mute audio' });
+    expect(mute).toHaveAttribute('title', 'Mute audio');
+    expect(mute).toHaveTextContent('Mute audio');
     await userEvent.setup().click(mute);
 
     expect(audio.setAudioMuted).toHaveBeenCalledWith(true);

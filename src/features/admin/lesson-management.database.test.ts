@@ -27,6 +27,7 @@ const lessonScopedAssessmentMigration = '202611040001_lesson_scoped_assessments.
 const completedActiveTimeMigration = '202611040002_reconcile_completed_attempt_active_time.sql';
 const chooseTranslationMigration = '202611040003_choose_correct_translation_activity.sql';
 const vocabularyMigration = '202611040004_vocabulary_word_list_star_thresholds.sql';
+const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_answers.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -145,6 +146,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', completedActiveTimeMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', chooseTranslationMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', vocabularyMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', acceptedTokenSequencesMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -166,6 +168,56 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('privately grades any explicitly accepted Arrange Words sequence and rejects others', async () => {
+    const activity = activitySchema.parse({
+      id: 'arrange-accepted-orders',
+      type: 'organize-translate',
+      title: 'Arrange the phrase',
+      prompt: 'Build the phrase for the expression.',
+      mathStatement: 'n - 6',
+      tokens: [
+        { id: 'number', label: 'a number' },
+        { id: 'six', label: 'six' },
+        { id: 'less-than', label: 'less than' },
+      ],
+      correctTokenSequence: ['six', 'less-than', 'number'],
+      acceptedTokenSequences: [
+        ['six', 'less-than', 'number'],
+        ['number', 'less-than', 'six'],
+      ],
+      explanation: { title: 'Accepted order', body: 'This order was explicitly configured.' },
+    });
+    if (activity.type !== 'organize-translate') throw new Error('Invalid activity fixture.');
+    const authored = draft({ prerequisiteLessonId: undefined, activities: [activity] });
+    const published = await publish(await save(authored));
+
+    await asUser(studentId);
+    const content = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, null]);
+    expect(content.activities[0]).not.toHaveProperty('acceptedTokenSequences');
+    expect(content.activities[0]).not.toHaveProperty('correctTokenSequence');
+    expect(publicLessonSchema.safeParse(content).success).toBe(true);
+
+    const firstAttempt = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    const accepted = await rpc<{ is_correct: boolean }>('submit_lesson_activity_answer', [
+      firstAttempt.id,
+      activity.id,
+      ['number', 'less-than', 'six'],
+    ]);
+    expect(accepted.is_correct).toBe(true);
+    const firstCompletion = await rpc<{ final_score: number }>('complete_lesson_attempt', [firstAttempt.id]);
+    expect(firstCompletion.final_score).toBe(100);
+
+    const secondAttempt = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    const unconfigured = await rpc<{ is_correct: boolean }>('submit_lesson_activity_answer', [
+      secondAttempt.id,
+      activity.id,
+      ['number', 'six', 'less-than'],
+    ]);
+    expect(unconfigured.is_correct).toBe(false);
+    const secondCompletion = await rpc<{ final_score: number }>('complete_lesson_attempt', [secondAttempt.id]);
+    expect(secondCompletion.final_score).toBe(0);
+  });
+
   it('saves, publishes, restores, and privately grades translation choices', async () => {
     const activity = activitySchema.parse({
       id: 'translate-sum-five',

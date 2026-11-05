@@ -20,6 +20,7 @@
     "@types/howler": "^2.2.13",
     "dexie": "^4.4.5",
     "howler": "^2.2.4",
+    "lucide-react": "^1.68.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MathWordListManagementPage } from '@/features/admin/MathWordListManagementPage';
@@ -36,6 +37,35 @@ describe('Math Word List CMS and student view', () => {
       rows[1],
       { ...rows[0], definition: 'A total' },
     ]));
+  });
+
+  it('searches global entries and preserves hidden rows when editing a result', async () => {
+    const user = userEvent.setup();
+    render(<MathWordListManagementPage />);
+    const search = await screen.findByRole('searchbox', { name: 'Search entries' });
+    await user.type(search, 'subtraction');
+    expect(screen.getByLabelText('Term 2')).toHaveValue('difference');
+    expect(screen.queryByLabelText('Term 1')).not.toBeInTheDocument();
+    await user.clear(search);
+    expect(screen.getByLabelText('Term 1')).toHaveValue('sum');
+    expect(screen.getByLabelText('Term 2')).toHaveValue('difference');
+  });
+
+  it('reorders entries by dragging their handle and saves the new order', async () => {
+    render(<MathWordListManagementPage />);
+    await screen.findByLabelText('Term 1');
+    const transfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() };
+    const sourceHandle = screen.getByRole('button', { name: 'Drag row 1 to reorder' });
+    fireEvent.dragStart(sourceHandle, { dataTransfer: transfer });
+    const reorderItems = document.querySelectorAll('.reference-rows-editor .admin-reorder-item');
+    fireEvent.dragOver(reorderItems[1], { dataTransfer: transfer, clientY: 1 });
+    expect(reorderItems[1]).toHaveClass('admin-reorder-item--after');
+    fireEvent.drop(reorderItems[1], { dataTransfer: transfer, clientY: 1 });
+    fireEvent.dragEnd(sourceHandle, { dataTransfer: transfer });
+    expect(screen.getByLabelText('Term 1')).toHaveValue('difference');
+    expect(screen.getByLabelText('Term 2')).toHaveValue('sum');
+    fireEvent.click(screen.getByRole('button', { name: 'Save Math Word List' }));
+    await waitFor(() => expect(service.saveMathWordEntries).toHaveBeenCalledWith([rows[1], rows[0]]));
   });
 
   it('removes the Review placeholder from Almanac', () => {

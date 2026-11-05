@@ -66,20 +66,45 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     mathStatement: z.string().min(1),
     tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string().min(1)).min(2),
+    acceptedTokenSequences: z.array(z.array(z.string().min(1)).min(2)).min(1).optional(),
   })
   .superRefine((activity, context) => {
     const tokenIds = activity.tokens.map((token) => token.id);
     if (new Set(tokenIds).size !== tokenIds.length) {
       context.addIssue({ code: 'custom', message: 'Token IDs must be unique.' });
     }
+    const acceptedSequences = activity.acceptedTokenSequences ?? [activity.correctTokenSequence];
+    const serializedSequences = new Set<string>();
+    acceptedSequences.forEach((sequence, index) => {
+      if (
+        sequence.length !== tokenIds.length ||
+        sequence.some((id) => !tokenIds.includes(id)) ||
+        new Set(sequence).size !== tokenIds.length
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['acceptedTokenSequences', index],
+          message: 'Each accepted answer must use every token exactly once.',
+        });
+      }
+      const serialized = JSON.stringify(sequence);
+      if (serializedSequences.has(serialized)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['acceptedTokenSequences', index],
+          message: 'Accepted answers must use different token orders.',
+        });
+      }
+      serializedSequences.add(serialized);
+    });
     if (
-      activity.correctTokenSequence.length !== tokenIds.length ||
-      activity.correctTokenSequence.some((id) => !tokenIds.includes(id)) ||
-      new Set(activity.correctTokenSequence).size !== tokenIds.length
+      activity.acceptedTokenSequences &&
+      JSON.stringify(activity.correctTokenSequence) !== JSON.stringify(activity.acceptedTokenSequences[0])
     ) {
       context.addIssue({
         code: 'custom',
-        message: 'The correct sequence must use every token exactly once.',
+        path: ['correctTokenSequence'],
+        message: 'The legacy correct order must match Accepted answer 1.',
       });
     }
   });
@@ -257,12 +282,16 @@ export const packagedContentSchema = z
 
 export type ActivityChoice = z.infer<typeof activityChoiceSchema>;
 export type ActivityToken = z.infer<typeof activityTokenSchema>;
+export type AuthoredActivity = z.infer<typeof activitySchema>;
 export type ReferenceEntry = z.infer<typeof referenceEntrySchema>;
 // Public player content omits private keys; post-answer feedback may reveal one choice.
 export const publicActivitySchema = z.discriminatedUnion('type', [
   z.object({ ...findWordActivitySchema.shape, correctChoiceId: z.string().optional() }),
   z.object({
-    ...organizeTranslateActivitySchema.shape,
+    ...activityBaseSchema.shape,
+    type: z.literal('organize-translate'),
+    mathStatement: z.string().min(1),
+    tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string()).optional(),
   }),
   z.object({

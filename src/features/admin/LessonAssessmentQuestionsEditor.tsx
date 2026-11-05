@@ -6,15 +6,22 @@ import {
 } from './assessment-management.service';
 import type { AssessmentKind } from '@/types/assessment';
 import { ChoiceRowsEditor } from './ChoiceRowsEditor';
+import { ReorderableItem, reorderById } from './ReorderableItem';
+import { AdminIconButton } from './AdminIconButton';
+import { ChevronDown } from 'lucide-react';
 
 export function LessonAssessmentQuestionsEditor({
   assessment,
   questions,
   onChange,
+  required,
+  onRequiredChange,
 }: {
   assessment: AssessmentKind;
   questions: AdminAssessmentQuestion[];
   onChange: (questions: AdminAssessmentQuestion[]) => void;
+  required: boolean;
+  onRequiredChange: (required: boolean) => void;
 }) {
   const label = assessmentLabel(assessment);
   const updateQuestion = (
@@ -30,44 +37,43 @@ export function LessonAssessmentQuestionsEditor({
           <span className="admin-assessment-summary__count">
             {questions.length} {questions.length === 1 ? 'question' : 'questions'}
           </span>
+          <span className="admin-assessment-summary__required">{required ? 'Required ✓' : 'Optional'}</span>
+          <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
         </summary>
         <div className="admin-assessment-content">
+          <label className="admin-assessment-required">
+            <input type="checkbox" checked={required} onChange={(event) => onRequiredChange(event.target.checked)} />
+            Require lesson {label.toLowerCase()}
+          </label>
+          {required ? <>
           {questions.length === 0 ? <p>No questions added yet.</p> : null}
           <ol className="admin-assessment-questions">
             {questions.map((question, questionIndex) => (
-              <li key={question.id}>
-                <details className="admin-assessment-question panel">
+              <ReorderableItem as="li" key={question.id} group={`assessment-${assessment}`} id={question.id}
+                label={`${label} question ${questionIndex + 1}`}
+                onReorder={(source, target, side) => onChange(reorderById(questions, source, target, side, (item) => item.id))}>
+                {(handle) => (
+                <details className="admin-assessment-question">
                   <summary>
+                    {handle}
                     <span>Question {questionIndex + 1}</span>
                     <span className="admin-assessment-question__preview">
                       {question.prompt.trim() || 'Untitled question'}
                     </span>
+                    <AdminIconButton inSummary icon="delete" label={`Delete question ${questionIndex + 1}`}
+                      onClick={() => onChange(questions.filter((item) => item.id !== question.id))} />
+                    <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
                   </summary>
                   <div className="admin-assessment-question__content">
                     <div className="admin-question-actions">
-                      <button
-                        type="button"
-                        aria-label={`Move question ${questionIndex + 1} up`}
+                      <AdminIconButton icon="up" label={`Move question ${questionIndex + 1} up`}
                         disabled={questionIndex === 0}
                         onClick={() => onChange(moveAssessmentQuestion(questions, questionIndex, -1))}
-                      >
-                        Move up
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Move question ${questionIndex + 1} down`}
+                      />
+                      <AdminIconButton icon="down" label={`Move question ${questionIndex + 1} down`}
                         disabled={questionIndex === questions.length - 1}
                         onClick={() => onChange(moveAssessmentQuestion(questions, questionIndex, 1))}
-                      >
-                        Move down
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete question ${questionIndex + 1}`}
-                        onClick={() => onChange(questions.filter((item) => item.id !== question.id))}
-                      >
-                        Delete question
-                      </button>
+                      />
                     </div>
                     <label className="admin-assessment-prompt">
                       <span>Question text</span>
@@ -115,16 +121,20 @@ export function LessonAssessmentQuestionsEditor({
                     />
                   </div>
                 </details>
-              </li>
+                )}
+              </ReorderableItem>
             ))}
           </ol>
           <button
             type="button"
+            className="admin-add-action"
+            aria-label={`Add ${label} question`}
             disabled={questions.length >= 100}
             onClick={() => onChange([...questions, newAssessmentQuestion()])}
           >
-            Add {label} question
+            + Add {label} question
           </button>
+          </> : <p>Enable the lesson {label} to manage its questions.</p>}
         </div>
       </details>
     </section>

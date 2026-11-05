@@ -69,7 +69,79 @@ const page = () =>
     </MemoryRouter>,
   );
 
+function dragAfter(source: HTMLElement, target: HTMLElement) {
+  const transfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+  const targetItem = target.closest('.admin-reorder-item');
+  if (!targetItem) throw new Error('Missing drop target');
+  fireEvent.dragStart(source, { dataTransfer: transfer });
+  fireEvent.dragOver(targetItem, { dataTransfer: transfer, clientY: 1 });
+  expect(targetItem).toHaveClass('admin-reorder-item--after');
+  fireEvent.drop(targetItem, { dataTransfer: transfer, clientY: 1 });
+  expect(targetItem).not.toHaveClass('admin-reorder-item--after');
+  fireEvent.dragEnd(source, { dataTransfer: transfer });
+}
+
 describe('Basic Lesson Management editor and preview', () => {
+  it('drag-reorders chapters, chapter content, activities and both assessments in the saved draft', async () => {
+    const row = item();
+    const firstChapter = row.draft.chapters[0];
+    firstChapter.activities = firstChapter.activities.slice(0, 2);
+    firstChapter.instructionalContent = [firstChapter.instructionalContent[0], {
+      id: 'vocabulary-reference', type: 'vocabulary-table', title: 'Vocabulary',
+      rows: [{ id: 'term-1', term: 'Variable', definition: 'Unknown', example: 'x' }],
+    }];
+    const secondChapter = newChapter(2, 'Second chapter');
+    row.draft.chapters = [firstChapter, secondChapter];
+    for (const kind of ['pre-test', 'post-test'] as const) {
+      const first = row.draft.assessmentQuestions[kind][0];
+      row.draft.assessmentQuestions[kind] = [first, { ...first, id: `${kind}-second`, prompt: 'Second question' }];
+    }
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(async (name: string, args?: { p_lesson: AuthoredLesson }) => ({
+      error: null,
+      data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+    }));
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+
+    for (const label of ['Pre-test', 'Post-test']) {
+      const section = screen.getByRole('region', { name: `Lesson ${label}` });
+      fireEvent.click(section.querySelector('summary')!);
+      dragAfter(screen.getByRole('button', { name: `Drag ${label} question 1 to reorder` }),
+        screen.getByRole('button', { name: `Drag ${label} question 2 to reorder` }));
+    }
+
+    fireEvent.click(container.querySelector('.admin-chapter-details > summary')!);
+    const firstActivity = container.querySelector<HTMLElement>('.admin-activity')!;
+    fireEvent.click(firstActivity.querySelector('summary')!);
+    fireEvent.change(within(firstActivity).getByLabelText('Activity title'), { target: { value: 'Unsaved activity edit' } });
+    dragAfter(screen.getByRole('button', { name: 'Drag teaching content 1 to reorder' }),
+      screen.getByRole('button', { name: 'Drag teaching content 2 to reorder' }));
+    dragAfter(screen.getByRole('button', { name: 'Drag activity 1 to reorder' }),
+      screen.getByRole('button', { name: 'Drag activity 2 to reorder' }));
+    expect(firstActivity).toHaveAttribute('open');
+    expect(within(firstActivity).getByLabelText('Activity title')).toHaveValue('Unsaved activity edit');
+    dragAfter(screen.getByRole('button', { name: 'Drag chapter 1 to reorder' }),
+      screen.getByRole('button', { name: 'Drag chapter 2 to reorder' }));
+    expect(firstActivity).toHaveAttribute('open');
+    expect(within(firstActivity).getByLabelText('Activity title')).toHaveValue('Unsaved activity edit');
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await screen.findByText('Draft saved.');
+
+    expect(client.rpc).toHaveBeenCalledWith('save_admin_lesson', expect.objectContaining({
+      p_lesson: expect.objectContaining({
+        chapters: [expect.objectContaining({ id: secondChapter.id, displayOrder: 1 }), expect.objectContaining({
+          id: firstChapter.id, displayOrder: 2,
+          instructionalContent: [expect.objectContaining({ id: 'vocabulary-reference' }), expect.objectContaining({ id: firstChapter.instructionalContent[0].id })],
+          activities: [expect.objectContaining({ id: firstChapter.activities[1].id }), expect.objectContaining({ id: firstChapter.activities[0].id, title: 'Unsaved activity edit' })],
+        })],
+        assessmentQuestions: expect.objectContaining({
+          'pre-test': [expect.objectContaining({ id: 'pre-test-second' }), expect.objectContaining({ id: 'pre-question' })],
+          'post-test': [expect.objectContaining({ id: 'post-test-second' }), expect.objectContaining({ id: 'post-question' })],
+        }),
+      }),
+    }));
+  }, 15000);
   it('disables creating a ninth lesson and explains the limit', async () => {
     const rows = Array.from({ length: MAX_LESSONS }, (_, index) => ({
       ...item(),
@@ -133,6 +205,22 @@ describe('Basic Lesson Management editor and preview', () => {
     );
     expect(client.rpc).not.toHaveBeenCalledWith('set_lesson_publication', expect.anything());
   });
+  it('shows publish failures beside the lesson actions without requiring a scroll back to the heading', async () => {
+    const row = item();
+    client.rpc.mockImplementation(async (name: string) =>
+      name === 'get_admin_lessons'
+        ? { data: [row], error: null }
+        : { data: null, error: { message: 'Could not publish this lesson.' } },
+    );
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish lesson' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not publish this lesson.');
+    expect(alert.closest('.admin-save-feedback')).toBeInTheDocument();
+    expect(alert.closest('.admin-save-feedback')).toHaveFocus();
+  });
   it('blocks activity eleven in the editor', async () => {
     const row = item();
     row.draft.chapters[0].activities = Array.from({ length: 9 }, () => newActivity('find-word'));
@@ -141,7 +229,7 @@ describe('Basic Lesson Management editor and preview', () => {
     const { container } = page();
     fireEvent.click(await screen.findByText(`Edit ${row.draft.title}`, { selector: 'button' }));
     fireEvent.click(container.querySelector('.admin-chapter-details summary')!);
-    const add = screen.getByText('Add activity to Chapter 1', { selector: 'button' });
+    const add = screen.getByRole('button', { name: 'Add activity to Chapter 1' });
     fireEvent.click(add);
     expect(add).toBeDisabled();
     expect(container.querySelectorAll('.admin-activity')).toHaveLength(MAX_ACTIVITIES);
@@ -171,7 +259,8 @@ describe('Basic Lesson Management editor and preview', () => {
     fireEvent.change(screen.getAllByLabelText('Activity type')[0], {
       target: { value: 'organize-translate' },
     });
-    expect(screen.getByRole('group', { name: 'Correct token order' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Accepted answers' })).toBeInTheDocument();
+    expect(screen.getByText('Accepted answer 1')).toBeInTheDocument();
   });
   it('creates and saves a Choose the Correct Translation activity in the collapsed editor', async () => {
     const row = item();
@@ -423,6 +512,7 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(postTest.querySelector('details')).not.toHaveAttribute('open');
     expect(within(preTest).getByText('1 question')).toBeInTheDocument();
     expect(within(postTest).getByText('1 question')).toBeInTheDocument();
+    expect(within(preTest).getByText('Required ✓')).toBeInTheDocument();
 
     fireEvent.click(preTest.querySelector('summary')!);
     const question = preTest.querySelector<HTMLElement>('.admin-assessment-question')!;
@@ -432,15 +522,25 @@ describe('Basic Lesson Management editor and preview', () => {
       'Question pre-question',
     );
     expect(within(question).getByLabelText('Question text')).not.toBeVisible();
-    expect(within(question).getByRole('button', { name: 'Delete question 1' })).not.toBeVisible();
+    expect(within(question).getByRole('button', { name: 'Delete question 1' })).toHaveAttribute('title', 'Delete question 1');
 
     fireEvent.click(question.querySelector('summary')!);
     expect(within(question).getByLabelText('Question text')).toBeVisible();
     expect(within(question).getAllByRole('radio', { name: 'Correct' })[0]).toBeChecked();
     expect(within(question).getByRole('button', { name: 'Move question 1 down' })).toBeVisible();
     expect(within(question).getByRole('button', { name: 'Delete question 1' })).toBeVisible();
+
+    fireEvent.click(postTest.querySelector('summary')!);
+    const postRequired = within(postTest).getByRole('checkbox', { name: 'Require lesson post-test' });
+    fireEvent.click(postRequired);
+    expect(within(postTest).getByText('Optional')).toBeInTheDocument();
+    fireEvent.click(postTest.querySelector('summary')!);
+    fireEvent.click(postTest.querySelector('summary')!);
+    expect(postRequired).not.toBeChecked();
+    fireEvent.click(postRequired);
+    expect(postTest.querySelector('.admin-assessment-question__preview')).toHaveTextContent('Question post-question');
   });
-  it('keeps correct-token rows distinct while preserving token reordering', async () => {
+  it('adds and independently reorders accepted token sequences', async () => {
     const activity = newActivity('organize-translate') as Extract<
       AuthoredLesson['activities'][number],
       { type: 'organize-translate' }
@@ -453,21 +553,79 @@ describe('Basic Lesson Management editor and preview', () => {
       { id: 'second', label: 'second token' },
     ];
     activity.correctTokenSequence = ['first', 'second'];
+    activity.acceptedTokenSequences = [['first', 'second']];
     const onChange = vi.fn();
-    render(<ActivityEditor activity={activity} onChange={onChange} />);
+    const view = render(<ActivityEditor activity={activity} onChange={onChange} />);
 
-    const order = screen.getByRole('group', { name: 'Correct token order' });
+    const order = screen.getByRole('group', { name: 'Accepted answer 1' });
     expect(order.querySelectorAll('.admin-token-order__item')).toHaveLength(2);
     expect(order.querySelector('.admin-token-order__controls')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Move correct token 1 down' }));
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ correctTokenSequence: ['second', 'first'] }),
+    expect(screen.getByText('Add another answer only when a different token order should also be considered correct.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '+ Add accepted answer' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Accepted answer added. Choose a distinct token order, then save the lesson draft.',
     );
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        correctTokenSequence: ['first', 'second'],
+        acceptedTokenSequences: [['first', 'second'], ['first', 'second']],
+      }),
+    );
+    const withSecondAnswer = onChange.mock.lastCall?.[0] as typeof activity;
+    const user = userEvent.setup();
+    view.rerender(<ActivityEditor activity={withSecondAnswer} onChange={onChange} />);
+    await user.click(view.getByRole('button', { name: 'Move token 1 in accepted answer 2 down' }));
+    expect(view.getByRole('status')).toHaveTextContent('Token moved down in accepted answer 2.');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      correctTokenSequence: ['first', 'second'],
+      acceptedTokenSequences: [['first', 'second'], ['second', 'first']],
+    }));
+    view.rerender(<ActivityEditor activity={{ ...withSecondAnswer, acceptedTokenSequences: [['first', 'second'], ['second', 'first']] }} onChange={onChange} />);
+    await user.click(view.getByRole('button', { name: 'Remove answer 1' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      correctTokenSequence: ['second', 'first'],
+      acceptedTokenSequences: [['second', 'first']],
+    }));
+  });
+  it('drag-reorders available tokens and an accepted answer independently', () => {
+    const activity = newActivity('organize-translate') as Extract<AuthoredLesson['activities'][number], { type: 'organize-translate' }>;
+    activity.tokens = [
+      { id: 'a', label: 'First' }, { id: 'b', label: 'Second' }, { id: 'c', label: 'Third' },
+    ];
+    activity.correctTokenSequence = ['a', 'b', 'c'];
+    activity.acceptedTokenSequences = [['a', 'b', 'c'], ['b', 'c', 'a']];
+    const onChange = vi.fn();
+    const view = render(<ActivityEditor activity={activity} onChange={onChange} />);
+
+    dragAfter(screen.getByRole('button', { name: 'Drag token 1 to reorder' }),
+      screen.getByRole('button', { name: 'Drag token 2 to reorder' }));
+    const reorderedTokens = onChange.mock.lastCall?.[0] as typeof activity;
+    expect(reorderedTokens.tokens.map((token) => token.id)).toEqual(['b', 'a', 'c']);
+    expect(reorderedTokens.acceptedTokenSequences).toEqual([['a', 'b', 'c'], ['b', 'c', 'a']]);
+
+    view.rerender(<ActivityEditor activity={reorderedTokens} onChange={onChange} />);
+    dragAfter(screen.getByRole('button', { name: 'Drag token 1 in accepted answer 2 to reorder' }),
+      screen.getByRole('button', { name: 'Drag token 2 in accepted answer 2 to reorder' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      correctTokenSequence: ['a', 'b', 'c'],
+      acceptedTokenSequences: [['a', 'b', 'c'], ['c', 'b', 'a']],
+    }));
   });
   it('rejects eleven activities in the service before any RPC', async () => {
     const draft = item().draft;
     draft.chapters[0].activities = Array.from({ length: 11 }, () => newActivity('find-word'));
     await expect(saveManagedLesson(draft, 0)).rejects.toThrow('at most 10');
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+  it('shows readable field guidance when a blank activity blocks publishing', async () => {
+    const row = item();
+    const blankActivity = newActivity('choose-correct-translation');
+    row.draft.activities.push(blankActivity);
+    row.draft.chapters[0].activities.push(blankActivity);
+
+    await expect(publishManagedLesson(row, true)).rejects.toThrow(
+      `Complete the required fields before publishing. Activity ${row.draft.activities.length}: title, instructions, feedback title, feedback explanation, choice 1 text, choice 2 text.`,
+    );
     expect(client.rpc).not.toHaveBeenCalled();
   });
   it('publishes/unpublishes only through the guarded publication RPC', async () => {
@@ -517,14 +675,25 @@ describe('Basic Lesson Management editor and preview', () => {
 
     const chapter = document.querySelector<HTMLElement>('.admin-chapter-details')!;
     expect(chapter).not.toHaveAttribute('open');
+    expect(chapter.closest('.admin-chapter')?.querySelector(':scope > legend')).toBeNull();
+    expect(chapter.querySelector('summary')).toHaveTextContent(/Chapter 1:.*teaching.*activities/);
+    const dragHandle = within(chapter).getByRole('button', { name: 'Drag chapter 1 to reorder' });
+    expect(dragHandle).toHaveAttribute('title');
+    fireEvent.click(dragHandle);
+    expect(chapter).not.toHaveAttribute('open');
+    fireEvent.click(within(chapter).getByRole('button', { name: 'Delete chapter 1' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete chapter?' })).toBeVisible();
+    expect(chapter).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(within(chapter).getByText(/Chapter 1:/));
-    const teaching = document.querySelector<HTMLElement>('.admin-instruction')!;
+    const teaching = [...document.querySelectorAll<HTMLElement>('.admin-instruction')]
+      .find((element) => within(element).queryByLabelText('Teaching content title'))!;
     expect(teaching).not.toHaveAttribute('open');
     expect(within(teaching).getByLabelText('Teaching content title')).not.toBeVisible();
-    expect(within(teaching).getByRole('button', { name: 'Delete content 1' })).not.toBeVisible();
-    fireEvent.click(within(teaching).getByText(/Content 1/));
+    expect(within(teaching).getByRole('button', { name: /Delete content/ })).toBeVisible();
+    fireEvent.click(teaching.querySelector('summary')!);
     expect(within(teaching).getByLabelText('Teaching content title')).toBeVisible();
-    expect(within(teaching).getByRole('button', { name: 'Delete content 1' })).toBeVisible();
+    expect(within(teaching).getByRole('button', { name: /Delete content/ })).toBeVisible();
   });
   it('keeps activity editors and actions collapsed behind a type/title summary', async () => {
     const row = item();
@@ -538,11 +707,15 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(summary).toHaveTextContent(row.draft.activities[0].title);
     expect(activity).not.toHaveAttribute('open');
     expect(within(activity).getByLabelText('Activity title')).not.toBeVisible();
-    expect(within(activity).getByRole('button', { name: 'Delete activity 1' })).not.toBeVisible();
+    expect(within(activity).getByRole('button', { name: 'Delete activity 1' })).toHaveAttribute('title', 'Delete activity 1');
 
     fireEvent.click(summary);
     expect(within(activity).getByLabelText('Activity title')).toBeVisible();
     expect(within(activity).getByRole('button', { name: 'Delete activity 1' })).toBeVisible();
+    fireEvent.change(within(activity).getByLabelText('Activity title'), { target: { value: 'Draft edit' } });
+    fireEvent.click(activity.querySelector('summary')!);
+    fireEvent.click(activity.querySelector('summary')!);
+    expect(within(activity).getByLabelText('Activity title')).toHaveValue('Draft edit');
   });
   it.each([false, true])(
     'waits for server admin membership before rendering (allowed=%s)',

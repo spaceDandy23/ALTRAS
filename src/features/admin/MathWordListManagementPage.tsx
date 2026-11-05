@@ -27,7 +27,7 @@ export function MathWordListManagementPage() {
   return (
     <section className="admin-panel admin-reference-page">
       <header><span className="eyebrow">Administrator workspace</span><h1>Math Word List</h1><p>Edit the global reference shown in the student Almanac.</p></header>
-      <ReferenceRowsEditor rows={rows} onChange={setRows} />
+      <ReferenceRowsEditor rows={rows} onChange={setRows} searchable />
       <div className="admin-actions"><button type="button" disabled={saving} onClick={() => void save()}>Save Math Word List</button></div>
       {message && <p role="status">{message}</p>}
     </section>

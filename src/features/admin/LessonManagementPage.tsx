@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { FormField } from '@/components/ui/FormField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminContentLoading } from './AdminContentLoading';
@@ -7,6 +8,8 @@ import { InstructionalContentEditor } from './InstructionalContentEditor';
 import { LessonAssessmentQuestionsEditor } from './LessonAssessmentQuestionsEditor';
 import { LessonContentPreview } from './LessonContentPreview';
 import { ReferenceRowsEditor } from './ReferenceRowsEditor';
+import { ReorderableItem, reorderById } from './ReorderableItem';
+import { AdminIconButton } from './AdminIconButton';
 import {
   listManagedLessons,
   saveManagedLesson,
@@ -27,27 +30,9 @@ import type { InstructionalContentBlock } from '@/features/lessons/domain/conten
 import './lesson-management.css';
 
 type VocabularyBlock = Extract<InstructionalContentBlock, { type: 'vocabulary-table' }>;
-type AuthoredChapter = AuthoredLesson['chapters'][number];
-type ChapterTeachingBlock = Exclude<InstructionalContentBlock, { type: 'vocabulary-table' }>;
 
-function isChapterTeachingBlock(block: InstructionalContentBlock): block is ChapterTeachingBlock {
-  return block.type !== 'vocabulary-table';
-}
-
-function moveChapterTeachingContent(
-  blocks: AuthoredChapter['instructionalContent'],
-  index: number,
-  direction: -1 | 1,
-) {
-  const reordered = moveItem(
-    blocks.filter(isChapterTeachingBlock),
-    index,
-    direction,
-  );
-  let visibleIndex = 0;
-  return blocks.map((block) =>
-    block.type === 'vocabulary-table' ? block : reordered[visibleIndex++],
-  );
+function errorMessage(cause: unknown, fallback: string) {
+  return cause instanceof Error && cause.message.trim() ? cause.message : fallback;
 }
 
 export function LessonManagementPage() {
@@ -63,6 +48,7 @@ export function LessonManagementPage() {
   const [reload, setReload] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null);
+  const saveFeedbackRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
     void listManagedLessons()
@@ -73,9 +59,9 @@ export function LessonManagementPage() {
           setError('');
         }
       })
-      .catch((e: Error) => {
+      .catch((e: unknown) => {
         if (active) {
-          setError(e.message);
+          setError(errorMessage(e, 'Unable to load lessons.'));
           setLoaded(true);
         }
       });
@@ -83,6 +69,11 @@ export function LessonManagementPage() {
       active = false;
     };
   }, [reload]);
+  useEffect(() => {
+    if (!error || !draft || preview) return;
+    saveFeedbackRef.current?.scrollIntoView?.({ behavior: 'auto', block: 'center' });
+    saveFeedbackRef.current?.focus({ preventScroll: true });
+  }, [error, draft, preview]);
   const current = items.find((item) => item.lesson_id === draft?.id);
   const vocabularyTables = draft?.chapters.flatMap((chapter, chapterIndex) =>
     chapter.instructionalContent.flatMap((block) =>
@@ -96,6 +87,7 @@ export function LessonManagementPage() {
   const change = (next: AuthoredLesson) => {
     setDraft(normalizeAuthoredLesson(next));
     setDirty(true);
+    setError('');
     setNotice('');
   };
   const changeChapters = (chapters: AuthoredLesson['chapters']) => {
@@ -164,7 +156,7 @@ export function LessonManagementPage() {
             : 'Lesson unpublished. Existing attempts remain saved.',
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to save lesson.');
+      setError(errorMessage(e, 'Unable to save or publish lesson.'));
     } finally {
       setBusy(false);
     }
@@ -209,12 +201,12 @@ export function LessonManagementPage() {
         Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} lessons and 10
         activities per lesson.
       </p>
-      {error && (
+      {error && !draft && (
         <p className="form-alert" role="alert">
           {error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && !draft && <p role="status">{notice}</p>}
       {!draft ? (
         <>
           <div className="admin-actions">
@@ -320,7 +312,7 @@ export function LessonManagementPage() {
               }}
             >
               <fieldset disabled={busy} className="admin-editor">
-                <legend>{current ? 'Edit lesson' : 'Create lesson'}</legend>
+                <legend>Lesson details</legend>
                 <div className="admin-fields">
                   <FormField
                     label="Lesson title"
@@ -390,46 +382,13 @@ export function LessonManagementPage() {
                     </button>
                   </div>
                 </details>
-                <fieldset className="admin-options">
-                  <legend>Lesson assessments</legend>
-                  <div className="admin-checks">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={draft.assessments?.preTest === 'pre-test'}
-                        onChange={(event) =>
-                          change({
-                            ...draft,
-                            assessments: {
-                              ...draft.assessments,
-                              preTest: event.target.checked ? 'pre-test' : undefined,
-                            },
-                          })
-                        }
-                      />
-                      Require lesson pre-test
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={draft.assessments?.postTest === 'post-test'}
-                        onChange={(event) =>
-                          change({
-                            ...draft,
-                            assessments: {
-                              ...draft.assessments,
-                              postTest: event.target.checked ? 'post-test' : undefined,
-                            },
-                          })
-                        }
-                      />
-                      Require lesson post-test
-                    </label>
-                  </div>
-                </fieldset>
-                {draft.assessments?.preTest === 'pre-test' ? (
+                <h2>Assessments</h2>
                   <LessonAssessmentQuestionsEditor
                     assessment="pre-test"
+                    required={draft.assessments?.preTest === 'pre-test'}
+                    onRequiredChange={(required) => change({ ...draft, assessments: {
+                      ...draft.assessments, preTest: required ? 'pre-test' : undefined,
+                    } })}
                     questions={draft.assessmentQuestions['pre-test']}
                     onChange={(questions) =>
                       change({
@@ -438,12 +397,12 @@ export function LessonManagementPage() {
                       })
                     }
                   />
-                ) : (
-                  <p>Enable the lesson Pre-test to manage its questions.</p>
-                )}
-                {draft.assessments?.postTest === 'post-test' ? (
                   <LessonAssessmentQuestionsEditor
                     assessment="post-test"
+                    required={draft.assessments?.postTest === 'post-test'}
+                    onRequiredChange={(required) => change({ ...draft, assessments: {
+                      ...draft.assessments, postTest: required ? 'post-test' : undefined,
+                    } })}
                     questions={draft.assessmentQuestions['post-test']}
                     onChange={(questions) =>
                       change({
@@ -452,9 +411,6 @@ export function LessonManagementPage() {
                       })
                     }
                   />
-                ) : (
-                  <p>Enable the lesson Post-test to manage its questions.</p>
-                )}
                 <div className="admin-section-heading">
                   <div>
                     <h2>Chapters ({draft.chapters.length})</h2>
@@ -470,32 +426,28 @@ export function LessonManagementPage() {
                   </button>
                 </div>
                 {draft.chapters.map((chapter, chapterIndex) => (
-                  <fieldset key={chapter.id} className="admin-chapter">
-                    <legend>Chapter {chapterIndex + 1}</legend>
+                  <ReorderableItem key={chapter.id} group={`lesson-${draft.id}-chapters`} id={chapter.id}
+                    label={`chapter ${chapterIndex + 1}`}
+                    onReorder={(source, target, side) => changeChapters(reorderById(draft.chapters, source, target, side, (item) => item.id))}>
+                  {(chapterHandle) => <div className="admin-chapter">
                     <details className="admin-chapter-details">
                       <summary>
-                        Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'} ·{' '}
-                        {chapter.instructionalContent.filter(isChapterTeachingBlock).length} teaching items · {chapter.activities.length} activities
+                        {chapterHandle}
+                        <span className="admin-summary-title">Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'}</span>
+                        <span className="admin-summary-meta">{chapter.instructionalContent.length} teaching · {chapter.activities.length} {chapter.activities.length === 1 ? 'activity' : 'activities'}</span>
+                        <AdminIconButton inSummary icon="delete" label={`Delete chapter ${chapterIndex + 1}`} onClick={() => setDeletingChapterId(chapter.id)} />
+                        <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
                       </summary>
                       <div className="admin-chapter-content">
                     <div className="admin-actions lesson-actions">
-                      <button
-                        type="button"
+                      <AdminIconButton icon="up" label={`Move chapter ${chapterIndex + 1} up`}
                         disabled={chapterIndex === 0}
                         onClick={() => changeChapters(moveItem(draft.chapters, chapterIndex, -1))}
-                      >
-                        Move chapter {chapterIndex + 1} up
-                      </button>
-                      <button
-                        type="button"
+                      />
+                      <AdminIconButton icon="down" label={`Move chapter ${chapterIndex + 1} down`}
                         disabled={chapterIndex === draft.chapters.length - 1}
                         onClick={() => changeChapters(moveItem(draft.chapters, chapterIndex, 1))}
-                      >
-                        Move chapter {chapterIndex + 1} down
-                      </button>
-                      <button type="button" onClick={() => setDeletingChapterId(chapter.id)}>
-                        Delete chapter {chapterIndex + 1}
-                      </button>
+                      />
                     </div>
                     <div className="admin-fields">
                       <FormField
@@ -527,18 +479,25 @@ export function LessonManagementPage() {
                       />
                     </div>
                     <h3>Teaching and discussion content</h3>
-                    {chapter.instructionalContent
-                      .filter(isChapterTeachingBlock)
-                      .map((block, contentIndex) => (
-                      <details key={block.id} className="admin-instruction">
+                    {chapter.instructionalContent.map((block, contentIndex) => (
+                      <ReorderableItem key={block.id} group={`chapter-${chapter.id}-content`} id={block.id}
+                        label={`teaching content ${contentIndex + 1}`}
+                        onReorder={(source, target, side) => changeChapters(draft.chapters.map((item) =>
+                          item.id === chapter.id ? { ...item, instructionalContent: reorderById(item.instructionalContent, source, target, side, (entry) => entry.id) } : item,
+                        ))}>
+                      {(contentHandle) => <details className="admin-instruction">
                         <summary>
-                          Content {contentIndex + 1} · {block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
-                          {block.type === 'example' ? block.phrase : block.title || 'Untitled content'}
+                          {contentHandle}
+                          <span className="admin-summary-title">Content {contentIndex + 1} · {block.type === 'vocabulary-table' ? 'Vocabulary reference' : block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
+                          {block.type === 'example' ? block.phrase : block.title || 'Untitled content'}</span>
+                          {block.type !== 'vocabulary-table' && <AdminIconButton inSummary icon="delete" label={`Delete content ${contentIndex + 1}`}
+                            onClick={() => changeChapters(draft.chapters.map((item) => item.id === chapter.id
+                              ? { ...item, instructionalContent: item.instructionalContent.filter((entry) => entry.id !== block.id) } : item))} />}
+                          <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
                         </summary>
                         <div className="admin-instruction-content">
                         <div className="admin-actions lesson-actions">
-                          <button
-                            type="button"
+                          <AdminIconButton icon="up" label={`Move content ${contentIndex + 1} up`}
                             disabled={contentIndex === 0}
                             onClick={() =>
                               changeChapters(
@@ -546,7 +505,7 @@ export function LessonManagementPage() {
                                   item.id === chapter.id
                                     ? {
                                         ...item,
-                                        instructionalContent: moveChapterTeachingContent(
+                                        instructionalContent: moveItem(
                                           item.instructionalContent,
                                           contentIndex,
                                           -1,
@@ -556,19 +515,16 @@ export function LessonManagementPage() {
                                 ),
                               )
                             }
-                          >
-                            Move content {contentIndex + 1} up
-                          </button>
-                          <button
-                            type="button"
-                            disabled={contentIndex === chapter.instructionalContent.filter(isChapterTeachingBlock).length - 1}
+                          />
+                          <AdminIconButton icon="down" label={`Move content ${contentIndex + 1} down`}
+                            disabled={contentIndex === chapter.instructionalContent.length - 1}
                             onClick={() =>
                               changeChapters(
                                 draft.chapters.map((item) =>
                                   item.id === chapter.id
                                     ? {
                                         ...item,
-                                        instructionalContent: moveChapterTeachingContent(
+                                        instructionalContent: moveItem(
                                           item.instructionalContent,
                                           contentIndex,
                                           1,
@@ -578,30 +534,9 @@ export function LessonManagementPage() {
                                 ),
                               )
                             }
-                          >
-                            Move content {contentIndex + 1} down
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              changeChapters(
-                                draft.chapters.map((item) =>
-                                  item.id === chapter.id
-                                    ? {
-                                        ...item,
-                                        instructionalContent: item.instructionalContent.filter(
-                                          (entry) => entry.id !== block.id,
-                                        ),
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          >
-                            Delete content {contentIndex + 1}
-                          </button>
+                          />
                         </div>
-                        <InstructionalContentEditor
+                        {block.type === 'vocabulary-table' ? <p>Edit this reference in the Vocabulary section above.</p> : <InstructionalContentEditor
                           block={block}
                           onChange={(next) =>
                             changeChapters(
@@ -617,12 +552,15 @@ export function LessonManagementPage() {
                               ),
                             )
                           }
-                        />
+                        />}
                         </div>
-                      </details>
+                      </details>}
+                      </ReorderableItem>
                     ))}
                     <button
                       type="button"
+                      className="admin-add-action"
+                      aria-label={`Add teaching content to ${chapter.title}`}
                       onClick={() =>
                         changeChapters(
                           draft.chapters.map((item) =>
@@ -639,13 +577,19 @@ export function LessonManagementPage() {
                         )
                       }
                     >
-                      Add teaching content to {chapter.title}
+                      + Add teaching content
                     </button>
                     <h3>Activities ({chapter.activities.length})</h3>
                     {chapter.activities.map((activity, activityIndex) => (
-                      <details key={activity.id} className="admin-activity">
+                      <ReorderableItem key={activity.id} group={`chapter-${chapter.id}-activities`} id={activity.id}
+                        label={`activity ${activityIndex + 1}`}
+                        onReorder={(source, target, side) => changeChapters(draft.chapters.map((item) =>
+                          item.id === chapter.id ? { ...item, activities: reorderById(item.activities, source, target, side, (entry) => entry.id) } : item,
+                        ))}>
+                      {(activityHandle) => <details className="admin-activity">
                         <summary>
-                          Activity {activityIndex + 1} ·{' '}
+                          {activityHandle}
+                          <span className="admin-summary-title">Activity {activityIndex + 1} ·{' '}
                           {activity.type === 'find-word'
                             ? 'Find the word'
                             : activity.type === 'organize-translate'
@@ -653,12 +597,15 @@ export function LessonManagementPage() {
                               : 'Choose the correct translation'} ·{' '}
                           <span className="admin-activity-summary__preview">
                             {activity.title || activity.prompt || 'Untitled activity'}
-                          </span>
+                          </span></span>
+                          <AdminIconButton inSummary icon="delete" label={`Delete activity ${activityIndex + 1}`}
+                            onClick={() => changeChapters(draft.chapters.map((item) => item.id === chapter.id
+                              ? { ...item, activities: item.activities.filter((entry) => entry.id !== activity.id) } : item))} />
+                          <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
                         </summary>
                         <div className="admin-activity-content">
                         <div className="admin-actions lesson-actions">
-                          <button
-                            type="button"
+                          <AdminIconButton icon="up" label={`Move activity ${activityIndex + 1} up`}
                             disabled={activityIndex === 0}
                             onClick={() =>
                               changeChapters(
@@ -672,11 +619,8 @@ export function LessonManagementPage() {
                                 ),
                               )
                             }
-                          >
-                            Move activity {activityIndex + 1} up
-                          </button>
-                          <button
-                            type="button"
+                          />
+                          <AdminIconButton icon="down" label={`Move activity ${activityIndex + 1} down`}
                             disabled={activityIndex === chapter.activities.length - 1}
                             onClick={() =>
                               changeChapters(
@@ -690,28 +634,7 @@ export function LessonManagementPage() {
                                 ),
                               )
                             }
-                          >
-                            Move activity {activityIndex + 1} down
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              changeChapters(
-                                draft.chapters.map((item) =>
-                                  item.id === chapter.id
-                                    ? {
-                                        ...item,
-                                        activities: item.activities.filter(
-                                          (entry) => entry.id !== activity.id,
-                                        ),
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          >
-                            Delete activity {activityIndex + 1}
-                          </button>
+                          />
                           {draft.chapters.length > 1 && (
                             <label>
                               Activity chapter
@@ -762,10 +685,13 @@ export function LessonManagementPage() {
                           }
                         />
                         </div>
-                      </details>
+                      </details>}
+                      </ReorderableItem>
                     ))}
                     <button
                       type="button"
+                      className="admin-add-action"
+                      aria-label={`Add activity to ${chapter.title}`}
                       disabled={totalLessonActivities(draft) >= MAX_ACTIVITIES}
                       onClick={() =>
                         changeChapters(
@@ -780,11 +706,12 @@ export function LessonManagementPage() {
                         )
                       }
                     >
-                      Add activity to {chapter.title}
+                      + Add activity
                     </button>
                       </div>
                     </details>
-                  </fieldset>
+                  </div>}
+                  </ReorderableItem>
                 ))}
                 <div className="admin-actions">
                   {totalLessonActivities(draft) >= MAX_ACTIVITIES && (
@@ -792,6 +719,16 @@ export function LessonManagementPage() {
                   )}
                 </div>
                 <div className="admin-actions">
+                  {(error || notice) && (
+                    <div
+                      ref={saveFeedbackRef}
+                      className="admin-save-feedback"
+                      tabIndex={error ? -1 : undefined}
+                    >
+                      {error && <p className="form-alert" role="alert">{error}</p>}
+                      {notice && <p role="status">{notice}</p>}
+                    </div>
+                  )}
                   <div className="lesson-actions">
                     <button className="button" type="submit">
                       {busy ? 'Saving…' : 'Save draft'}
