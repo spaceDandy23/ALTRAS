@@ -29,6 +29,7 @@ import { AdminRoute } from '@/features/admin/AdminRoute';
 import { AdminLayout } from '@/features/admin/AdminLayout';
 import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
 import { UserManagementPage } from '@/features/admin/UserManagementPage';
+import { MathWordListManagementPage } from '@/features/admin/MathWordListManagementPage';
 import { NotFoundPage } from './NotFoundPage';
 import {
   GuestOnlyRoute,
@@ -67,6 +68,7 @@ export function App() {
             <Route index element={<Navigate to="/admin/users" replace />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="lessons" element={<LessonManagementPage />} />
+            <Route path="math-word-list" element={<MathWordListManagementPage />} />
             <Route path="assessments" element={<Navigate to="/admin/lessons" replace />} />
           </Route>
           <Route

@@ -408,7 +408,11 @@ export function ActiveLessonPage() {
             <p className="assessment-kicker">Chapter {chapterIndex + 1}</p>
             <h1 id="chapter-teaching-title">{currentChapter.title}</h1>
             {currentChapter.description && <p>{currentChapter.description}</p>}
-            <TeachingContentRenderer blocks={currentChapter.instructionalContent} />
+            <TeachingContentRenderer
+              blocks={currentChapter.instructionalContent.filter(
+                (block) => block.type !== 'vocabulary-table',
+              )}
+            />
             <div className="chapter-teaching__actions">
               <Button
                 onPointerDown={playNeutralClickOnPointerDown}

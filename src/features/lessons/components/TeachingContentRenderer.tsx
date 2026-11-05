@@ -1,4 +1,5 @@
 import type { InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
+import { VocabularyTable } from './VocabularyTable';
 
 export function TeachingContentRenderer({ blocks }: { blocks: InstructionalContentBlock[] }) {
   return (
@@ -9,7 +10,11 @@ export function TeachingContentRenderer({ blocks }: { blocks: InstructionalConte
           className={`chapter-teaching__block chapter-teaching__block--${block.type}`}
         >
           <h2>{block.type === 'example' ? block.phrase : block.title}</h2>
-          <p>{block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}</p>
+          {block.type === 'vocabulary-table' ? (
+            <VocabularyTable title={block.title} rows={block.rows} />
+          ) : (
+            <p>{block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}</p>
+          )}
         </article>
       ))}
     </div>

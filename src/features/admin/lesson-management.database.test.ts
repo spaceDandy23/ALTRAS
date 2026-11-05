@@ -26,6 +26,7 @@ const offlineAssessmentMigration = '202610310001_offline_assessment_start.sql';
 const lessonScopedAssessmentMigration = '202611040001_lesson_scoped_assessments.sql';
 const completedActiveTimeMigration = '202611040002_reconcile_completed_attempt_active_time.sql';
 const chooseTranslationMigration = '202611040003_choose_correct_translation_activity.sql';
+const vocabularyMigration = '202611040004_vocabulary_word_list_star_thresholds.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -143,6 +144,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonScopedAssessmentMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', completedActiveTimeMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', chooseTranslationMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', vocabularyMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -508,7 +510,17 @@ describe('Basic Lesson Management SQL and RLS', () => {
       packagedContent.lessons.map((lesson) => lesson.id),
     );
     expect(rows.every((row) => row.draft.chapters.length === 1)).toBe(true);
-    expect(rows.map((row) => row.published_version)).toEqual([1, 2]);
+    expect(rows.map((row) => row.published_version)).toEqual([2, 2]);
+    expect(rows[0].draft.chapters[0].instructionalContent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'vocabulary-table',
+          rows: expect.arrayContaining([
+            expect.objectContaining({ term: 'Quantity', definition: '', example: '' }),
+          ]),
+        }),
+      ]),
+    );
     await asUser(studentId);
     const catalog = await rpc<unknown[]>('get_lesson_catalog');
     for (const lesson of catalog) expect(publicLessonSchema.safeParse(lesson).success).toBe(true);

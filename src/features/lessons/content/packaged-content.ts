@@ -38,6 +38,20 @@ const content: PackagedContent = {
       contentVersion: 1,
       instructionalContent: [
         {
+          id: 'lesson-one-vocabulary',
+          type: 'vocabulary-table',
+          title: 'Vocabulary',
+          rows: [
+            { id: 'constant', term: 'Constant', definition: 'A single fixed number', example: '(-38, -20, -7, 0, 7, 20, 38)' },
+            { id: 'variable', term: 'Variable', definition: 'A symbol (usually a letter) representing an unknown value', example: 'x, n, p' },
+            { id: 'coefficient', term: 'Coefficient', definition: 'A number multiplied by a variable', example: '7 is the coefficient in 7x\n1 is the coefficient in y' },
+            { id: 'term', term: 'Term', definition: 'A single number, a single variable, or a product of numbers and variables. Terms are separated by addition (+) or subtraction (-) signs.', example: '7x, y, and 4 are the terms in (7x + y - 4)' },
+            { id: 'base-exponent', term: 'Base and Exponent', definition: 'Base represents the number that is multiplied by itself\nExponent represents how many times the base number is multiplied', example: 'In x³, x is the base and 3 is the exponent' },
+            { id: 'quantity', term: 'Quantity', definition: '', example: '' },
+            { id: 'consecutive-numbers', term: 'Consecutive numbers', definition: 'Numbers that follow each other in a regular counting order or pattern. They are written in a series where the difference between the numbers is fixed and where no numbers are skipped in between.', example: '(1, 2, 3) are consecutive numbers\n(4, 6, 8) are consecutive even numbers\n(9, 11, 13) are consecutive odd numbers' },
+          ],
+        },
+        {
           id: 'intro-operation-signals',
           type: 'paragraph',
           title: 'Words can signal an operation',

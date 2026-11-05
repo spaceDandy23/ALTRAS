@@ -135,6 +135,13 @@ export function newInstructionalBlock(
 ): InstructionalContentBlock {
   const id = `content-${crypto.randomUUID()}`;
   if (type === 'example') return { id, type, phrase: '', expression: '', note: '' };
+  if (type === 'vocabulary-table')
+    return {
+      id,
+      type,
+      title: 'Vocabulary',
+      rows: [{ id: `reference-${crypto.randomUUID()}`, term: '', definition: '', example: '' }],
+    };
   return { id, type, title: '', body: '' };
 }
 

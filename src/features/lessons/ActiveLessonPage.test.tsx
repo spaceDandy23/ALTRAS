@@ -225,7 +225,7 @@ describe('active lesson loading failures', () => {
           title: 'Foundations',
           description: 'Read this before practicing.',
           displayOrder: 1,
-          instructionalContent: [base.instructionalContent[0]],
+          instructionalContent: base.instructionalContent.slice(0, 2),
           activities: base.activities.slice(0, 2),
         },
         {
@@ -290,6 +290,8 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Foundations' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Words can signal an operation' })).toBeVisible();
+    expect(screen.queryByRole('table', { name: 'Vocabulary' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: lesson.activities[0].title }),
     ).not.toBeInTheDocument();

@@ -265,6 +265,54 @@ describe('lesson overview transitions', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toMatch(/^\/assets\/characters\//);
   });
 
+  it('renders CMS vocabulary in the overview reference style instead of Operation words', async () => {
+    const lesson = packagedContent.lessons[0];
+    const userId = '20000000-0000-4000-8000-000000000009';
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getLessonProgress).mockResolvedValue({
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'available',
+      bestScore: 0,
+      bestStarCount: 0,
+      attemptCount: 0,
+      xpAwarded: 0,
+      firstStartedAt: null,
+      lastAttemptedAt: null,
+      clearedAt: null,
+    });
+    vi.mocked(getActiveAttempt).mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'teaching_content',
+        displayName: 'Teaching Content',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Vocabulary' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Constant' })).toBeVisible();
+    expect(screen.getByText('A single fixed number')).toBeVisible();
+    expect(screen.getByText('(-38, -20, -7, 0, 7, 20, 38)')).toHaveClass(
+      'lesson-vocabulary__example',
+    );
+    expect(screen.queryByRole('heading', { name: 'Operation words' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Vocabulary' })).not.toBeInTheDocument();
+  });
+
   it('renders an error after rejection and retries without remaining on the loader', async () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000004';

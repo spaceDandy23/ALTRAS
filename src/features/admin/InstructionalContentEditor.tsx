@@ -1,14 +1,16 @@
 import { FormField } from '@/components/ui/FormField';
 import type { InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
 
+type EditableInstructionalContent = Exclude<InstructionalContentBlock, { type: 'vocabulary-table' }>;
+
 export function InstructionalContentEditor({
   block,
   onChange,
 }: {
-  block: InstructionalContentBlock;
-  onChange: (block: InstructionalContentBlock) => void;
+  block: EditableInstructionalContent;
+  onChange: (block: EditableInstructionalContent) => void;
 }) {
-  const changeType = (type: InstructionalContentBlock['type']) => {
+  const changeType = (type: Exclude<InstructionalContentBlock['type'], 'vocabulary-table'>) => {
     if (type === 'example') {
       onChange({ id: block.id, type, phrase: '', expression: '', note: '' });
     } else {
@@ -22,7 +24,9 @@ export function InstructionalContentEditor({
         Content type
         <select
           value={block.type}
-          onChange={(event) => changeType(event.target.value as InstructionalContentBlock['type'])}
+          onChange={(event) =>
+            changeType(event.target.value as Exclude<InstructionalContentBlock['type'], 'vocabulary-table'>)
+          }
         >
           <option value="paragraph">Explanation</option>
           <option value="example">Example</option>

@@ -6,6 +6,7 @@ import { ActivityEditor } from './ActivityEditor';
 import { InstructionalContentEditor } from './InstructionalContentEditor';
 import { LessonAssessmentQuestionsEditor } from './LessonAssessmentQuestionsEditor';
 import { LessonContentPreview } from './LessonContentPreview';
+import { ReferenceRowsEditor } from './ReferenceRowsEditor';
 import {
   listManagedLessons,
   saveManagedLesson,
@@ -22,7 +23,32 @@ import {
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
+import type { InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
 import './lesson-management.css';
+
+type VocabularyBlock = Extract<InstructionalContentBlock, { type: 'vocabulary-table' }>;
+type AuthoredChapter = AuthoredLesson['chapters'][number];
+type ChapterTeachingBlock = Exclude<InstructionalContentBlock, { type: 'vocabulary-table' }>;
+
+function isChapterTeachingBlock(block: InstructionalContentBlock): block is ChapterTeachingBlock {
+  return block.type !== 'vocabulary-table';
+}
+
+function moveChapterTeachingContent(
+  blocks: AuthoredChapter['instructionalContent'],
+  index: number,
+  direction: -1 | 1,
+) {
+  const reordered = moveItem(
+    blocks.filter(isChapterTeachingBlock),
+    index,
+    direction,
+  );
+  let visibleIndex = 0;
+  return blocks.map((block) =>
+    block.type === 'vocabulary-table' ? block : reordered[visibleIndex++],
+  );
+}
 
 export function LessonManagementPage() {
   const [items, setItems] = useState<ManagedLesson[]>([]);
@@ -58,6 +84,15 @@ export function LessonManagementPage() {
     };
   }, [reload]);
   const current = items.find((item) => item.lesson_id === draft?.id);
+  const vocabularyTables = draft?.chapters.flatMap((chapter, chapterIndex) =>
+    chapter.instructionalContent.flatMap((block) =>
+      block.type === 'vocabulary-table' ? [{ chapterId: chapter.id, chapterIndex, block }] : [],
+    ),
+  ) ?? [];
+  const vocabularyEntryCount = vocabularyTables.reduce(
+    (count, entry) => count + entry.block.rows.length,
+    0,
+  );
   const change = (next: AuthoredLesson) => {
     setDraft(normalizeAuthoredLesson(next));
     setDirty(true);
@@ -70,6 +105,37 @@ export function LessonManagementPage() {
         chapters: chapters.map((chapter, index) => ({ ...chapter, displayOrder: index + 1 })),
       });
     }
+  };
+  const updateVocabularyRows = (chapterId: string, blockId: string, rows: VocabularyBlock['rows']) => {
+    if (!draft) return;
+    changeChapters(
+      draft.chapters.map((chapter) =>
+        chapter.id === chapterId
+          ? {
+              ...chapter,
+              instructionalContent: chapter.instructionalContent.map((block) =>
+                block.id === blockId && block.type === 'vocabulary-table' ? { ...block, rows } : block,
+              ),
+            }
+          : chapter,
+      ),
+    );
+  };
+  const addVocabularyTable = () => {
+    if (!draft?.chapters.length) return;
+    changeChapters(
+      draft.chapters.map((chapter, index) =>
+        index === 0
+          ? {
+              ...chapter,
+              instructionalContent: [
+                ...chapter.instructionalContent,
+                newInstructionalBlock('vocabulary-table'),
+              ],
+            }
+          : chapter,
+      ),
+    );
   };
   const accept = (item: ManagedLesson) => {
     setItems((rows) =>
@@ -304,6 +370,26 @@ export function LessonManagementPage() {
                     </select>
                   </label>
                 </div>
+                <details className="admin-vocabulary-details">
+                  <summary>
+                    Vocabulary ({vocabularyTables.length ? `${vocabularyEntryCount} terms` : 'not added'})
+                  </summary>
+                  <div className="admin-vocabulary-content">
+                    {vocabularyTables.map(({ chapterId, chapterIndex, block }) => (
+                      <section className="admin-vocabulary-table" key={block.id}>
+                        {vocabularyTables.length > 1 && <h3>Chapter {chapterIndex + 1}</h3>}
+                        <ReferenceRowsEditor
+                          rows={block.rows}
+                          onChange={(rows) => updateVocabularyRows(chapterId, block.id, rows)}
+                        />
+                      </section>
+                    ))}
+                    {vocabularyTables.length === 0 && <p>Add the lesson vocabulary reference here.</p>}
+                    <button type="button" onClick={addVocabularyTable} disabled={!draft.chapters.length}>
+                      {vocabularyTables.length ? 'Add vocabulary table' : 'Add vocabulary'}
+                    </button>
+                  </div>
+                </details>
                 <fieldset className="admin-options">
                   <legend>Lesson assessments</legend>
                   <div className="admin-checks">
@@ -389,7 +475,7 @@ export function LessonManagementPage() {
                     <details className="admin-chapter-details">
                       <summary>
                         Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'} ·{' '}
-                        {chapter.instructionalContent.length} teaching items · {chapter.activities.length} activities
+                        {chapter.instructionalContent.filter(isChapterTeachingBlock).length} teaching items · {chapter.activities.length} activities
                       </summary>
                       <div className="admin-chapter-content">
                     <div className="admin-actions lesson-actions">
@@ -441,7 +527,9 @@ export function LessonManagementPage() {
                       />
                     </div>
                     <h3>Teaching and discussion content</h3>
-                    {chapter.instructionalContent.map((block, contentIndex) => (
+                    {chapter.instructionalContent
+                      .filter(isChapterTeachingBlock)
+                      .map((block, contentIndex) => (
                       <details key={block.id} className="admin-instruction">
                         <summary>
                           Content {contentIndex + 1} · {block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
@@ -458,7 +546,7 @@ export function LessonManagementPage() {
                                   item.id === chapter.id
                                     ? {
                                         ...item,
-                                        instructionalContent: moveItem(
+                                        instructionalContent: moveChapterTeachingContent(
                                           item.instructionalContent,
                                           contentIndex,
                                           -1,
@@ -473,14 +561,14 @@ export function LessonManagementPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={contentIndex === chapter.instructionalContent.length - 1}
+                            disabled={contentIndex === chapter.instructionalContent.filter(isChapterTeachingBlock).length - 1}
                             onClick={() =>
                               changeChapters(
                                 draft.chapters.map((item) =>
                                   item.id === chapter.id
                                     ? {
                                         ...item,
-                                        instructionalContent: moveItem(
+                                        instructionalContent: moveChapterTeachingContent(
                                           item.instructionalContent,
                                           contentIndex,
                                           1,

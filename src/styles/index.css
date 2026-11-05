@@ -2264,6 +2264,67 @@ a .lesson-node:hover {
   gap: 0.75rem 2rem;
 }
 
+.lesson-vocabulary {
+  margin-top: 0.8rem;
+  border-block: 1px solid var(--line);
+  padding: 1rem 1.25rem;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.lesson-vocabulary > h2 {
+  margin-bottom: 0.5rem;
+}
+
+.lesson-vocabulary__rows {
+  display: grid;
+}
+
+.lesson-vocabulary__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.75fr) minmax(0, 1.6fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.65rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+
+.lesson-vocabulary__row:last-child {
+  border-bottom: 0;
+}
+
+.lesson-vocabulary__row h3,
+.lesson-vocabulary__row p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.lesson-vocabulary__row h3 {
+  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-size: 1rem;
+}
+
+.lesson-vocabulary__row p {
+  color: var(--muted);
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.lesson-vocabulary__row .lesson-vocabulary__example {
+  color: var(--yellow);
+}
+
+@media (max-width: 760px) {
+  .lesson-vocabulary {
+    padding-inline: 0.75rem;
+  }
+
+  .lesson-vocabulary__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+}
+
 .lesson-reference > h2,
 .lesson-reference__intro {
   grid-column: 1;
@@ -3218,6 +3279,66 @@ a.almanac-option:hover {
 
 .word-list-empty p {
   color: var(--muted);
+}
+
+.vocabulary-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.vocabulary-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel-bg);
+}
+.vocabulary-table th,
+.vocabulary-table td {
+  border: 1px solid var(--line);
+  padding: 0.8rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-line;
+}
+.vocabulary-table thead th {
+  color: var(--paper);
+  background: var(--control-bg);
+}
+
+@media (max-width: 600px) {
+  .vocabulary-table,
+  .vocabulary-table tbody,
+  .vocabulary-table tr,
+  .vocabulary-table th,
+  .vocabulary-table td {
+    display: block;
+    width: 100%;
+  }
+  .vocabulary-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .vocabulary-table tr {
+    margin-bottom: 0.85rem;
+    border: 1px solid var(--line);
+  }
+  .vocabulary-table th,
+  .vocabulary-table td {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .vocabulary-table th::before,
+  .vocabulary-table td::before {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.75em;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
 }
 
 /* Researcher results */

@@ -15,10 +15,10 @@ describe('lesson scoring and XP policy', () => {
   });
 
   it.each([
-    [69, 0],
-    [70, 1],
-    [84, 1],
-    [85, 2],
+    [49, 0],
+    [50, 1],
+    [75, 1],
+    [76, 2],
     [99, 2],
     [100, 3],
   ])('maps score %i to %i stars', (score, stars) => {

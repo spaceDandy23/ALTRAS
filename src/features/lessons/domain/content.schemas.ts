@@ -106,6 +106,13 @@ export const activitySchema = z.discriminatedUnion('type', [
   chooseCorrectTranslationActivitySchema,
 ]);
 
+export const referenceEntrySchema = z.object({
+  id: z.string().min(1),
+  term: z.string().min(1),
+  definition: z.string(),
+  example: z.string(),
+});
+
 export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
   z.object({
     id: z.string().min(1),
@@ -125,6 +132,12 @@ export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
     type: z.literal('warning'),
     title: z.string().min(1),
     body: z.string().min(1),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('vocabulary-table'),
+    title: z.string().min(1),
+    rows: z.array(referenceEntrySchema).min(1),
   }),
 ]);
 
@@ -244,6 +257,7 @@ export const packagedContentSchema = z
 
 export type ActivityChoice = z.infer<typeof activityChoiceSchema>;
 export type ActivityToken = z.infer<typeof activityTokenSchema>;
+export type ReferenceEntry = z.infer<typeof referenceEntrySchema>;
 // Public player content omits private keys; post-answer feedback may reveal one choice.
 export const publicActivitySchema = z.discriminatedUnion('type', [
   z.object({ ...findWordActivitySchema.shape, correctChoiceId: z.string().optional() }),

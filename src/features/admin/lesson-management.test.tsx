@@ -307,6 +307,46 @@ describe('Basic Lesson Management editor and preview', () => {
       ),
     );
   });
+  it('authors and saves Vocabulary from its collapsed lesson-level section', async () => {
+    const row = item();
+    row.draft.chapters[0].instructionalContent = [];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(
+      async (name: string, args?: { p_lesson: ManagedLesson['draft'] }) => ({
+        error: null,
+        data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+      }),
+    );
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    const vocabularySection = screen.getByText('Vocabulary (not added)');
+    expect(screen.queryByLabelText('Term 1')).not.toBeInTheDocument();
+    fireEvent.click(vocabularySection);
+    fireEvent.click(screen.getByRole('button', { name: 'Add vocabulary' }));
+    fireEvent.change(screen.getByLabelText('Term 1'), { target: { value: 'Variable' } });
+    fireEvent.change(screen.getByLabelText('Definition 1'), { target: { value: 'An unknown value' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add row' }));
+    fireEvent.change(screen.getByLabelText('Term 2'), { target: { value: 'Constant' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move row 2 up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove row 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() =>
+      expect(client.rpc).toHaveBeenCalledWith(
+        'save_admin_lesson',
+        expect.objectContaining({
+          p_lesson: expect.objectContaining({
+            chapters: [expect.objectContaining({
+              instructionalContent: [expect.objectContaining({
+                type: 'vocabulary-table',
+                rows: [expect.objectContaining({ term: 'Constant' })],
+              })],
+            })],
+          }),
+        }),
+      ),
+    );
+  });
   it('authors lesson-scoped Pre-test and Post-test questions in the lesson draft', async () => {
     const row = item();
     client.rpc.mockImplementation(
@@ -447,12 +487,18 @@ describe('Basic Lesson Management editor and preview', () => {
   it('previews real renderers with no remote calls or local learning writes', async () => {
     const before = await Promise.all(db.tables.map((t) => t.count()));
     const user = userEvent.setup();
-    render(<LessonContentPreview lesson={item().draft} />);
+    const lesson = item().draft;
+    render(<LessonContentPreview lesson={lesson} />);
+    expect(screen.queryByRole('table', { name: 'Vocabulary' })).not.toBeInTheDocument();
     expect(document.querySelectorAll('.chapter-teaching__block')).toHaveLength(
-      item().draft.chapters.reduce((count, chapter) => count + chapter.instructionalContent.length, 0),
+      lesson.chapters.reduce(
+        (count, chapter) =>
+          count + chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table').length,
+        0,
+      ),
     );
     const activity = screen
-      .getByRole('heading', { name: item().draft.activities[0].title })
+      .getByRole('heading', { name: lesson.activities[0].title })
       .closest('.activity-card')! as HTMLElement;
     await user.click(within(activity).getByRole('radio', { name: 'sum' }));
     await user.click(within(activity).getByRole('button', { name: 'Submit answer' }));

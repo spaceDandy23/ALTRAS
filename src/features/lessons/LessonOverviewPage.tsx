@@ -25,6 +25,30 @@ import {
   playNeutralClickOnPointerDown,
 } from '@/services/audio/click.handlers';
 
+function LessonVocabularyReference({ lesson }: { lesson: LearningLesson }) {
+  const rows = lesson.instructionalContent.flatMap((block) =>
+    block.type === 'vocabulary-table'
+      ? block.rows.map((row) => ({ ...row, id: `${block.id}:${row.id}` }))
+      : [],
+  );
+  if (rows.length === 0) return null;
+
+  return (
+    <section className="lesson-vocabulary" aria-labelledby="lesson-vocabulary-heading">
+      <h2 id="lesson-vocabulary-heading">Vocabulary</h2>
+      <div className="lesson-vocabulary__rows">
+        {rows.map((row) => (
+          <article className="lesson-vocabulary__row" key={row.id}>
+            <h3>{row.term}</h3>
+            {row.definition && <p>{row.definition}</p>}
+            {row.example && <p className="lesson-vocabulary__example">{row.example}</p>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function LessonOverviewPage() {
   const { lessonId = '' } = useParams();
   const user = useAuthStore((state) => state.user);
@@ -247,41 +271,7 @@ export function LessonOverviewPage() {
               </div>
             </section>
             {progress?.status !== 'locked' && (
-              <section className="lesson-reference" aria-labelledby="operation-words-heading">
-                <h2 id="operation-words-heading">Operation words</h2>
-                {lesson.instructionalContent
-                  .filter((block) => block.type === 'paragraph')
-                  .map((block) => (
-                    <p className="lesson-reference__intro" key={block.id}>
-                      {block.body}
-                    </p>
-                  ))}
-                <div className="operation-examples">
-                  {lesson.instructionalContent
-                    .filter((block) => block.type === 'example')
-                    .map((block) =>
-                      block.type === 'example' ? (
-                        <article className="operation-example" key={block.id}>
-                          <div>
-                            <span>{block.phrase}</span>
-                            <strong>{block.expression}</strong>
-                          </div>
-                          <p>{block.note}</p>
-                        </article>
-                      ) : null,
-                    )}
-                </div>
-                {lesson.instructionalContent
-                  .filter((block) => block.type === 'warning')
-                  .map((block) =>
-                    block.type === 'warning' ? (
-                      <aside className="order-warning" key={block.id}>
-                        <h3>Order matters</h3>
-                        <p>{block.body}</p>
-                      </aside>
-                    ) : null,
-                  )}
-              </section>
+              <LessonVocabularyReference lesson={lesson} />
             )}
           </>
           <ConfirmDialog

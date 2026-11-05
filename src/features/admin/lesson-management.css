@@ -137,7 +137,8 @@
 .admin-chapter,
 .admin-instruction,
 .admin-activity,
-.admin-options {
+.admin-options,
+.admin-vocabulary-details {
   min-width: 0;
   padding: 1rem;
   border: 1px solid var(--line);
@@ -150,7 +151,8 @@
 }
 .admin-chapter-details > summary,
 .admin-instruction > summary,
-.admin-activity > summary {
+.admin-activity > summary,
+.admin-vocabulary-details > summary {
   min-width: 0;
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -161,6 +163,17 @@
 }
 .admin-instruction-content {
   padding-top: 0.85rem;
+}
+.admin-vocabulary-details {
+  background: var(--surface-soft);
+}
+.admin-vocabulary-content {
+  display: grid;
+  gap: 1rem;
+  padding-top: 0.85rem;
+}
+.admin-vocabulary-table {
+  min-width: 0;
 }
 .admin-activity-content {
   padding-top: 0.85rem;
@@ -218,6 +231,47 @@
 }
 .admin-option .form-field {
   flex: 1 1 180px;
+}
+.reference-rows-editor {
+  display: grid;
+  min-width: 0;
+  grid-column: 1 / -1;
+  gap: 0.85rem;
+  margin-block: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.reference-row-editor {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(9rem, 0.65fr) minmax(12rem, 1fr) minmax(12rem, 1fr) auto;
+  align-items: end;
+  gap: 0.65rem;
+}
+.reference-row-editor label {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+}
+.reference-row-editor input,
+.reference-row-editor textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.65rem;
+  color: var(--paper);
+  background: var(--control-bg);
+}
+.reference-row-editor textarea {
+  min-height: 4.25rem;
+  resize: vertical;
+}
+.reference-row-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 .admin-token-order {
   display: grid;
@@ -616,6 +670,13 @@
   }
   .admin-instruction-fields {
     grid-template-columns: 1fr;
+  }
+  .reference-row-editor {
+    grid-template-columns: 1fr;
+  }
+  .reference-row-editor__actions,
+  .reference-row-editor__actions button {
+    width: 100%;
   }
   .lesson-preview-navigation {
     grid-template-columns: 1fr;
