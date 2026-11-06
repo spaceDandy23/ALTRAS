@@ -27,8 +27,12 @@ describe('offline status responsive layout', () => {
     expect(styles).toMatch(
       /[.]offline-status__dot\s*\{[^}]*flex:\s*0 0 7px;/,
     );
-    expect(appShell.indexOf('<OfflineStatus />')).toBeLessThan(
-      appShell.indexOf('<div className="app-header__tools">'),
+    const statusRegion = appShell.match(
+      /<div className="student-status-region">([\s\S]*?)<\/div>/,
+    )?.[1] ?? '';
+    expect(statusRegion).toContain('<OfflineStatus />');
+    expect(statusRegion?.indexOf('<OfflineStatus />')).toBeLessThan(
+      statusRegion?.indexOf('<GlobalLessonSyncStatus'),
     );
   });
 });

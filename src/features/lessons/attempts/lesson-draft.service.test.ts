@@ -102,6 +102,7 @@ describe('offline lesson drafts', () => {
     });
     if (privateActivity.type !== 'choose-correct-translation') throw new Error('Invalid test activity.');
     const { correctChoiceId: _correctChoiceId, ...publicFields } = privateActivity;
+    expect(_correctChoiceId).toBe('answer-key-id');
     const offlineLesson = {
       ...structuredClone(lesson),
       activities: [publicActivitySchema.parse(publicFields)],

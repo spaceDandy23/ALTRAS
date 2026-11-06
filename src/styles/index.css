@@ -5938,6 +5938,21 @@ html[data-experience='student'] .loading-state p {
   }
 }
 
+@media (max-width: 360px) {
+  .home-companion,
+  .assessment-question__companion,
+  .result-companion {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+
+  .home-companion .character-dialogue__tail,
+  .assessment-question__companion .character-dialogue__tail,
+  .result-companion .character-dialogue__tail {
+    display: none;
+  }
+}
+
 @media (min-width: 1800px) {
   .app-content {
     padding-top: 2.6rem;

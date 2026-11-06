@@ -52,6 +52,7 @@ describe('Math Word List', () => {
   it('returns to Almanac', async () => {
     const user = userEvent.setup();
     renderPage();
+    await screen.findByText('sum');
     await user.click(screen.getByRole('link', { name: 'Back to Almanac' }));
     expect(screen.getByText('Almanac destination')).toBeVisible();
   });

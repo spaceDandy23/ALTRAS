@@ -1,4 +1,5 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { db } from '@/db/database';
@@ -407,10 +408,14 @@ it.each(['hub', 'detail'] as const)(
     await waitFor(() => expect(api.finish).toHaveBeenCalledOnce());
     expect(screen.getByText('Results pending sync')).toBeVisible();
     await act(async () => confirm());
-    expect(await screen.findByText('View Results')).toBeVisible();
+    if (page === 'hub') {
+      expect(await screen.findByText('Score 75%')).toBeVisible();
+      await userEvent.setup().click(screen.getByRole('link', { name: /Lesson overview/ }));
+    }
+    expect(await screen.findByRole('link', { name: 'View Results' })).toBeVisible();
     expect(screen.getByText('Score 75%')).toBeVisible();
     expect(screen.queryByText('Results pending sync')).toBeNull();
-    if (page === 'detail') expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Restart Lesson' })).toBeEnabled();
     await syncPendingLessonDrafts(userId);
     expect(api.finish).toHaveBeenCalledOnce();
     expect(api.time).toHaveBeenCalledOnce();

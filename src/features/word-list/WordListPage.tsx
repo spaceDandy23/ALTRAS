@@ -16,7 +16,19 @@ export function WordListPage() {
       .then(setEntries)
       .catch(() => setError('Unable to load the Math Word List.'));
   };
-  useEffect(load, []);
+  useEffect(() => {
+    let active = true;
+    void listMathWordEntries()
+      .then((loadedEntries) => {
+        if (active) setEntries(loadedEntries);
+      })
+      .catch(() => {
+        if (active) setError('Unable to load the Math Word List.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const filtered = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('en-US');
     if (!query) return entries ?? [];

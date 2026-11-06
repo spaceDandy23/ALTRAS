@@ -33,5 +33,8 @@ describe('character motion preferences', () => {
       /@media \(max-width: 800px\)[\s\S]*?\.character-assistant \.character-portrait \{[\s\S]*?width: clamp\(60px, 19vw, 64px\)/,
     );
     expect(stylesheet).toMatch(/\.character-portrait \{[\s\S]*?aspect-ratio: 3 \/ 4/);
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 360px\)[\s\S]*?\.home-companion,[\s\S]*?\.assessment-question__companion,[\s\S]*?\.result-companion \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/,
+    );
   });
 });

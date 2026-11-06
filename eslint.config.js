@@ -50,6 +50,7 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         Buffer: 'readonly',
+        console: 'readonly',
         WebSocket: 'readonly',
         fetch: 'readonly',
         process: 'readonly',

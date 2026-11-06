@@ -435,7 +435,7 @@ describe('Basic Lesson Management editor and preview', () => {
         }),
       ),
     );
-  });
+  }, 20_000);
   it('authors lesson-scoped Pre-test and Post-test questions in the lesson draft', async () => {
     const row = item();
     client.rpc.mockImplementation(

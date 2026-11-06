@@ -127,7 +127,8 @@ export async function publishManagedLesson(
     try {
       publishableLessonSchema.parse(item.draft);
     } catch (cause) {
-      if (cause instanceof z.ZodError) throw new Error(lessonValidationMessage(cause));
+      if (cause instanceof z.ZodError)
+        throw new Error(lessonValidationMessage(cause), { cause });
       throw cause;
     }
     for (const assessment of ['pre-test', 'post-test'] as const) {

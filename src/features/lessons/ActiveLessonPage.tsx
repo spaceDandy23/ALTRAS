@@ -543,6 +543,7 @@ export function ActiveLessonPage() {
         setSaveState(navigator.onLine ? 'saving' : 'pending');
         // Include the final active segment in the ordered sync, then pause
         // tracking. Completion closes the server attempt immediately after.
+        // eslint-disable-next-line react-hooks/purity -- This event handler closes the active-time window at submit time.
         await flushActiveTime(Date.now(), true);
         if (navigator.onLine) await synchronizerRef.current?.flush();
       } catch {

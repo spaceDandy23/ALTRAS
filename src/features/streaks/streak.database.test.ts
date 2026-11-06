@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 let pg: PGlite;
 let studentId: string;
-const lessonId = 'lesson-operation-signals';
+const lessonId = 'lesson-foundational-concepts';
 
 async function identity(userId: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
@@ -45,14 +45,71 @@ async function snapshot(attemptId: string | null = null) {
   return result.rows[0].streak;
 }
 
-async function readyAttempt(wrong = false, targetLesson = lessonId) {
+async function completeAssessment(
+  attemptId: string,
+  kind: 'pre-test' | 'post-test',
+  targetLesson: string,
+) {
   const { rows } = await pg.query<{ id: string }>(
+    'select id from public.start_assessment($1, $2)',
+    [kind, attemptId],
+  );
+  const assessmentId = rows[0].id;
+  await pg.exec('reset role');
+  const keys = await pg.query<{ id: string; correct_choice_id: string }>(
+    `select id, correct_choice_id from public.assessment_questions
+     where lesson_id = $1 and assessment = $2 and content_version =
+       (select content_version from public.assessment_attempts where id = $3)
+     order by display_order`,
+    [targetLesson, kind, assessmentId],
+  );
+  await identity(studentId);
+  const answers = keys.rows.map((question) => ({
+    question_id: question.id,
+    selected_choice_id: question.correct_choice_id,
+  }));
+  await pg.query('select public.sync_assessment_draft($1, 0, 1, $2, $3)', [
+    assessmentId,
+    randomUUID(),
+    JSON.stringify(answers),
+  ]);
+  await pg.query('select public.complete_assessment_revision($1, 1)', [assessmentId]);
+  // A retry after an accepted completion must remain idempotent.
+  await pg.query('select public.complete_assessment_revision($1, 1)', [assessmentId]);
+}
+
+async function readyAttempt(wrong = false, targetLesson = lessonId) {
+  const { rows } = await pg.query<{
+    id: string;
+    content_version: number;
+    flow_stage: string;
+    pre_assessment_version: number | null;
+    post_assessment_version: number | null;
+  }>(
     'select id from public.start_lesson_attempt($1)',
     [targetLesson],
   );
   const id = rows[0].id;
-  // Test-only owner access supplies fixtures; completion still uses the real authenticated RPC.
+  // Test-only owner access supplies lesson content and private keys; progression and scoring still
+  // use the real authenticated RPCs.
   await pg.exec('reset role');
+  const attempt = await pg.query<{
+    id: string;
+    content_version: number;
+    flow_stage: string;
+    pre_assessment_version: number | null;
+    post_assessment_version: number | null;
+  }>(
+    `select id, content_version, flow_stage, pre_assessment_version, post_assessment_version
+     from public.lesson_attempts where id = $1`,
+    [id],
+  );
+  const definition = await pg.query<{
+    presentation: { chapters: Array<{ id: string; activities: Array<{ id: string }> }> };
+  }>(
+    'select presentation from public.lesson_definitions where lesson_id = $1 and content_version = $2',
+    [targetLesson, attempt.rows[0].content_version],
+  );
   const keys = await pg.query<{
     activity_id: string;
     correct_answer: unknown;
@@ -62,17 +119,37 @@ async function readyAttempt(wrong = false, targetLesson = lessonId) {
     [targetLesson],
   );
   await identity(studentId);
-  for (const key of keys.rows) {
-    const answer = wrong
-      ? typeof key.correct_answer === 'string'
-        ? key.answer_options.find((option) => option !== key.correct_answer)
-        : [...key.answer_options].reverse()
-      : key.correct_answer;
-    await pg.query('select public.submit_lesson_activity_answer($1, $2, $3)', [
-      id,
-      key.activity_id,
-      JSON.stringify(answer),
-    ]);
+
+  if (attempt.rows[0].pre_assessment_version !== null) {
+    await completeAssessment(id, 'pre-test', targetLesson);
+    await pg.query('select public.advance_lesson_attempt_stage($1)', [id]);
+  }
+
+  const keyByActivity = new Map(keys.rows.map((key) => [key.activity_id, key]));
+  for (const chapter of definition.rows[0].presentation.chapters) {
+    await pg.query('select public.advance_lesson_attempt_stage($1)', [id]);
+    for (const activity of chapter.activities) {
+      const key = keyByActivity.get(activity.id);
+      if (!key) throw new Error(`Missing test answer key for ${activity.id}.`);
+      const answer = wrong
+        ? typeof key.correct_answer === 'string'
+          ? key.answer_options.find((option) => option !== key.correct_answer)
+          : [...key.answer_options].reverse()
+        : key.correct_answer;
+      await pg.query('select public.submit_lesson_activity_answer($1, $2, $3)', [
+        id,
+        key.activity_id,
+        JSON.stringify(answer),
+      ]);
+    }
+    if (chapter.activities.length > 0) {
+      await pg.query('select public.advance_lesson_attempt_stage($1)', [id]);
+    }
+  }
+
+  if (attempt.rows[0].post_assessment_version !== null) {
+    await completeAssessment(id, 'post-test', targetLesson);
+    await pg.query('select public.advance_lesson_attempt_stage($1)', [id]);
   }
   return id;
 }
@@ -188,7 +265,7 @@ describe('student streak PostgreSQL integration', () => {
     );
     await expect(
       pg.query('select public.complete_lesson_attempt($1)', [rows[0].id]),
-    ).rejects.toThrow('Complete every activity');
+    ).rejects.toThrow('Complete every required lesson step first.');
     expect(await snapshot()).toMatchObject({ current_streak: 0 });
     await pg.query('select public.abandon_lesson_attempt($1)', [rows[0].id]);
     expect(await snapshot()).toMatchObject({ current_streak: 0 });
@@ -235,9 +312,9 @@ describe('student streak PostgreSQL integration', () => {
   });
 
   it('records one day when two different qualifying completions race', async () => {
-    await complete(); // unlock Lesson 2 through the real prerequisite flow
+    await complete(); // unlock Operation Words through the real prerequisite flow
     const first = await readyAttempt();
-    const second = await readyAttempt(false, 'lesson-order-matters');
+    const second = await readyAttempt(false, 'lesson-operation-signals');
     await pg.exec('reset role; delete from public.student_activity_days;');
     await identity(studentId);
     await Promise.all(
@@ -303,30 +380,14 @@ describe('student streak PostgreSQL integration', () => {
     await expect(snapshot()).rejects.toThrow('Student access required');
   });
 
-  it('does not award a streak for completed pre/post assessments or their retries', async () => {
-    for (const kind of ['pre-test', 'post-test']) {
-      const { rows } = await pg.query<{ id: string }>(
-        'select id from public.start_assessment($1)',
-        [kind],
-      );
-      const id = rows[0].id;
-      await pg.exec('reset role');
-      const keys = await pg.query<{ id: string; correct_choice_id: string }>(
-        'select id, correct_choice_id from public.assessment_questions where assessment = $1',
-        [kind],
-      );
-      await identity(studentId);
-      await pg.query('select public.sync_assessment_draft($1, 0, 1, $2, $3)', [
-        id,
-        randomUUID(),
-        JSON.stringify(
-          keys.rows.map((q) => ({ question_id: q.id, selected_choice_id: q.correct_choice_id })),
-        ),
-      ]);
-      await pg.query('select public.complete_assessment_revision($1, 1)', [id]);
-      await pg.query('select public.complete_assessment_revision($1, 1)', [id]);
-    }
+  it('does not award a streak when lesson Pre-test and Post-test are complete but the lesson is not', async () => {
+    const id = await readyAttempt();
     expect(await snapshot()).toMatchObject({ current_streak: 0 });
+    const attempt = await pg.query<{ status: string }>(
+      'select status from public.lesson_attempts where id = $1',
+      [id],
+    );
+    expect(attempt.rows[0].status).toBe('active');
   });
 
   it('uses Philippine midnight regardless of session timezone, year/leap boundaries, or client dates', async () => {

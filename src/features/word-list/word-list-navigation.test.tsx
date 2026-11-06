@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LessonsPage } from '@/features/lessons/LessonsPage';
@@ -80,8 +79,7 @@ describe('Word list navigation', () => {
     expect(screen.queryByRole('link', { name: 'Word list' })).not.toBeInTheDocument();
   });
 
-  it('opens Almanac from the lesson hub', async () => {
-    const user = userEvent.setup();
+  it('does not duplicate sidebar Almanac navigation in the lesson hub', async () => {
     render(
       <MemoryRouter initialEntries={['/lessons']}>
         <Routes>
@@ -91,7 +89,7 @@ describe('Word list navigation', () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole('link', { name: 'Almanac' }));
-    expect(screen.getByText('Almanac destination')).toBeVisible();
+    await screen.findByText('Words That Signal Operations');
+    expect(screen.queryByRole('link', { name: 'Almanac' })).not.toBeInTheDocument();
   });
 });

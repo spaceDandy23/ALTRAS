@@ -44,7 +44,7 @@ beforeAll(async () => {
     try {
       await pg.exec(readFileSync(resolve('supabase/migrations', file), 'utf8'));
     } catch (error) {
-      throw new Error(`Failed migration ${file}: ${String(error)}`);
+      throw new Error(`Failed migration ${file}: ${String(error)}`, { cause: error });
     }
   }
 
@@ -59,7 +59,9 @@ beforeAll(async () => {
   } catch (error) {
     const detail = error && typeof error === 'object' && 'detail' in error ? String(error.detail) : String(error);
     const where = error && typeof error === 'object' && 'where' in error ? String(error.where) : '';
-    throw new Error(`Failed migration ${laterMigrations.at(-1)}: ${detail} ${where}`);
+    throw new Error(`Failed migration ${laterMigrations.at(-1)}: ${detail} ${where}`, {
+      cause: error,
+    });
   }
 }, 30000);
 

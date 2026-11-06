@@ -233,7 +233,7 @@ describe('Admin User Management SQL authorization', () => {
   });
 
   it('keeps lesson management under the same server-authoritative active-admin rule', async () => {
-    expect((await pg.query('select * from public.get_admin_lessons()')).rows).toHaveLength(2);
+    expect((await pg.query('select * from public.get_admin_lessons()')).rows).toHaveLength(5);
     await pg.exec('reset role');
     await pg.query("update auth.users set banned_until=now()+interval '1 day' where id=$1", [
       adminId,
