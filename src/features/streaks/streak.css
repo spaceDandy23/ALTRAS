@@ -1,0 +1,27 @@
+.student-streak {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1.25rem;
+  padding-block: 1rem;
+  border-block: 1px solid var(--line);
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+.student-streak strong {
+  color: var(--yellow);
+}
+.student-streak span,
+.student-streak small {
+  color: var(--muted);
+}
+.student-streak p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.streak-feedback {
+  color: var(--green);
+  margin-block: 1rem;
+}

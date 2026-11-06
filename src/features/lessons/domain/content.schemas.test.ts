@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { packagedContent } from '../content/packaged-content';
-import { packagedContentSchema } from './content.schemas';
+import { activitySchema, packagedContentSchema, publicActivitySchema } from './content.schemas';
 
 describe('learning content schema', () => {
-  it('accepts the bundled unit and both supported activity types', () => {
+  it('accepts the bundled unit and all supported activity types', () => {
     const parsed = packagedContentSchema.parse(packagedContent);
     const playable = parsed.lessons.find((lesson) => lesson.contentStatus === 'playable');
 
@@ -14,6 +14,26 @@ describe('learning content schema', () => {
     expect(
       playable?.activities.filter((activity) => activity.type === 'organize-translate'),
     ).toHaveLength(3);
+  });
+
+  it('accepts a choice-based verbal phrase translation without exposing its answer key', () => {
+    const activity = {
+      id: 'translate-sum-five',
+      type: 'choose-correct-translation',
+      title: 'Choose the matching expression',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'choice-a', label: 'n + 5' },
+        { id: 'choice-b', label: 'n - 5' },
+      ],
+      correctChoiceId: 'choice-a',
+      explanation: { title: 'Addition', body: 'Sum means add.' },
+    };
+
+    expect(activitySchema.safeParse(activity).success).toBe(true);
+    const { correctChoiceId: answerKey, ...publicFields } = activity;
+    void answerKey;
+    expect(publicActivitySchema.parse(publicFields)).not.toHaveProperty('correctChoiceId');
   });
 
   it('provides five stable, supported Order Matters activities and verified examples', () => {
@@ -56,6 +76,39 @@ describe('learning content schema', () => {
     const activity = invalid.lessons[0].activities[0];
     if (activity.type === 'find-word') activity.correctChoiceId = 'not-a-choice';
 
+    expect(packagedContentSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it('accepts optional reusable character dialogue without requiring it in existing lessons', () => {
+    const withGuidance = structuredClone(packagedContent);
+    withGuidance.lessons[0].characterId = 'altras-guide';
+    withGuidance.lessons[0].characterDialogue = {
+      introduction: 'Lesson introduction override.',
+      completion: 'Lesson completion override.',
+    };
+    withGuidance.lessons[0].activities[0].characterDialogue = {
+      introduction: 'Activity introduction override.',
+      hint: 'Hint override.',
+      correct: 'Correct override.',
+      incorrect: 'Incorrect override.',
+      encouragement: 'Encouragement override.',
+    };
+
+    const parsed = packagedContentSchema.parse(withGuidance);
+    expect(parsed.lessons[0]).toMatchObject({
+      characterId: 'altras-guide',
+      characterDialogue: { introduction: 'Lesson introduction override.' },
+    });
+    expect(parsed.lessons[0].activities[0].characterDialogue).toMatchObject({
+      hint: 'Hint override.',
+      correct: 'Correct override.',
+    });
+    expect(packagedContentSchema.safeParse(packagedContent).success).toBe(true);
+  });
+
+  it('rejects blank character dialogue overrides', () => {
+    const invalid = structuredClone(packagedContent);
+    invalid.lessons[0].characterDialogue = { introduction: '   ' };
     expect(packagedContentSchema.safeParse(invalid).success).toBe(false);
   });
 });

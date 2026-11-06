@@ -1,22 +1,35 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { ZodError } from 'zod';
 import { BackLink } from '@/components/ui/BackLink';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Panel } from '@/components/ui/Panel';
-import { db } from '@/db/database';
 import { getProfile, updateDisplayName } from './profile.service';
 import { useAuthStore } from '@/stores/auth.store';
 
 export function ProfilePage() {
   const user = useAuthStore((state) => state.user);
   const replaceUser = useAuthStore((state) => state.replaceUser);
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [displayNameState, setDisplayNameState] = useState({
+    userId: user?.id ?? '',
+    value: user?.displayName ?? '',
+  });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!user) return;
-    void getProfile(db, user.id).then((profile) => setDisplayName(profile.displayName));
+    let active = true;
+    void getProfile(user.id)
+      .then((profile) => {
+        if (active) setDisplayNameState({ userId: user.id, value: profile.displayName });
+      })
+      .catch(() => {
+        if (active) setError('Unable to load the online profile. Try refreshing.');
+      });
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   useEffect(() => {
@@ -26,17 +39,23 @@ export function ProfilePage() {
   }, [message]);
 
   if (!user) return null;
+  const displayName =
+    displayNameState.userId === user.id ? displayNameState.value : user.displayName;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setMessage('');
     setError('');
     try {
-      const result = await updateDisplayName(db, user.id, displayName);
+      const result = await updateDisplayName(user.id, displayName);
       replaceUser(result.user);
       setMessage('Profile saved.');
-    } catch {
-      setError('Use a display name between 2 and 40 characters.');
+    } catch (cause) {
+      setError(
+        cause instanceof ZodError
+          ? 'Use a display name between 2 and 40 characters.'
+          : 'Could not save the online profile. Check your connection and try again.',
+      );
     }
   };
 
@@ -55,7 +74,7 @@ export function ProfilePage() {
           <h2>{user.displayName}</h2>
           <span>@{user.normalizedUsername}</span>
           <div className="profile-badge__meta">
-            <span>Local account</span>
+            <span>Online account</span>
             <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
           </div>
         </Panel>
@@ -65,7 +84,9 @@ export function ProfilePage() {
             <FormField
               label="Display name"
               value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
+              onChange={(event) =>
+                setDisplayNameState({ userId: user.id, value: event.target.value })
+              }
               error={error}
               maxLength={40}
             />

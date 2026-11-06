@@ -19,12 +19,26 @@ export const activityTokenSchema = z.object({
   label: z.string().min(1),
 });
 
+export const activityCharacterDialogueSchema = z.object({
+  introduction: z.string().trim().min(1).optional(),
+  hint: z.string().trim().min(1).optional(),
+  correct: z.string().trim().min(1).optional(),
+  incorrect: z.string().trim().min(1).optional(),
+  encouragement: z.string().trim().min(1).optional(),
+});
+
+export const lessonCharacterDialogueSchema = z.object({
+  introduction: z.string().trim().min(1).optional(),
+  completion: z.string().trim().min(1).optional(),
+});
+
 const activityBaseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   prompt: z.string().min(1),
   hint: hintSchema.optional(),
   explanation: explanationSchema,
+  characterDialogue: activityCharacterDialogueSchema.optional(),
 });
 
 export const findWordActivitySchema = activityBaseSchema
@@ -52,28 +66,77 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     mathStatement: z.string().min(1),
     tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string().min(1)).min(2),
+    acceptedTokenSequences: z.array(z.array(z.string().min(1)).min(2)).min(1).optional(),
   })
   .superRefine((activity, context) => {
     const tokenIds = activity.tokens.map((token) => token.id);
     if (new Set(tokenIds).size !== tokenIds.length) {
       context.addIssue({ code: 'custom', message: 'Token IDs must be unique.' });
     }
+    const acceptedSequences = activity.acceptedTokenSequences ?? [activity.correctTokenSequence];
+    const serializedSequences = new Set<string>();
+    acceptedSequences.forEach((sequence, index) => {
+      if (
+        sequence.length !== tokenIds.length ||
+        sequence.some((id) => !tokenIds.includes(id)) ||
+        new Set(sequence).size !== tokenIds.length
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['acceptedTokenSequences', index],
+          message: 'Each accepted answer must use every token exactly once.',
+        });
+      }
+      const serialized = JSON.stringify(sequence);
+      if (serializedSequences.has(serialized)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['acceptedTokenSequences', index],
+          message: 'Accepted answers must use different token orders.',
+        });
+      }
+      serializedSequences.add(serialized);
+    });
     if (
-      activity.correctTokenSequence.length !== tokenIds.length ||
-      activity.correctTokenSequence.some((id) => !tokenIds.includes(id)) ||
-      new Set(activity.correctTokenSequence).size !== tokenIds.length
+      activity.acceptedTokenSequences &&
+      JSON.stringify(activity.correctTokenSequence) !== JSON.stringify(activity.acceptedTokenSequences[0])
     ) {
       context.addIssue({
         code: 'custom',
-        message: 'The correct sequence must use every token exactly once.',
+        path: ['correctTokenSequence'],
+        message: 'The legacy correct order must match Accepted answer 1.',
       });
+    }
+  });
+
+export const chooseCorrectTranslationActivitySchema = activityBaseSchema
+  .extend({
+    type: z.literal('choose-correct-translation'),
+    choices: z.array(activityChoiceSchema).min(2),
+    correctChoiceId: z.string().min(1),
+  })
+  .superRefine((activity, context) => {
+    const choiceIds = activity.choices.map((choice) => choice.id);
+    if (new Set(choiceIds).size !== choiceIds.length) {
+      context.addIssue({ code: 'custom', message: 'Choice IDs must be unique.' });
+    }
+    if (!choiceIds.includes(activity.correctChoiceId)) {
+      context.addIssue({ code: 'custom', message: 'The correct choice must exist.' });
     }
   });
 
 export const activitySchema = z.discriminatedUnion('type', [
   findWordActivitySchema,
   organizeTranslateActivitySchema,
+  chooseCorrectTranslationActivitySchema,
 ]);
+
+export const referenceEntrySchema = z.object({
+  id: z.string().min(1),
+  term: z.string().min(1),
+  definition: z.string(),
+  example: z.string(),
+});
 
 export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
   z.object({
@@ -95,7 +158,27 @@ export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     body: z.string().min(1),
   }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('vocabulary-table'),
+    title: z.string().min(1),
+    rows: z.array(referenceEntrySchema).min(1),
+  }),
 ]);
+
+export const lessonChapterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  displayOrder: z.number().int().positive(),
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(activitySchema),
+});
+
+export const lessonAssessmentFlowSchema = z.object({
+  preTest: z.literal('pre-test').optional(),
+  postTest: z.literal('post-test').optional(),
+});
 
 export const sectionSchema = z.object({
   id: z.string().min(1),
@@ -114,21 +197,28 @@ export const unitSchema = z.object({
   contentVersion: z.number().int().positive(),
 });
 
-export const lessonSchema = z
-  .object({
-    id: z.string().min(1),
-    sectionId: z.string().min(1),
-    unitId: z.string().min(1),
-    title: z.string().min(1),
-    shortDescription: z.string().min(1),
-    concepts: z.array(z.string().min(1)).min(1),
-    displayOrder: z.number().int().nonnegative(),
-    prerequisiteLessonId: z.string().min(1).optional(),
-    contentStatus: z.enum(['playable', 'preview']),
+export const lessonMetadataSchema = z.object({
+  id: z.string().min(1),
+  sectionId: z.string().min(1),
+  unitId: z.string().min(1),
+  title: z.string().min(1),
+  shortDescription: z.string().min(1),
+  concepts: z.array(z.string().min(1)).min(1),
+  displayOrder: z.number().int().nonnegative(),
+  prerequisiteLessonId: z.string().min(1).optional(),
+  contentStatus: z.enum(['playable', 'preview']),
+  passingThreshold: z.number().int().min(0).max(100),
+  contentVersion: z.number().int().positive(),
+  characterId: z.string().trim().min(1).optional(),
+  characterDialogue: lessonCharacterDialogueSchema.optional(),
+});
+
+export const lessonSchema = lessonMetadataSchema
+  .extend({
     instructionalContent: z.array(instructionalContentBlockSchema),
     activities: z.array(activitySchema),
-    passingThreshold: z.number().int().min(0).max(100),
-    contentVersion: z.number().int().positive(),
+    chapters: z.array(lessonChapterSchema).optional(),
+    assessments: lessonAssessmentFlowSchema.optional(),
   })
   .superRefine((lesson, context) => {
     if (lesson.contentStatus === 'playable' && lesson.activities.length === 0) {
@@ -140,6 +230,23 @@ export const lessonSchema = z
     ];
     if (new Set(itemIds).size !== itemIds.length) {
       context.addIssue({ code: 'custom', message: 'Lesson content IDs must be unique.' });
+    }
+    if (lesson.chapters) {
+      const chapterIds = lesson.chapters.map((chapter) => chapter.id);
+      const chapterOrders = lesson.chapters.map((chapter) => chapter.displayOrder);
+      if (new Set(chapterIds).size !== chapterIds.length) {
+        context.addIssue({ code: 'custom', message: 'Chapter IDs must be unique.' });
+      }
+      if (new Set(chapterOrders).size !== chapterOrders.length) {
+        context.addIssue({ code: 'custom', message: 'Chapter order must be unique.' });
+      }
+      const chapterItems = lesson.chapters.flatMap((chapter) => [
+        ...chapter.instructionalContent,
+        ...chapter.activities,
+      ]);
+      if (new Set(chapterItems.map((item) => item.id)).size !== chapterItems.length) {
+        context.addIssue({ code: 'custom', message: 'Chapter content IDs must be unique.' });
+      }
     }
   });
 
@@ -175,11 +282,51 @@ export const packagedContentSchema = z
 
 export type ActivityChoice = z.infer<typeof activityChoiceSchema>;
 export type ActivityToken = z.infer<typeof activityTokenSchema>;
-export type FindWordActivity = z.infer<typeof findWordActivitySchema>;
-export type OrganizeTranslateActivity = z.infer<typeof organizeTranslateActivitySchema>;
-export type LessonActivity = z.infer<typeof activitySchema>;
+export type AuthoredActivity = z.infer<typeof activitySchema>;
+export type ReferenceEntry = z.infer<typeof referenceEntrySchema>;
+// Public player content omits private keys; post-answer feedback may reveal one choice.
+export const publicActivitySchema = z.discriminatedUnion('type', [
+  z.object({ ...findWordActivitySchema.shape, correctChoiceId: z.string().optional() }),
+  z.object({
+    ...activityBaseSchema.shape,
+    type: z.literal('organize-translate'),
+    mathStatement: z.string().min(1),
+    tokens: z.array(activityTokenSchema).min(2),
+    correctTokenSequence: z.array(z.string()).optional(),
+  }),
+  z.object({
+    ...chooseCorrectTranslationActivitySchema.shape,
+    correctChoiceId: z.string().optional(),
+  }),
+]);
+export const publicLessonChapterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  displayOrder: z.number().int().positive(),
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(publicActivitySchema),
+});
+export const publicLessonSchema = lessonMetadataSchema.extend({
+  instructionalContent: z.array(instructionalContentBlockSchema),
+  activities: z.array(publicActivitySchema).min(1).max(10),
+  chapters: z.array(publicLessonChapterSchema).optional(),
+  assessments: lessonAssessmentFlowSchema.optional(),
+});
+export type FindWordActivity = Extract<z.infer<typeof publicActivitySchema>, { type: 'find-word' }>;
+export type OrganizeTranslateActivity = Extract<
+  z.infer<typeof publicActivitySchema>,
+  { type: 'organize-translate' }
+>;
+export type ChooseCorrectTranslationActivity = Extract<
+  z.infer<typeof publicActivitySchema>,
+  { type: 'choose-correct-translation' }
+>;
+export type LessonActivity = z.infer<typeof publicActivitySchema>;
 export type InstructionalContentBlock = z.infer<typeof instructionalContentBlockSchema>;
+export type LessonChapter = z.infer<typeof lessonChapterSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
-export type LearningLesson = z.infer<typeof lessonSchema>;
+export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
+export type LearningLesson = z.infer<typeof publicLessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

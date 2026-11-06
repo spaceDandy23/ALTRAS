@@ -2,33 +2,49 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { FindWordActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function FindWordActivityView({
   activity,
   submitted,
+  pendingAnswer,
   onSubmit,
+  onHintVisibilityChange,
 }: {
   activity: FindWordActivity;
   submitted?: SubmittedActivityAnswer;
+  pendingAnswer?: string;
   onSubmit: (answer: string) => Promise<void>;
+  onHintVisibilityChange?: (visible: boolean) => void;
 }) {
   const [selected, setSelected] = useState('');
   const [hintVisible, setHintVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-  const visibleAnswer = submitted?.answer ?? selected;
+  const visibleAnswer = submitted?.answer ?? pendingAnswer ?? selected;
   const visibleLabel =
     typeof visibleAnswer === 'string'
       ? activity.choices.find((choice) => choice.id === visibleAnswer)?.label
       : undefined;
 
   const submit = async () => {
-    if (!selected || submitted) return;
+    if (!selected || submitted || pendingAnswer) return;
     setSaving(true);
     try {
       await onSubmit(selected);
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleHint = () => {
+    setHintVisible((visible) => {
+      const next = !visible;
+      onHintVisibilityChange?.(next);
+      return next;
+    });
   };
 
   return (
@@ -44,7 +60,7 @@ export function FindWordActivityView({
       >
         {activity.mathStatement}
       </div>
-      <fieldset className="find-word-fieldset" disabled={Boolean(submitted)}>
+      <fieldset className="find-word-fieldset" disabled={Boolean(submitted || pendingAnswer)}>
         <legend>
           <span>{activity.sentenceBefore}</span>
           <span className="sentence-blank">{visibleLabel ?? 'choose a word'}</span>
@@ -66,12 +82,14 @@ export function FindWordActivityView({
               <label
                 key={choice.id}
                 className={`choice-option ${selected === choice.id ? 'choice-option--selected' : ''} ${submittedState}`}
+                onPointerDown={playNeutralClickOnPointerDown}
               >
                 <input
                   type="radio"
                   name={activity.id}
                   value={choice.id}
                   checked={visibleAnswer === choice.id}
+                  onKeyDown={playNeutralClickOnKeyDown}
                   onChange={() => setSelected(choice.id)}
                 />
                 <span>{choice.label}</span>
@@ -80,19 +98,24 @@ export function FindWordActivityView({
           })}
         </div>
       </fieldset>
-      {!submitted && (
+      {!submitted && !pendingAnswer && (
         <div className="activity-actions">
           {activity.hint && (
-            <Button variant="quiet" onClick={() => setHintVisible((visible) => !visible)}>
+            <Button variant="quiet" onClick={toggleHint}>
               {hintVisible ? 'Hide hint' : 'Show hint'}
             </Button>
           )}
-          <Button disabled={!selected || saving} onClick={() => void submit()}>
+          <Button
+            disabled={!selected || saving}
+            onPointerDown={playNeutralClickOnPointerDown}
+            onKeyDown={playNeutralClickOnKeyDown}
+            onClick={() => void submit()}
+          >
             {saving ? 'Checking…' : 'Submit answer'}
           </Button>
         </div>
       )}
-      {hintVisible && !submitted && (
+      {hintVisible && !submitted && !pendingAnswer && (
         <p className="activity-hint" role="status">
           <strong>Hint:</strong> {activity.hint?.body}
         </p>

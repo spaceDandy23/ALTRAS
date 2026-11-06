@@ -2,25 +2,14 @@ import { z } from 'zod';
 import {
   activitySchema,
   instructionalContentBlockSchema,
+  lessonMetadataSchema,
   sectionSchema,
   unitSchema,
 } from '@/features/lessons/domain/content.schemas';
 
 export const storedSectionSchema = sectionSchema;
 export const storedUnitSchema = unitSchema;
-export const storedLessonSchema = z.object({
-  id: z.string().min(1),
-  sectionId: z.string().min(1),
-  unitId: z.string().min(1),
-  title: z.string().min(1),
-  shortDescription: z.string().min(1),
-  concepts: z.array(z.string().min(1)).min(1),
-  displayOrder: z.number().int().nonnegative(),
-  prerequisiteLessonId: z.string().min(1).optional(),
-  contentStatus: z.enum(['playable', 'preview']),
-  passingThreshold: z.number().int().min(0).max(100),
-  contentVersion: z.number().int().positive(),
-});
+export const storedLessonSchema = lessonMetadataSchema;
 
 export const storedLessonItemSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -63,7 +52,7 @@ export const lessonProgressSchema = z.object({
 
 export const submittedActivityAnswerSchema = z.object({
   activityId: z.string().min(1),
-  activityType: z.enum(['find-word', 'organize-translate']),
+  activityType: z.enum(['find-word', 'organize-translate', 'choose-correct-translation']),
   answer: z.union([z.string(), z.array(z.string())]),
   isCorrect: z.boolean(),
   submittedAt: z.number().int().nonnegative(),
@@ -84,6 +73,19 @@ export const lessonAttemptSchema = z.object({
   starCount: z.number().int().min(0).max(3).nullable(),
   cleared: z.boolean().nullable(),
   xpImprovement: z.number().int().nonnegative(),
+  flowStage: z
+    .enum([
+      'legacy-activity',
+      'pre-test',
+      'chapter-teaching',
+      'chapter-activity',
+      'post-test',
+      'ready-to-complete',
+    ])
+    .optional(),
+  currentChapterId: z.string().nullable().optional(),
+  preAssessmentVersion: z.number().int().positive().nullable().optional(),
+  postAssessmentVersion: z.number().int().positive().nullable().optional(),
 });
 
 export type StoredSection = z.infer<typeof storedSectionSchema>;

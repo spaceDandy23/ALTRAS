@@ -2,30 +2,48 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { OrganizeTranslateActivity } from '../domain/content.schemas';
 import type { SubmittedActivityAnswer } from '@/types/learning';
+import {
+  playNeutralClickOnKeyDown,
+  playNeutralClickOnPointerDown,
+} from '@/services/audio/click.handlers';
 
 export function OrganizeTranslateActivityView({
   activity,
   submitted,
+  pendingAnswer,
   onSubmit,
+  onHintVisibilityChange,
 }: {
   activity: OrganizeTranslateActivity;
   submitted?: SubmittedActivityAnswer;
+  pendingAnswer?: string[];
   onSubmit: (answer: string[]) => Promise<void>;
+  onHintVisibilityChange?: (visible: boolean) => void;
 }) {
-  const submittedSequence = Array.isArray(submitted?.answer) ? submitted.answer : null;
+  const submittedSequence = Array.isArray(submitted?.answer)
+    ? submitted.answer
+    : (pendingAnswer ?? null);
   const [sequence, setSequence] = useState<string[]>(submittedSequence ?? []);
   const [hintVisible, setHintVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const tokenById = new Map(activity.tokens.map((token) => [token.id, token]));
   const available = activity.tokens.filter((token) => !sequence.includes(token.id));
   const submit = async () => {
-    if (sequence.length !== activity.tokens.length || submitted) return;
+    if (sequence.length !== activity.tokens.length || submitted || pendingAnswer) return;
     setSaving(true);
     try {
       await onSubmit(sequence);
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleHint = () => {
+    setHintVisible((visible) => {
+      const next = !visible;
+      onHintVisibilityChange?.(next);
+      return next;
+    });
   };
 
   return (
@@ -54,24 +72,27 @@ export function OrganizeTranslateActivityView({
             <button
               key={tokenId}
               className="selected-token"
-              disabled={Boolean(submitted)}
+              disabled={Boolean(submitted || pendingAnswer)}
               onClick={() =>
                 setSequence((current) => current.filter((_, itemIndex) => itemIndex !== index))
               }
               aria-label={`Remove ${tokenById.get(tokenId)?.label}`}
             >
-              {tokenById.get(tokenId)?.label} {!submitted && <span aria-hidden="true">×</span>}
+              {tokenById.get(tokenId)?.label}{' '}
+              {!submitted && !pendingAnswer && <span aria-hidden="true">×</span>}
             </button>
           ))}
         </div>
       </section>
-      {!submitted && (
+      {!submitted && !pendingAnswer && (
         <>
           <div className="available-token-list" aria-label="Available phrase tokens">
             {available.map((token) => (
               <button
                 key={token.id}
                 className="available-token"
+                onPointerDown={playNeutralClickOnPointerDown}
+                onKeyDown={playNeutralClickOnKeyDown}
                 onClick={() => setSequence((current) => [...current, token.id])}
               >
                 <span aria-hidden="true">+</span> {token.label}
@@ -91,12 +112,14 @@ export function OrganizeTranslateActivityView({
           </div>
           <div className="activity-actions">
             {activity.hint && (
-              <Button variant="quiet" onClick={() => setHintVisible((visible) => !visible)}>
+              <Button variant="quiet" onClick={toggleHint}>
                 {hintVisible ? 'Hide hint' : 'Show hint'}
               </Button>
             )}
             <Button
               disabled={sequence.length !== activity.tokens.length || saving}
+              onPointerDown={playNeutralClickOnPointerDown}
+              onKeyDown={playNeutralClickOnKeyDown}
               onClick={() => void submit()}
             >
               {saving ? 'Checking…' : 'Submit translation'}
@@ -104,7 +127,7 @@ export function OrganizeTranslateActivityView({
           </div>
         </>
       )}
-      {hintVisible && !submitted && (
+      {hintVisible && !submitted && !pendingAnswer && (
         <p className="activity-hint" role="status">
           <strong>Hint:</strong> {activity.hint?.body}
         </p>

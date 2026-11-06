@@ -1,7 +1,7 @@
 export const SCORING_POLICY = {
   passingScore: 70,
-  oneStarMinimum: 70,
-  twoStarMinimum: 85,
+  oneStarMinimum: 50,
+  twoStarMinimum: 76,
   threeStarMinimum: 100,
   xpPerScorePoint: 1,
   xpPerStar: 10,
