@@ -11,6 +11,8 @@ import { db } from '@/db/database';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import type { LearningLesson } from './domain/content.schemas';
+import { TeachingContentRenderer } from './components/TeachingContentRenderer';
+import { vocabularyTables } from './domain/content-tables';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { getLesson } from './content/content.service';
 import { getLessonProgress } from './progress/progress.service';
@@ -26,25 +28,12 @@ import {
 } from '@/services/audio/click.handlers';
 
 function LessonVocabularyReference({ lesson }: { lesson: LearningLesson }) {
-  const rows = lesson.instructionalContent.flatMap((block) =>
-    block.type === 'vocabulary-table'
-      ? block.rows.map((row) => ({ ...row, id: `${block.id}:${row.id}` }))
-      : [],
-  );
-  if (rows.length === 0) return null;
+  const blocks = lesson.instructionalContent.filter((block) => block.type === 'vocabulary-table' && vocabularyTables(block).length > 0);
+  if (blocks.length === 0) return null;
 
   return (
-    <section className="lesson-vocabulary" aria-labelledby="lesson-vocabulary-heading">
-      <h2 id="lesson-vocabulary-heading">Vocabulary</h2>
-      <div className="lesson-vocabulary__rows">
-        {rows.map((row) => (
-          <article className="lesson-vocabulary__row" key={row.id}>
-            <h3>{row.term}</h3>
-            {row.definition && <p>{row.definition}</p>}
-            {row.example && <p className="lesson-vocabulary__example">{row.example}</p>}
-          </article>
-        ))}
-      </div>
+    <section className="lesson-vocabulary" aria-label="Vocabulary">
+      <TeachingContentRenderer blocks={blocks} />
     </section>
   );
 }

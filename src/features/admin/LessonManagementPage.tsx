@@ -7,7 +7,8 @@ import { ActivityEditor } from './ActivityEditor';
 import { InstructionalContentEditor } from './InstructionalContentEditor';
 import { LessonAssessmentQuestionsEditor } from './LessonAssessmentQuestionsEditor';
 import { LessonContentPreview } from './LessonContentPreview';
-import { ReferenceRowsEditor } from './ReferenceRowsEditor';
+import { ContentTablesEditor } from './ContentTablesEditor';
+import { vocabularyTables as getVocabularyTables } from '@/features/lessons/domain/content-tables';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { AdminIconButton } from './AdminIconButton';
 import {
@@ -26,10 +27,8 @@ import {
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
-import type { InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
+import type { ContentTable, InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
 import './lesson-management.css';
-
-type VocabularyBlock = Extract<InstructionalContentBlock, { type: 'vocabulary-table' }>;
 
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message.trim() ? cause.message : fallback;
@@ -42,6 +41,7 @@ export function LessonManagementPage() {
   const [revision, setRevision] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [vocabularyOpen, setVocabularyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -75,15 +75,12 @@ export function LessonManagementPage() {
     saveFeedbackRef.current?.focus({ preventScroll: true });
   }, [error, draft, preview]);
   const current = items.find((item) => item.lesson_id === draft?.id);
-  const vocabularyTables = draft?.chapters.flatMap((chapter, chapterIndex) =>
+  const vocabularyTables = draft?.chapters.flatMap((chapter) =>
     chapter.instructionalContent.flatMap((block) =>
-      block.type === 'vocabulary-table' ? [{ chapterId: chapter.id, chapterIndex, block }] : [],
+      block.type === 'vocabulary-table' ? [{ chapterId: chapter.id, block }] : [],
     ),
   ) ?? [];
-  const vocabularyEntryCount = vocabularyTables.reduce(
-    (count, entry) => count + entry.block.rows.length,
-    0,
-  );
+  const referenceTables = vocabularyTables.flatMap(({ block }) => getVocabularyTables(block));
   const change = (next: AuthoredLesson) => {
     setDraft(normalizeAuthoredLesson(next));
     setDirty(true);
@@ -98,35 +95,22 @@ export function LessonManagementPage() {
       });
     }
   };
-  const updateVocabularyRows = (chapterId: string, blockId: string, rows: VocabularyBlock['rows']) => {
+  const updateVocabularyTables = (tables: ContentTable[]) => {
     if (!draft) return;
+    const first = vocabularyTables[0];
+    // References are edited together; consolidate only this draft, keeping table/row IDs.
     changeChapters(
-      draft.chapters.map((chapter) =>
-        chapter.id === chapterId
-          ? {
-              ...chapter,
-              instructionalContent: chapter.instructionalContent.map((block) =>
-                block.id === blockId && block.type === 'vocabulary-table' ? { ...block, rows } : block,
-              ),
-            }
-          : chapter,
-      ),
-    );
-  };
-  const addVocabularyTable = () => {
-    if (!draft?.chapters.length) return;
-    changeChapters(
-      draft.chapters.map((chapter, index) =>
-        index === 0
-          ? {
-              ...chapter,
-              instructionalContent: [
-                ...chapter.instructionalContent,
-                newInstructionalBlock('vocabulary-table'),
-              ],
-            }
-          : chapter,
-      ),
+      draft.chapters.map((chapter, index) => ({
+        ...chapter,
+        instructionalContent: first
+          ? chapter.instructionalContent.flatMap<InstructionalContentBlock>((block) => block.type !== 'vocabulary-table' ? [block]
+            : chapter.id === first.chapterId && block.id === first.block.id
+              ? [{ ...block, rows: [], tables }] : [])
+          : index === 0 ? [...chapter.instructionalContent, {
+              id: `content-${crypto.randomUUID()}`, type: 'vocabulary-table' as const,
+              title: 'Vocabulary', rows: [], tables,
+            }] : chapter.instructionalContent,
+      })),
     );
   };
   const accept = (item: ManagedLesson) => {
@@ -362,24 +346,13 @@ export function LessonManagementPage() {
                     </select>
                   </label>
                 </div>
-                <details className="admin-vocabulary-details">
+                <details className="admin-vocabulary-details" open={vocabularyOpen}
+                  onToggle={(event) => setVocabularyOpen(event.currentTarget.open)}>
                   <summary>
-                    Vocabulary ({vocabularyTables.length ? `${vocabularyEntryCount} terms` : 'not added'})
+                    Vocabulary ({referenceTables.length ? `${referenceTables.length} tables` : 'not added'})
                   </summary>
                   <div className="admin-vocabulary-content">
-                    {vocabularyTables.map(({ chapterId, chapterIndex, block }) => (
-                      <section className="admin-vocabulary-table" key={block.id}>
-                        {vocabularyTables.length > 1 && <h3>Chapter {chapterIndex + 1}</h3>}
-                        <ReferenceRowsEditor
-                          rows={block.rows}
-                          onChange={(rows) => updateVocabularyRows(chapterId, block.id, rows)}
-                        />
-                      </section>
-                    ))}
-                    {vocabularyTables.length === 0 && <p>Add the lesson vocabulary reference here.</p>}
-                    <button type="button" onClick={addVocabularyTable} disabled={!draft.chapters.length}>
-                      {vocabularyTables.length ? 'Add vocabulary table' : 'Add vocabulary'}
-                    </button>
+                    {vocabularyOpen && <ContentTablesEditor tables={referenceTables} onChange={updateVocabularyTables} />}
                   </div>
                 </details>
                 <h2>Assessments</h2>

@@ -3587,6 +3587,21 @@ a.almanac-option:hover {
   max-width: 100%;
   overflow-x: auto;
 }
+.content-tables { display: grid; gap: 1.5rem; min-width: 0; }
+.content-table-wrap { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; }
+.content-table { width: 100%; border-collapse: collapse; background: var(--panel-bg); }
+.content-table caption { text-align: left; font-weight: 800; padding-bottom: 0.75rem; }
+.content-table th,
+.content-table td {
+  border: 1px solid var(--line);
+  padding: 0.8rem;
+  min-width: 8rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.content-table thead th { color: var(--paper); background: var(--control-bg); }
 .vocabulary-table {
   width: 100%;
   border-collapse: collapse;

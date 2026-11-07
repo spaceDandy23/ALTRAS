@@ -303,14 +303,11 @@ describe('lesson overview transitions', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Vocabulary' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Constant' })).toBeVisible();
+    expect(await screen.findByRole('table', { name: 'Vocabulary' })).toBeVisible();
+    expect(screen.getByRole('cell', { name: 'Constant' })).toBeVisible();
     expect(screen.getByText('A single fixed number')).toBeVisible();
-    expect(screen.getByText('(-38, -20, -7, 0, 7, 20, 38)')).toHaveClass(
-      'lesson-vocabulary__example',
-    );
+    expect(screen.getByText('(-38, -20, -7, 0, 7, 20, 38)')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Operation words' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: 'Vocabulary' })).not.toBeInTheDocument();
   });
 
   it('renders an error after rejection and retries without remaining on the loader', async () => {

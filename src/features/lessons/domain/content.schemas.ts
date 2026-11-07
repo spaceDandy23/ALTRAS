@@ -138,6 +138,48 @@ export const referenceEntrySchema = z.object({
   example: z.string(),
 });
 
+// Array order is display order; cells are keyed by column ID, never by position.
+export const contentTableSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    title: z.string().optional(),
+    columns: z
+      .array(z.object({ id: z.string().trim().min(1), label: z.string().trim().min(1) }).strict())
+      .min(1),
+    rows: z.array(
+      z
+        .object({
+          id: z.string().trim().min(1),
+          cells: z.record(z.string(), z.string()),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+  .superRefine((table, ctx) => {
+    const ids = table.columns.map((column) => column.id);
+    if (
+      new Set(ids).size !== ids.length ||
+      new Set(table.rows.map((row) => row.id)).size !== table.rows.length
+    )
+      ctx.addIssue({ code: 'custom', message: 'Table column and row IDs must be unique.' });
+    for (const row of table.rows) {
+      if (
+        Object.keys(row.cells).length !== ids.length ||
+        ids.some((id) => !Object.hasOwn(row.cells, id))
+      )
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Each row must contain exactly the configured columns.',
+        });
+    }
+  });
+export const contentTablesSchema = z.array(contentTableSchema).superRefine((tables, ctx) => {
+  if (new Set(tables.map((table) => table.id)).size !== tables.length)
+    ctx.addIssue({ code: 'custom', message: 'Table IDs must be unique.' });
+});
+export type ContentTable = z.infer<typeof contentTableSchema>;
+
 export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
   z.object({
     id: z.string().min(1),
@@ -158,12 +200,23 @@ export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     body: z.string().min(1),
   }),
-  z.object({
-    id: z.string().min(1),
-    type: z.literal('vocabulary-table'),
-    title: z.string().min(1),
-    rows: z.array(referenceEntrySchema).min(1),
-  }),
+  z
+    .object({
+      id: z.string().min(1),
+      type: z.literal('vocabulary-table'),
+      title: z.string().min(1),
+      rows: z.array(referenceEntrySchema),
+      tables: contentTablesSchema.optional(),
+    })
+    .superRefine((block, ctx) => {
+      if (block.tables === undefined && block.rows.length === 0)
+        ctx.addIssue({ code: 'custom', message: 'Add a vocabulary row or configure tables.' });
+      if (block.tables !== undefined && block.rows.length > 0)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Use either legacy vocabulary rows or configurable tables.',
+        });
+    }),
 ]);
 
 export const lessonChapterSchema = z.object({

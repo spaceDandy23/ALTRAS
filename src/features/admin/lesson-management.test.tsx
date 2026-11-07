@@ -411,13 +411,15 @@ describe('Basic Lesson Management editor and preview', () => {
     const vocabularySection = screen.getByText('Vocabulary (not added)');
     expect(screen.queryByLabelText('Term 1')).not.toBeInTheDocument();
     fireEvent.click(vocabularySection);
-    fireEvent.click(screen.getByRole('button', { name: 'Add vocabulary' }));
-    fireEvent.change(screen.getByLabelText('Term 1'), { target: { value: 'Variable' } });
-    fireEvent.change(screen.getByLabelText('Definition 1'), { target: { value: 'An unknown value' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add row' }));
-    fireEvent.change(screen.getByLabelText('Term 2'), { target: { value: 'Constant' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Move row 2 up' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove row 2' }));
+    const vocabulary = within(vocabularySection.closest('details')!);
+    fireEvent.click(await vocabulary.findByRole('button', { name: 'Add table' }));
+    fireEvent.change(vocabulary.getByLabelText('Term 1'), { target: { value: 'Variable' } });
+    fireEvent.change(vocabulary.getByLabelText('Definition 1'), { target: { value: 'An unknown value' } });
+    fireEvent.click(vocabulary.getByRole('button', { name: 'Add row' }));
+    fireEvent.change(vocabulary.getByLabelText('Term 2'), { target: { value: 'Constant' } });
+    fireEvent.click(vocabulary.getByRole('button', { name: 'Move row 2 up' }));
+    fireEvent.click(vocabulary.getByRole('button', { name: 'Remove row 2' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
 
     await waitFor(() =>
@@ -428,7 +430,8 @@ describe('Basic Lesson Management editor and preview', () => {
             chapters: [expect.objectContaining({
               instructionalContent: [expect.objectContaining({
                 type: 'vocabulary-table',
-                rows: [expect.objectContaining({ term: 'Constant' })],
+                rows: [],
+                tables: [expect.objectContaining({ rows: [expect.objectContaining({ cells: expect.objectContaining({ term: 'Constant' }) })] })],
               })],
             })],
           }),
@@ -647,11 +650,11 @@ describe('Basic Lesson Management editor and preview', () => {
     const user = userEvent.setup();
     const lesson = item().draft;
     render(<LessonContentPreview lesson={lesson} />);
-    expect(screen.queryByRole('table', { name: 'Vocabulary' })).not.toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Vocabulary' })).toBeVisible();
     expect(document.querySelectorAll('.chapter-teaching__block')).toHaveLength(
       lesson.chapters.reduce(
         (count, chapter) =>
-          count + chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table').length,
+          count + chapter.instructionalContent.length,
         0,
       ),
     );

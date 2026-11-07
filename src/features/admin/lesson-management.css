@@ -250,6 +250,38 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
 .admin-vocabulary-table {
   min-width: 0;
 }
+.content-tables-editor,
+.content-table-editor__body,
+.content-table-editor fieldset {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.content-table-editor {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1rem;
+  background: var(--panel-bg);
+}
+.content-table-editor > summary,
+.content-table-editor__column,
+.content-table-editor__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.content-table-editor > summary { cursor: pointer; overflow-wrap: anywhere; }
+.content-table-editor__body { padding-top: 1rem; }
+.content-table-editor label { display: grid; gap: 0.5rem; min-width: 0; }
+.content-table-editor__column > label { flex: 1 1 12rem; }
+.content-table-editor__row { display: grid; gap: 0.75rem; min-width: 0; }
+.content-table-editor__cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+}
 .admin-activity-content {
   padding-top: 0.85rem;
 }
@@ -350,7 +382,9 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
   gap: 0.4rem;
 }
 .reference-row-editor input,
-.reference-row-editor textarea {
+.reference-row-editor textarea,
+.content-table-editor input,
+.content-table-editor textarea {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--line);
@@ -359,7 +393,8 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
   color: var(--paper);
   background: var(--control-bg);
 }
-.reference-row-editor textarea {
+.reference-row-editor textarea,
+.content-table-editor textarea {
   min-height: 4.25rem;
   resize: vertical;
 }

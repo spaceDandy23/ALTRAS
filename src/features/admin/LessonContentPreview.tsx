@@ -32,6 +32,7 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
       <h2>{lesson.title}</h2>
       <p>Preview only — no attempts, progress, XP or streaks are recorded.</p>
       <p>{lesson.shortDescription}</p>
+      <TeachingContentRenderer blocks={lesson.instructionalContent.filter((block) => block.type === 'vocabulary-table')} />
       {lesson.chapters.map((chapter) => (
         <section
           key={chapter.id}

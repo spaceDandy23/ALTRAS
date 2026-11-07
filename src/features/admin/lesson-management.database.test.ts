@@ -11,7 +11,7 @@ import {
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
-import { activitySchema, publicLessonSchema } from '@/features/lessons/domain/content.schemas';
+import { activitySchema, publicLessonSchema, type ContentTable } from '@/features/lessons/domain/content.schemas';
 
 let pg: PGlite;
 const adminId = randomUUID(),
@@ -147,6 +147,9 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', chooseTranslationMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', vocabularyMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', acceptedTokenSequencesMigration), 'utf8'));
+  const versionsBeforeTables = await pg.query('select * from public.lesson_definitions order by lesson_id,content_version');
+  await pg.exec(readFileSync(resolve('supabase/migrations/202611070001_dynamic_content_tables.sql'), 'utf8'));
+  expect((await pg.query('select * from public.lesson_definitions order by lesson_id,content_version')).rows).toEqual(versionsBeforeTables.rows);
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -168,6 +171,62 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('saves, publishes and restores ordered configurable tables without changing published versions or private keys', async () => {
+    const tables: ContentTable[] = [
+      { id: 'operations', title: 'Operation words', columns: [
+        { id: 'operation', label: 'Operation' }, { id: 'symbol', label: 'Symbol' }, { id: 'words', label: 'Words/Phrases' },
+      ], rows: [
+        { id: 'add', cells: { operation: 'Addition', symbol: '+', words: 'sum\nmore than' } },
+        { id: 'subtract', cells: { operation: 'Subtraction', symbol: '-', words: '' } },
+      ] },
+      { id: 'translate', columns: [{ id: 'verbal', label: 'Verbal' }, { id: 'symbolic', label: 'Symbolic' }],
+        rows: [{ id: 'translation', cells: { verbal: 'Five more than a number', symbolic: 'n + 5' } }] },
+    ];
+    const authored = draft({ prerequisiteLessonId: undefined, instructionalContent: [
+      { id: 'references', type: 'vocabulary-table', title: 'Vocabulary', rows: [], tables },
+    ] });
+    const saved = await save(authored);
+    expect(saved.draft.chapters[0].instructionalContent).toEqual(authored.chapters[0].instructionalContent);
+    const first = await publish(saved);
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', [first.lesson_id]);
+    const initialContent = await rpc<AuthoredLesson>('get_lesson_content', [first.lesson_id, attempt.id]);
+    expect(initialContent.instructionalContent).toEqual(authored.instructionalContent);
+    expect(initialContent.chapters[0].instructionalContent).toEqual(authored.instructionalContent);
+    expect(publicLessonSchema.safeParse(initialContent).success).toBe(true);
+    expect(initialContent.activities[0]).not.toHaveProperty('correctChoiceId');
+
+    await asUser(adminId);
+    const reordered = [tables[1], { ...tables[0], columns: [...tables[0].columns].reverse(), rows: [...tables[0].rows].reverse() }];
+    const updated = normalizeAuthoredLesson({ ...first.draft, chapters: [{ ...first.draft.chapters[0],
+      instructionalContent: [{ id: 'references', type: 'vocabulary-table', title: 'Vocabulary', rows: [], tables: reordered }],
+    }] });
+    const second = await publish(await save(updated, first.revision));
+    await asUser(studentId);
+    const latest = await rpc<AuthoredLesson>('get_lesson_content', [second.lesson_id, null]);
+    expect(latest.instructionalContent).toEqual(updated.instructionalContent);
+    expect(await rpc('get_lesson_content', [first.lesson_id, attempt.id])).toEqual(initialContent);
+    expect(second.published_version).toBe(first.published_version! + 1);
+  });
+
+  it.each([
+    { id: 't', columns: [], rows: [] },
+    { id: 't', columns: [{ id: 'c', label: 'Column' }, { id: 'c', label: 'Duplicate' }], rows: [] },
+    { id: 't', columns: [{ id: 'c', label: 'Column' }], rows: [{ id: 'r', cells: {} }] },
+    { id: 't', columns: [{ id: 'c', label: 'Column' }], rows: [{ id: 'r', cells: { c: '', unknown: '' } }] },
+    { id: 't', columns: [{ id: 'c', label: 'Column' }], rows: [{ id: 'r', cells: { c: 1 } }] },
+    { id: 't', columns: [{ id: 'c', label: 'Column' }], rows: [{ id: 'r', cells: { c: '' } }, { id: 'r', cells: { c: '' } }] },
+    { id: 't', columns: [{ id: 'c', label: 'Column' }], rows: [], secret: 'unexpected field' },
+  ])('rejects malformed configurable tables at publication: %j', async (table) => {
+    const authored = draft({ instructionalContent: [{ id: 'table-content', type: 'vocabulary-table', title: 'Tables', rows: [] }] });
+    // Simulate untrusted RPC input rather than bypassing TypeScript in application code.
+    const instructions = authored.instructionalContent.map((block) => ({ ...block, tables: [table] }));
+    const payload = { ...authored, instructionalContent: instructions,
+      chapters: [{ ...authored.chapters[0], instructionalContent: instructions }] };
+    const saved = await rpc<ManagedLesson>('save_admin_lesson', [payload, 0]);
+    await expect(publish(saved)).rejects.toThrow();
+  });
+
   it('privately grades any explicitly accepted Arrange Words sequence and rejects others', async () => {
     const activity = activitySchema.parse({
       id: 'arrange-accepted-orders',
