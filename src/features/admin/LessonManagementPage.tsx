@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { FormField } from '@/components/ui/FormField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -34,6 +34,14 @@ function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message.trim() ? cause.message : fallback;
 }
 
+function keepOverviewPosition(
+  blocks: InstructionalContentBlock[],
+  teaching: InstructionalContentBlock[],
+) {
+  let index = 0;
+  return blocks.map((block) => block.type === 'vocabulary-table' ? block : teaching[index++] ?? block);
+}
+
 export function LessonManagementPage() {
   const [items, setItems] = useState<ManagedLesson[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -48,6 +56,13 @@ export function LessonManagementPage() {
   const [reload, setReload] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null);
+  const [removingTeachingChapterId, setRemovingTeachingChapterId] = useState<string | null>(null);
+  const [newTeachingBlockId, setNewTeachingBlockId] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (!newTeachingBlockId) return;
+    const editor = document.getElementById(`teaching-${newTeachingBlockId}`);
+    if (editor instanceof HTMLDetailsElement) editor.open = true;
+  }, [newTeachingBlockId]);
   const saveFeedbackRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
@@ -94,6 +109,14 @@ export function LessonManagementPage() {
         chapters: chapters.map((chapter, index) => ({ ...chapter, displayOrder: index + 1 })),
       });
     }
+  };
+  const addTeachingBlock = (chapterId: string) => {
+    if (!draft) return;
+    const block = newInstructionalBlock();
+    setNewTeachingBlockId(block.id);
+    changeChapters(draft.chapters.map((chapter) => chapter.id === chapterId
+      ? { ...chapter, instructionalContent: [...chapter.instructionalContent, block] }
+      : chapter));
   };
   const updateVocabularyTables = (tables: ContentTable[]) => {
     if (!draft) return;
@@ -407,7 +430,7 @@ export function LessonManagementPage() {
                       <summary>
                         {chapterHandle}
                         <span className="admin-summary-title">Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'}</span>
-                        <span className="admin-summary-meta">{chapter.instructionalContent.length} teaching · {chapter.activities.length} {chapter.activities.length === 1 ? 'activity' : 'activities'}</span>
+                        <span className="admin-summary-meta">{chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table').length} teaching · {chapter.activities.length} {chapter.activities.length === 1 ? 'activity' : 'activities'}</span>
                         <AdminIconButton inSummary icon="delete" label={`Delete chapter ${chapterIndex + 1}`} onClick={() => setDeletingChapterId(chapter.id)} />
                         <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
                       </summary>
@@ -451,21 +474,29 @@ export function LessonManagementPage() {
                         }
                       />
                     </div>
-                    <h3>Teaching and discussion content</h3>
-                    {chapter.instructionalContent.map((block, contentIndex) => (
+                    {chapter.instructionalContent.some((block) => block.type !== 'vocabulary-table') && (
+                      <div className="admin-teaching-section">
+                      <div className="admin-section-heading admin-section-heading--teaching">
+                        <h3>Teaching Content</h3>
+                        <button type="button" className="button button--quiet" onClick={() => setRemovingTeachingChapterId(chapter.id)}>
+                          Remove Teaching Content
+                        </button>
+                      </div>
+                    {chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table').map((block, contentIndex) => (
                       <ReorderableItem key={block.id} group={`chapter-${chapter.id}-content`} id={block.id}
                         label={`teaching content ${contentIndex + 1}`}
                         onReorder={(source, target, side) => changeChapters(draft.chapters.map((item) =>
-                          item.id === chapter.id ? { ...item, instructionalContent: reorderById(item.instructionalContent, source, target, side, (entry) => entry.id) } : item,
+                          item.id === chapter.id ? { ...item, instructionalContent: keepOverviewPosition(item.instructionalContent,
+                            reorderById(item.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table'), source, target, side, (entry) => entry.id)) } : item,
                         ))}>
-                      {(contentHandle) => <details className="admin-instruction">
+                      {(contentHandle) => <details id={`teaching-${block.id}`} className="admin-instruction">
                         <summary>
                           {contentHandle}
-                          <span className="admin-summary-title">Content {contentIndex + 1} · {block.type === 'vocabulary-table' ? 'Vocabulary reference' : block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
-                          {block.type === 'example' ? block.phrase : block.title || 'Untitled content'}</span>
-                          {block.type !== 'vocabulary-table' && <AdminIconButton inSummary icon="delete" label={`Delete content ${contentIndex + 1}`}
+                          <span className="admin-summary-title">Content {contentIndex + 1} · {block.type === 'content-table' ? 'Dynamic tables' : block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
+                          {block.type === 'content-table' ? `${block.tables.length} ${block.tables.length === 1 ? 'table' : 'tables'}` : block.type === 'example' ? block.phrase : block.title || 'Untitled content'}</span>
+                          <AdminIconButton inSummary icon="delete" label={`Delete content ${contentIndex + 1}`}
                             onClick={() => changeChapters(draft.chapters.map((item) => item.id === chapter.id
-                              ? { ...item, instructionalContent: item.instructionalContent.filter((entry) => entry.id !== block.id) } : item))} />}
+                              ? { ...item, instructionalContent: item.instructionalContent.filter((entry) => entry.id !== block.id) } : item))} />
                           <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
                         </summary>
                         <div className="admin-instruction-content">
@@ -478,11 +509,11 @@ export function LessonManagementPage() {
                                   item.id === chapter.id
                                     ? {
                                         ...item,
-                                        instructionalContent: moveItem(
-                                          item.instructionalContent,
+                                        instructionalContent: keepOverviewPosition(item.instructionalContent, moveItem(
+                                          item.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table'),
                                           contentIndex,
                                           -1,
-                                        ),
+                                        )),
                                       }
                                     : item,
                                 ),
@@ -490,18 +521,18 @@ export function LessonManagementPage() {
                             }
                           />
                           <AdminIconButton icon="down" label={`Move content ${contentIndex + 1} down`}
-                            disabled={contentIndex === chapter.instructionalContent.length - 1}
+                            disabled={contentIndex === chapter.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table').length - 1}
                             onClick={() =>
                               changeChapters(
                                 draft.chapters.map((item) =>
                                   item.id === chapter.id
                                     ? {
                                         ...item,
-                                        instructionalContent: moveItem(
-                                          item.instructionalContent,
+                                        instructionalContent: keepOverviewPosition(item.instructionalContent, moveItem(
+                                          item.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table'),
                                           contentIndex,
                                           1,
-                                        ),
+                                        )),
                                       }
                                     : item,
                                 ),
@@ -509,7 +540,7 @@ export function LessonManagementPage() {
                             }
                           />
                         </div>
-                        {block.type === 'vocabulary-table' ? <p>Edit this reference in the Vocabulary section above.</p> : <InstructionalContentEditor
+                        <InstructionalContentEditor
                           block={block}
                           onChange={(next) =>
                             changeChapters(
@@ -525,33 +556,20 @@ export function LessonManagementPage() {
                               ),
                             )
                           }
-                        />}
+                        />
                         </div>
                       </details>}
                       </ReorderableItem>
                     ))}
-                    <button
-                      type="button"
-                      className="admin-add-action"
-                      aria-label={`Add teaching content to ${chapter.title}`}
-                      onClick={() =>
-                        changeChapters(
-                          draft.chapters.map((item) =>
-                            item.id === chapter.id
-                              ? {
-                                  ...item,
-                                  instructionalContent: [
-                                    ...item.instructionalContent,
-                                    newInstructionalBlock(),
-                                  ],
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                    >
-                      + Add teaching content
-                    </button>
+                      </div>
+                    )}
+                    <div className="admin-actions">
+                      <button type="button" className="admin-add-action"
+                        aria-label={`Add teaching content to ${chapter.title}`}
+                        onClick={() => addTeachingBlock(chapter.id)}>
+                        + Add teaching content
+                      </button>
+                    </div>
                     <h3>Activities ({chapter.activities.length})</h3>
                     {chapter.activities.map((activity, activityIndex) => (
                       <ReorderableItem key={activity.id} group={`chapter-${chapter.id}-activities`} id={activity.id}
@@ -748,6 +766,22 @@ export function LessonManagementPage() {
       >
         This removes the chapter and its teaching content and activities from the draft. Save the
         draft to keep this change; published content remains unchanged until republished.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={removingTeachingChapterId !== null}
+        title="Remove Teaching Content?"
+        confirmLabel="Remove Teaching Content"
+        onCancel={() => setRemovingTeachingChapterId(null)}
+        onConfirm={() => {
+          if (draft && removingTeachingChapterId) {
+            changeChapters(draft.chapters.map((chapter) => chapter.id === removingTeachingChapterId
+              ? { ...chapter, instructionalContent: chapter.instructionalContent.filter((block) => block.type === 'vocabulary-table') }
+              : chapter));
+          }
+          setRemovingTeachingChapterId(null);
+        }}
+      >
+        This removes this chapter's teaching blocks from the draft. Its activities and the lesson Overview stay in place.
       </ConfirmDialog>
     </>
   );

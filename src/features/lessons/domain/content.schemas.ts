@@ -200,6 +200,11 @@ export const instructionalContentBlockSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     body: z.string().min(1),
   }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('content-table'),
+    tables: contentTablesSchema.min(1),
+  }),
   z
     .object({
       id: z.string().min(1),

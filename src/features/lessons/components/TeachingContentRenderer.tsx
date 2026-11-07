@@ -12,11 +12,11 @@ export function TeachingContentRenderer({ blocks }: { blocks: InstructionalConte
             key={block.id}
             className={`chapter-teaching__block chapter-teaching__block--${block.type}`}
           >
-            {block.type !== 'vocabulary-table' && (
+            {block.type !== 'vocabulary-table' && block.type !== 'content-table' && (
               <h2>{block.type === 'example' ? block.phrase : block.title}</h2>
             )}
-            {block.type === 'vocabulary-table' ? (
-              <VocabularyTables tables={vocabularyTables(block)} />
+            {block.type === 'vocabulary-table' || block.type === 'content-table' ? (
+              <VocabularyTables tables={block.type === 'content-table' ? block.tables : vocabularyTables(block)} />
             ) : (
               <p>{block.type === 'example' ? `${block.expression} — ${block.note}` : block.body}</p>
             )}

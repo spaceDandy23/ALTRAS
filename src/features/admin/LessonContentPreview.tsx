@@ -42,9 +42,11 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
           <p className="assessment-kicker">Chapter</p>
           <h3 id={`${chapter.id}-preview-title`}>{chapter.title}</h3>
           {chapter.description && <p>{chapter.description}</p>}
-          <TeachingContentRenderer
-            blocks={chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table')}
-          />
+          {chapter.instructionalContent.some((block) => block.type !== 'vocabulary-table') && (
+            <TeachingContentRenderer
+              blocks={chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table')}
+            />
+          )}
         </section>
       ))}
       {activity.type === 'find-word' ? (

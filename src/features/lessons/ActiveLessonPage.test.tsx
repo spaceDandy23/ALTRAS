@@ -311,6 +311,33 @@ describe('active lesson loading failures', () => {
     expect(await screen.findByRole('heading', { name: lesson.activities[0].title })).toBeVisible();
   });
 
+  it('restores an older attempt at an empty teaching stage directly into activities', async () => {
+    const base = structuredClone(packagedContent.lessons[0]);
+    const chapterId = 'chapter-no-teaching';
+    const lesson = { ...base, chapters: [{ id: chapterId, title: 'Practice', displayOrder: 1,
+      instructionalContent: [], activities: base.activities }] };
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const attempt: LessonAttempt = {
+      id: attemptId, userId, lessonId: lesson.id, contentVersion: lesson.contentVersion,
+      status: 'active', startedAt: 1, lastUpdatedAt: 1, completedAt: null, abandonedAt: null,
+      answers: [], finalScore: null, starCount: null, cleared: null, xpImprovement: 0,
+      flowStage: 'chapter-teaching', currentChapterId: chapterId,
+    };
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    await saveLessonDraft(createLessonDraft(attempt, lesson));
+    useAuthStore.setState({ status: 'authenticated', user: {
+      id: userId, normalizedUsername: 'student', displayName: 'Student', createdAt: 1, lastLoginAt: 1,
+    } });
+    useContentStore.setState({ status: 'ready', error: null });
+    render(<MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}><Routes>
+      <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+    </Routes></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: base.activities[0].title })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Start chapter activities' })).not.toBeInTheDocument();
+    expect((await getLessonDraft(userId, lesson.id, attemptId))?.attempt.flowStage).toBe('chapter-activity');
+  });
+
   it('renders a recoverable error and retries restoration', async () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000002';

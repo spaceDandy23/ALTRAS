@@ -150,6 +150,9 @@ beforeAll(async () => {
   const versionsBeforeTables = await pg.query('select * from public.lesson_definitions order by lesson_id,content_version');
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070001_dynamic_content_tables.sql'), 'utf8'));
   expect((await pg.query('select * from public.lesson_definitions order by lesson_id,content_version')).rows).toEqual(versionsBeforeTables.rows);
+  await pg.exec(readFileSync(resolve('supabase/migrations/202611070002_chapter_vocabulary_tables.sql'), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations/202611070003_revert_chapter_vocabulary_tables.sql'), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations/202611070004_optional_chapter_teaching_tables.sql'), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -171,6 +174,36 @@ afterAll(async () => {
 });
 
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('publishes mixed chapter teaching tables without moving the Overview, and skips empty teaching', async () => {
+    const base = structuredClone(packagedContent.lessons[0]);
+    const overview = { id: 'overview-reference', type: 'vocabulary-table' as const, title: 'Vocabulary', rows: [], tables: [{
+      id: 'overview-table', columns: [{ id: 'term', label: 'Term' }], rows: [{ id: 'row', cells: { term: 'Variable' } }],
+    }] };
+    const chapterOne = newChapter(1, 'Activities first');
+    chapterOne.instructionalContent = [overview];
+    chapterOne.activities = [structuredClone(base.activities[0])];
+    const chapterTwo = newChapter(2, 'Teaching tables');
+    chapterTwo.instructionalContent = [
+      { id: 'explanation', type: 'paragraph', title: 'Read the phrase', body: 'Then translate.' },
+      { id: 'tables', type: 'content-table', tables: [
+        { id: 'operations', title: 'Operations', columns: [{ id: 'word', label: 'Word' }], rows: [{ id: 'sum', cells: { word: 'sum' } }] },
+        { id: 'translations', columns: [{ id: 'verbal', label: 'Verbal' }, { id: 'symbolic', label: 'Symbolic' }], rows: [{ id: 'example', cells: { verbal: 'five more', symbolic: 'n + 5' } }] },
+      ] },
+      { id: 'warning', type: 'warning', title: 'Mind the order', body: 'Read carefully.' },
+    ];
+    chapterTwo.activities = [structuredClone(base.activities[1])];
+    const authored = draft({ prerequisiteLessonId: undefined, chapters: [chapterOne, chapterTwo] });
+    const saved = await save(authored);
+    const published = await publish(saved);
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string; flow_stage: string }>('start_lesson_attempt', [published.lesson_id]);
+    expect(attempt.flow_stage).toBe('chapter-activity');
+    const content = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, attempt.id]);
+    expect(content.chapters[0].instructionalContent).toEqual([overview]);
+    expect(content.chapters[1].instructionalContent).toEqual(chapterTwo.instructionalContent);
+    expect(content.instructionalContent).toContainEqual(overview);
+    expect(publicLessonSchema.safeParse(content).success).toBe(true);
+  });
   it('saves, publishes and restores ordered configurable tables without changing published versions or private keys', async () => {
     const tables: ContentTable[] = [
       { id: 'operations', title: 'Operation words', columns: [
@@ -476,6 +509,8 @@ describe('Basic Lesson Management SQL and RLS', () => {
     });
     const first = newChapter(1, 'Foundations');
     const second = newChapter(2, 'Applications');
+    first.instructionalContent = [{ id: 'first-teaching', type: 'paragraph', title: 'First', body: 'Read first.' }];
+    second.instructionalContent = [{ id: 'second-teaching', type: 'paragraph', title: 'Second', body: 'Read next.' }];
     first.activities = structuredClone(packagedContent.lessons[0].activities.slice(0, 2));
     second.activities = [structuredClone(packagedContent.lessons[0].activities[2])];
     lesson.chapters = [first, second];

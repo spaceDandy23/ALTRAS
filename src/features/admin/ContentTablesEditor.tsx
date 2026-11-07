@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { ContentTable } from '@/features/lessons/domain/content.schemas';
+import { newContentTable } from '@/features/lessons/domain/content-tables';
 import { AdminIconButton } from './AdminIconButton';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { moveItem } from './lesson-management.service';
@@ -285,19 +286,7 @@ export function ContentTablesEditor({
         type="button"
         className="admin-add-action"
         onClick={() =>
-          onChange([
-            ...tables,
-            {
-              id: crypto.randomUUID(),
-              title: '',
-              columns: [
-                { id: 'term', label: 'Term' },
-                { id: 'definition', label: 'Definition' },
-                { id: 'example', label: 'Example' },
-              ],
-              rows: [{ id: crypto.randomUUID(), cells: { term: '', definition: '', example: '' } }],
-            },
-          ])
+          onChange([...tables, newContentTable()])
         }
       >
         Add table

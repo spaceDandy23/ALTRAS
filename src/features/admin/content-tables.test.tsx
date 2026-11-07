@@ -44,6 +44,19 @@ const confirmRemoval = () =>
   fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
 
 describe('configurable teaching tables', () => {
+  it('renders multiple chapter tables in order beside ordinary teaching blocks', () => {
+    const block = { id: 'chapter-tables', type: 'content-table' as const, tables };
+    expect(instructionalContentBlockSchema.safeParse(block).success).toBe(true);
+    render(<TeachingContentRenderer blocks={[
+      { id: 'intro', type: 'paragraph', title: 'Start here', body: 'Read the rows.' },
+      block,
+      { id: 'warning', type: 'warning', title: 'Check order', body: 'Read carefully.' },
+    ]} />);
+    expect(screen.getAllByRole('table').map((table) => table.getAttribute('aria-label'))).toEqual(['Operations', 'Table 2']);
+    expect(screen.getByText('Start here').compareDocumentPosition(screen.getByRole('table', { name: 'Operations' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Table 2' }).compareDocumentPosition(screen.getByText('Check order')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(instructionalContentBlockSchema.safeParse({ ...block, tables: [] }).success).toBe(false);
+  });
   it('allows removing every table without leaving an empty student card', () => {
     const block: VocabularyBlock = { id: 'reference', type: 'vocabulary-table', title: 'Vocabulary', rows: [], tables: [] };
     expect(instructionalContentBlockSchema.safeParse(block).success).toBe(true);

@@ -4,6 +4,7 @@ import {
   type InstructionalContentBlock,
   type LessonChapter,
 } from '@/features/lessons/domain/content.schemas';
+import { newContentTable } from '@/features/lessons/domain/content-tables';
 import { catalogShell } from '@/features/lessons/content/catalog-shell';
 import { getSupabaseClient } from '@/services/supabase.client';
 import {
@@ -185,6 +186,7 @@ export function newInstructionalBlock(
 ): InstructionalContentBlock {
   const id = `content-${crypto.randomUUID()}`;
   if (type === 'example') return { id, type, phrase: '', expression: '', note: '' };
+  if (type === 'content-table') return { id, type, tables: [newContentTable()] };
   if (type === 'vocabulary-table')
     return {
       id,

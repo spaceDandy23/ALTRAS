@@ -86,9 +86,10 @@ describe('Basic Lesson Management editor and preview', () => {
     const row = item();
     const firstChapter = row.draft.chapters[0];
     firstChapter.activities = firstChapter.activities.slice(0, 2);
-    firstChapter.instructionalContent = [firstChapter.instructionalContent[0], {
-      id: 'vocabulary-reference', type: 'vocabulary-table', title: 'Vocabulary',
-      rows: [{ id: 'term-1', term: 'Variable', definition: 'Unknown', example: 'x' }],
+    firstChapter.instructionalContent = [{
+      id: 'first-teaching', type: 'paragraph', title: 'Read first', body: 'Read carefully.',
+    }, {
+      id: 'second-teaching', type: 'warning', title: 'Read carefully', body: 'Mind the order.',
     }];
     const secondChapter = newChapter(2, 'Second chapter');
     row.draft.chapters = [firstChapter, secondChapter];
@@ -132,7 +133,7 @@ describe('Basic Lesson Management editor and preview', () => {
       p_lesson: expect.objectContaining({
         chapters: [expect.objectContaining({ id: secondChapter.id, displayOrder: 1 }), expect.objectContaining({
           id: firstChapter.id, displayOrder: 2,
-          instructionalContent: [expect.objectContaining({ id: 'vocabulary-reference' }), expect.objectContaining({ id: firstChapter.instructionalContent[0].id })],
+          instructionalContent: [expect.objectContaining({ id: 'second-teaching' }), expect.objectContaining({ id: firstChapter.instructionalContent[0].id })],
           activities: [expect.objectContaining({ id: firstChapter.activities[1].id }), expect.objectContaining({ id: firstChapter.activities[0].id, title: 'Unsaved activity edit' })],
         })],
         assessmentQuestions: expect.objectContaining({
@@ -395,6 +396,63 @@ describe('Basic Lesson Management editor and preview', () => {
         }),
       ),
     );
+  });
+  it('adds and removes optional chapter Teaching Content without changing Overview tables', async () => {
+    const row = item();
+    const overview = { id: 'overview-reference', type: 'vocabulary-table' as const, title: 'Vocabulary', rows: [], tables: [{
+      id: 'overview-table', columns: [{ id: 'term', label: 'Term' }], rows: [{ id: 'one', cells: { term: 'Variable' } }],
+    }] };
+    row.draft.chapters[0].instructionalContent = [overview];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(async (name: string, args?: { p_lesson: AuthoredLesson }) => ({
+      error: null, data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+    }));
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    expect(screen.getByText('Vocabulary (1 tables)')).toBeInTheDocument();
+    fireEvent.click(container.querySelector('.admin-chapter-details > summary')!);
+    expect(screen.queryByRole('heading', { name: 'Teaching Content' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add dynamic table to Chapter 1' }));
+    const tableBlock = document.querySelector<HTMLElement>('.admin-instruction')!;
+    expect(tableBlock).toHaveAttribute('open');
+    expect(within(tableBlock).getByLabelText('Table title (optional)')).toBeVisible();
+    expect(within(tableBlock).getByLabelText('Term 1')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Teaching Content' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Teaching Content' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Teaching Content' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove Teaching Content' }));
+    expect(screen.queryByRole('heading', { name: 'Teaching Content' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await screen.findByText('Draft saved.');
+    expect(client.rpc).toHaveBeenCalledWith('save_admin_lesson', expect.objectContaining({
+      p_lesson: expect.objectContaining({ chapters: [expect.objectContaining({ instructionalContent: [overview] })] }),
+    }));
+  }, 15000);
+  it('reorders chapter teaching blocks without moving the lesson Overview reference', async () => {
+    const row = item();
+    const overview = { id: 'overview-reference', type: 'vocabulary-table' as const, title: 'Vocabulary', rows: [], tables: [{
+      id: 'overview-table', columns: [{ id: 'term', label: 'Term' }], rows: [],
+    }] };
+    row.draft.chapters[0].instructionalContent = [overview,
+      { id: 'first-teaching', type: 'paragraph', title: 'First', body: 'First body.' },
+      { id: 'second-teaching', type: 'warning', title: 'Second', body: 'Second body.' },
+    ];
+    row.draft = normalizeAuthoredLesson(row.draft);
+    client.rpc.mockImplementation(async (name: string, args?: { p_lesson: AuthoredLesson }) => ({
+      error: null, data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args!.p_lesson, revision: 2 },
+    }));
+    const { container } = page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+    fireEvent.click(container.querySelector('.admin-chapter-details > summary')!);
+    dragAfter(screen.getByRole('button', { name: 'Drag teaching content 1 to reorder' }),
+      screen.getByRole('button', { name: 'Drag teaching content 2 to reorder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await screen.findByText('Draft saved.');
+    expect(client.rpc).toHaveBeenCalledWith('save_admin_lesson', expect.objectContaining({
+      p_lesson: expect.objectContaining({ chapters: [expect.objectContaining({ instructionalContent: [
+        overview, expect.objectContaining({ id: 'second-teaching' }), expect.objectContaining({ id: 'first-teaching' }),
+      ] })] }),
+    }));
   });
   it('authors and saves Vocabulary from its collapsed lesson-level section', async () => {
     const row = item();

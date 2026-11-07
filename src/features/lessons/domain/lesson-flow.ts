@@ -3,6 +3,10 @@ import type { LessonAttempt } from '@/types/learning';
 
 export type LessonFlowStage = NonNullable<LessonAttempt['flowStage']>;
 
+export function hasChapterTeachingContent(chapter: { instructionalContent: { type: string }[] }) {
+  return chapter.instructionalContent.some((block) => block.type !== 'vocabulary-table');
+}
+
 export function lessonChapters(lesson: LearningLesson) {
   if (lesson.chapters?.length)
     return [...lesson.chapters].sort((left, right) => left.displayOrder - right.displayOrder);
@@ -64,18 +68,27 @@ export function nextLessonFlowState(
   const chapters = lessonChapters(lesson);
   const chapterIndex = chapters.findIndex((chapter) => chapter.id === attempt.currentChapterId);
   const currentChapter = chapters[chapterIndex];
+  const nextChapterState = (from: number) => {
+    let lastChapterId = attempt.currentChapterId ?? null;
+    for (const chapter of chapters.slice(from)) {
+      if (hasChapterTeachingContent(chapter))
+        return { flowStage: 'chapter-teaching' as const, currentChapterId: chapter.id };
+      if (chapter.activities.length)
+        return { flowStage: 'chapter-activity' as const, currentChapterId: chapter.id };
+      lastChapterId = chapter.id;
+    }
+    return attempt.postAssessmentVersion
+      ? { flowStage: 'post-test' as const, currentChapterId: lastChapterId }
+      : { flowStage: 'ready-to-complete' as const, currentChapterId: lastChapterId };
+  };
   if (stage === 'pre-test') {
-    return { flowStage: 'chapter-teaching', currentChapterId: chapters[0]?.id ?? null };
+    return nextChapterState(0);
   }
   if (stage === 'chapter-teaching' && currentChapter?.activities.length) {
     return { flowStage: 'chapter-activity', currentChapterId: currentChapter.id };
   }
   if (stage === 'chapter-teaching' || stage === 'chapter-activity') {
-    const nextChapter = chapters[chapterIndex + 1];
-    if (nextChapter) return { flowStage: 'chapter-teaching', currentChapterId: nextChapter.id };
-    return attempt.postAssessmentVersion
-      ? { flowStage: 'post-test', currentChapterId: attempt.currentChapterId ?? null }
-      : { flowStage: 'ready-to-complete', currentChapterId: attempt.currentChapterId ?? null };
+    return nextChapterState(chapterIndex + 1);
   }
   if (stage === 'post-test') {
     return { flowStage: 'ready-to-complete', currentChapterId: attempt.currentChapterId ?? null };

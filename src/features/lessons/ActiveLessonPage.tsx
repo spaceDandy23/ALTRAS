@@ -41,7 +41,7 @@ import {
 import { FindWordActivityView } from './activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateActivityView';
 import type { ActivityAnswer } from './domain/evaluation';
-import { chapterActivityPosition, lessonChapters } from './domain/lesson-flow';
+import { chapterActivityPosition, hasChapterTeachingContent, lessonChapters } from './domain/lesson-flow';
 import { ContentState } from './components/ContentState';
 import { TeachingContentRenderer } from './components/TeachingContentRenderer';
 import { playSfx } from '@/services/audio/audio.manager';
@@ -328,6 +328,22 @@ export function ActiveLessonPage() {
     }
   }, [attempt?.flowStage, attemptId, lessonId, navigate]);
 
+  const emptyTeachingChapter = attempt?.flowStage === 'chapter-teaching' && lesson
+    ? lessonChapters(lesson).find((chapter) => chapter.id === attempt.currentChapterId)
+    : null;
+  const skipEmptyTeaching = !!draft && !!emptyTeachingChapter && !hasChapterTeachingContent(emptyTeachingChapter);
+  useEffect(() => {
+    if (!skipEmptyTeaching || loadedFor !== loadKey || !draft || stageAdvanceInFlightRef.current) return;
+    stageAdvanceInFlightRef.current = true;
+    void queueLessonStageTransition(draft.id, db, Date.now(), 'chapter-teaching')
+      .then((next) => {
+        applyDraft(next);
+        if (navigator.onLine) synchronizerRef.current?.requestSync();
+      })
+      .catch(() => setLoadError('Your lesson step could not be restored.'))
+      .finally(() => { stageAdvanceInFlightRef.current = false; });
+  }, [applyDraft, draft, loadKey, loadedFor, skipEmptyTeaching]);
+
   if (loadedFor === loadKey && loadError) {
     return (
       <ContentState>
@@ -352,6 +368,10 @@ export function ActiveLessonPage() {
         <LoadingState variant="page" message={launchMessage} />
       </ContentState>
     );
+  }
+
+  if (skipEmptyTeaching) {
+    return <ContentState><LoadingState variant="page" /></ContentState>;
   }
 
   const stage = attempt.flowStage ?? 'legacy-activity';
