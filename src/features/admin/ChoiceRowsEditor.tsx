@@ -1,8 +1,8 @@
-import { FormField } from '@/components/ui/FormField';
 import { moveItem } from './lesson-management.service';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { Fragment, type ReactNode } from 'react';
 import { AdminIconButton } from './AdminIconButton';
+import { ValidationFieldError, ValidationScope, ValidatedFormField, useLessonValidation, type ValidationPathPart } from './lesson-validation';
 
 export type EditableChoice = { id: string; label: string };
 
@@ -21,6 +21,7 @@ export function ChoiceRowsEditor({
   correctChoiceId,
   onCorrectChoiceChange,
   reorderGroup,
+  validationPath = [],
 }: {
   choices: EditableChoice[];
   onChange: (choices: EditableChoice[]) => void;
@@ -36,12 +37,16 @@ export function ChoiceRowsEditor({
   correctChoiceId?: string;
   onCorrectChoiceChange?: (choiceId: string) => void;
   reorderGroup?: string;
+  validationPath?: ValidationPathPart[];
 }) {
+  const listValidation = useLessonValidation(validationPath);
   return (
-    <fieldset className="admin-options">
+    <ValidationScope path={validationPath}>
+    <fieldset className="admin-options" tabIndex={-1} {...listValidation.fieldAttributes}>
       <legend>{legend}</legend>
       {choices.map((choice, index) => {
         const row = (handle: ReactNode) => (
+        <ValidationScope path={[index]}>
         <div className="admin-option">
           {handle}
           {onCorrectChoiceChange && (
@@ -55,9 +60,10 @@ export function ChoiceRowsEditor({
               Correct
             </label>
           )}
-          <FormField
+          <ValidatedFormField
             label={`${choiceLabel} ${index + 1}`}
             value={choice.label}
+            validationPath={['label']}
             maxLength={choiceMaxLength}
             required={choiceRequired}
             onChange={(event) =>
@@ -81,6 +87,7 @@ export function ChoiceRowsEditor({
             onClick={() => onChange(choices.filter((item) => item.id !== choice.id))}
           />
         </div>
+        </ValidationScope>
         );
         return reorderGroup ? (
           <ReorderableItem key={choice.id} group={reorderGroup} id={choice.id}
@@ -98,6 +105,13 @@ export function ChoiceRowsEditor({
       >
         {addLabel}
       </button>
+      <ChoiceListError />
     </fieldset>
+    </ValidationScope>
   );
+}
+
+function ChoiceListError() {
+  const { error } = useLessonValidation([]);
+  return error ? <ValidationFieldError path={[]} /> : null;
 }

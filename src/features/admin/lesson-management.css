@@ -151,6 +151,82 @@
 .admin-save-feedback > * {
   margin-block: 0.5rem;
 }
+.admin-validation-summary {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-block: 1rem;
+  border: 2px solid #ff7770;
+  border-left-width: 6px;
+  border-radius: var(--radius);
+  padding: 1rem;
+  color: #fff4f2;
+  background: #351b1c;
+}
+.admin-validation-summary > svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  color: #ff8982;
+}
+.admin-validation-summary > div,
+.admin-validation-summary li,
+.admin-validation-summary button {
+  min-width: 0;
+}
+.admin-validation-summary h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.admin-validation-summary p {
+  margin: 0.25rem 0 0.5rem;
+}
+.admin-validation-summary ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding-inline-start: 1.15rem;
+}
+.admin-validation-summary li::marker {
+  color: #ff8982;
+}
+.admin-validation-summary button {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.admin-validation-summary button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.admin-content .form-field__error {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.admin-content [aria-invalid='true'] {
+  border-color: #ff7770;
+  box-shadow: 0 0 0 1px #ff7770;
+}
+:root[data-theme='light'] .admin-validation-summary {
+  border-color: #a8322c;
+  color: #581b18;
+  background: #fbe9e7;
+}
+:root[data-theme='light'] .admin-validation-summary > svg,
+:root[data-theme='light'] .admin-validation-summary li::marker {
+  color: #8f2924;
+}
+:root[data-theme='light'] .admin-content [aria-invalid='true'] {
+  border-color: #a8322c;
+  box-shadow: 0 0 0 1px #a8322c;
+}
 .admin-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

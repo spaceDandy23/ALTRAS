@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { FormField } from '@/components/ui/FormField';
 import { ChoiceRowsEditor } from './ChoiceRowsEditor';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { AdminIconButton } from './AdminIconButton';
 import { moveItem, newActivity, type AuthoredLesson } from './lesson-management.service';
+import { ValidationFieldError, ValidationScope, ValidatedFormField, useLessonValidation, type ValidationPathPart } from './lesson-validation';
 type Activity = AuthoredLesson['activities'][number];
 
 export function ActivityEditor({
   activity,
   onChange,
+  validationPath = [],
 }: {
   activity: Activity;
   onChange: (a: Activity) => void;
+  validationPath?: ValidationPathPart[];
 }) {
   const [answerFeedback, setAnswerFeedback] = useState('');
   const options = activity.type === 'organize-translate' ? activity.tokens : activity.choices;
@@ -43,6 +45,7 @@ export function ActivityEditor({
     onChange({ ...activity, tokens: next, acceptedTokenSequences: updated, correctTokenSequence: updated[0] });
   };
   return (
+    <ValidationScope path={validationPath}>
     <div className="admin-fields">
       <label>
         Activity type
@@ -71,32 +74,37 @@ export function ActivityEditor({
           <option value="choose-correct-translation">Choose the correct translation</option>
         </select>
       </label>
-      <FormField
+      <ValidatedFormField
         label="Activity title"
+        validationPath={['title']}
         value={activity.title}
         onChange={(e) => onChange({ ...activity, title: e.target.value })}
       />
-      <FormField
+      <ValidatedFormField
         label={activity.type === 'choose-correct-translation' ? 'Verbal phrase' : 'Prompt / instructions'}
+        validationPath={['prompt']}
         value={activity.prompt}
         onChange={(e) => onChange({ ...activity, prompt: e.target.value })}
       />
       {activity.type !== 'choose-correct-translation' && (
-        <FormField
+        <ValidatedFormField
           label="Mathematical expression"
+          validationPath={['mathStatement']}
           value={activity.mathStatement}
           onChange={(e) => onChange({ ...activity, mathStatement: e.target.value })}
         />
       )}
       {activity.type === 'find-word' && (
         <>
-          <FormField
+          <ValidatedFormField
             label="Sentence before blank"
+            validationPath={['sentenceBefore']}
             value={activity.sentenceBefore}
             onChange={(e) => onChange({ ...activity, sentenceBefore: e.target.value })}
           />
-          <FormField
+          <ValidatedFormField
             label="Sentence after blank"
+            validationPath={['sentenceAfter']}
             value={activity.sentenceAfter}
             onChange={(e) => onChange({ ...activity, sentenceAfter: e.target.value })}
           />
@@ -112,6 +120,7 @@ export function ActivityEditor({
         maxChoices={20}
         reorderGroup={activity.type === 'organize-translate' ? `activity-${activity.id}-tokens` : undefined}
         radioGroupName={`correct-activity-${activity.id}`}
+        validationPath={[activity.type === 'organize-translate' ? 'tokens' : 'choices']}
         correctChoiceId={activity.type === 'organize-translate' ? undefined : activity.correctChoiceId}
         onCorrectChoiceChange={
           activity.type === 'organize-translate'
@@ -119,6 +128,7 @@ export function ActivityEditor({
             : (choiceId) => onChange({ ...activity, correctChoiceId: choiceId })
         }
       />
+      <ActivityCorrectAnswerError />
       {activity.type === 'organize-translate' && (
         <section className="admin-accepted-answers" aria-labelledby={`accepted-answers-${activity.id}`}>
           <h3 id={`accepted-answers-${activity.id}`}>Accepted answers</h3>
@@ -188,27 +198,40 @@ export function ActivityEditor({
           {answerFeedback && <p className="admin-accepted-answer__feedback" role="status">{answerFeedback}</p>}
         </section>
       )}
-      <FormField
+      <ValidatedFormField
         label="Hint (optional)"
+        validationPath={['hint', 'body']}
         value={activity.hint?.body ?? ''}
         onChange={(e) =>
           onChange({ ...activity, hint: e.target.value ? { body: e.target.value } : undefined })
         }
       />
-      <FormField
+      <ValidatedFormField
         label="Feedback title"
+        validationPath={['explanation', 'title']}
         value={activity.explanation.title}
         onChange={(e) =>
           onChange({ ...activity, explanation: { ...activity.explanation, title: e.target.value } })
         }
       />
-      <FormField
+      <ValidatedFormField
         label="Feedback explanation"
+        validationPath={['explanation', 'body']}
         value={activity.explanation.body}
         onChange={(e) =>
           onChange({ ...activity, explanation: { ...activity.explanation, body: e.target.value } })
         }
       />
+    </div>
+    </ValidationScope>
+  );
+}
+
+function ActivityCorrectAnswerError() {
+  const validation = useLessonValidation(['correctChoiceId']);
+  return (
+    <div data-validation-path={validation.validationPath} tabIndex={-1}>
+      <ValidationFieldError path={['correctChoiceId']} />
     </div>
   );
 }

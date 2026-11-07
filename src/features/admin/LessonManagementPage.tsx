@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { FormField } from '@/components/ui/FormField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminContentLoading } from './AdminContentLoading';
 import { ActivityEditor } from './ActivityEditor';
@@ -22,11 +21,14 @@ import {
   normalizeAuthoredLesson,
   moveItem,
   totalLessonActivities,
+  getLessonValidationIssues,
+  LessonManagementValidationError,
   MAX_ACTIVITIES,
   MAX_LESSONS,
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
+import { LessonValidationProvider, LessonValidationSummary, ValidationScope, ValidatedFormField, ValidatedSelectField, type LessonValidationIssue } from './lesson-validation';
 import type { ContentTable, InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
 import './lesson-management.css';
 
@@ -42,6 +44,14 @@ function keepOverviewPosition(
   return blocks.map((block) => block.type === 'vocabulary-table' ? block : teaching[index++] ?? block);
 }
 
+function firstVocabularyPath(lesson: AuthoredLesson) {
+  for (const [chapterIndex, chapter] of lesson.chapters.entries()) {
+    const contentIndex = chapter.instructionalContent.findIndex((block) => block.type === 'vocabulary-table');
+    if (contentIndex >= 0) return ['chapters', chapterIndex, 'instructionalContent', contentIndex, 'tables'];
+  }
+  return [];
+}
+
 export function LessonManagementPage() {
   const [items, setItems] = useState<ManagedLesson[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -52,6 +62,8 @@ export function LessonManagementPage() {
   const [vocabularyOpen, setVocabularyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [validationIssues, setValidationIssues] = useState<LessonValidationIssue[]>([]);
+  const [validationAction, setValidationAction] = useState<'save' | 'publish' | null>(null);
   const [notice, setNotice] = useState('');
   const [reload, setReload] = useState(0);
   const [leaving, setLeaving] = useState(false);
@@ -89,6 +101,21 @@ export function LessonManagementPage() {
     saveFeedbackRef.current?.scrollIntoView?.({ behavior: 'auto', block: 'center' });
     saveFeedbackRef.current?.focus({ preventScroll: true });
   }, [error, draft, preview]);
+  useEffect(() => {
+    if (validationIssues.length === 0 || preview) return;
+    const key = JSON.stringify(validationIssues[0].path);
+    const target = [...document.querySelectorAll<HTMLElement>('[data-validation-path]')]
+      .find((element) => element.dataset.validationPath === key);
+    if (!target) return;
+    for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
+    }
+    const frame = requestAnimationFrame(() => {
+      target.scrollIntoView?.({ behavior: 'auto', block: 'center' });
+      target.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [validationIssues, preview]);
   const current = items.find((item) => item.lesson_id === draft?.id);
   const vocabularyTables = draft?.chapters.flatMap((chapter) =>
     chapter.instructionalContent.flatMap((block) =>
@@ -97,10 +124,16 @@ export function LessonManagementPage() {
   ) ?? [];
   const referenceTables = vocabularyTables.flatMap(({ block }) => getVocabularyTables(block));
   const change = (next: AuthoredLesson) => {
-    setDraft(normalizeAuthoredLesson(next));
+    const normalized = normalizeAuthoredLesson(next);
+    setDraft(normalized);
     setDirty(true);
     setError('');
     setNotice('');
+    if (validationAction) {
+      const nextIssues = getLessonValidationIssues(normalized, validationAction);
+      setValidationIssues(nextIssues);
+      if (nextIssues.length === 0) setValidationAction(null);
+    }
   };
   const changeChapters = (chapters: AuthoredLesson['chapters']) => {
     if (draft) {
@@ -151,6 +184,8 @@ export function LessonManagementPage() {
     setBusy(true);
     setError('');
     setNotice('');
+    setValidationIssues([]);
+    setValidationAction(null);
     try {
       const saved = dirty || !current ? await saveManagedLesson(draft, revision) : current;
       accept(saved);
@@ -163,7 +198,12 @@ export function LessonManagementPage() {
             : 'Lesson unpublished. Existing attempts remain saved.',
       );
     } catch (e) {
-      setError(errorMessage(e, 'Unable to save or publish lesson.'));
+      if (e instanceof LessonManagementValidationError) {
+        setValidationIssues(e.issues);
+        setValidationAction(publish ? 'publish' : 'save');
+      } else {
+        setError(errorMessage(e, 'Unable to save or publish lesson.'));
+      }
     } finally {
       setBusy(false);
     }
@@ -318,41 +358,47 @@ export function LessonManagementPage() {
                 void save();
               }}
             >
+              <LessonValidationProvider issues={validationIssues}>
+              <LessonValidationSummary issues={validationIssues} />
               <fieldset disabled={busy} className="admin-editor">
                 <legend>Lesson details</legend>
                 <div className="admin-fields">
-                  <FormField
+                  <ValidatedFormField
                     label="Lesson title"
+                    validationPath={['title']}
                     value={draft.title}
                     maxLength={2000}
                     required
                     onChange={(e) => change({ ...draft, title: e.target.value })}
                   />
-                  <FormField
+                  <ValidatedFormField
                     label="Short description"
+                    validationPath={['shortDescription']}
                     value={draft.shortDescription}
                     maxLength={2000}
                     onChange={(e) => change({ ...draft, shortDescription: e.target.value })}
                   />
-                  <FormField
+                  <ValidatedFormField
                     label="Lesson order"
+                    validationPath={['displayOrder']}
                     type="number"
                     min={1}
                     max={99999}
                     value={draft.displayOrder}
                     onChange={(e) => change({ ...draft, displayOrder: Number(e.target.value) })}
                   />
-                  <FormField
+                  <ValidatedFormField
                     label="Passing score (%)"
+                    validationPath={['passingThreshold']}
                     type="number"
                     min={0}
                     max={100}
                     value={draft.passingThreshold}
                     onChange={(e) => change({ ...draft, passingThreshold: Number(e.target.value) })}
                   />
-                  <label>
-                    Prerequisite
-                    <select
+                  <ValidatedSelectField
+                    label="Prerequisite"
+                    validationPath={['prerequisiteLessonId']}
                       value={draft.prerequisiteLessonId ?? ''}
                       onChange={(e) =>
                         change({ ...draft, prerequisiteLessonId: e.target.value || undefined })
@@ -366,8 +412,7 @@ export function LessonManagementPage() {
                             {item.draft.title}
                           </option>
                         ))}
-                    </select>
-                  </label>
+                  </ValidatedSelectField>
                 </div>
                 <details className="admin-vocabulary-details" open={vocabularyOpen}
                   onToggle={(event) => setVocabularyOpen(event.currentTarget.open)}>
@@ -375,7 +420,7 @@ export function LessonManagementPage() {
                     Vocabulary ({referenceTables.length ? `${referenceTables.length} tables` : 'not added'})
                   </summary>
                   <div className="admin-vocabulary-content">
-                    {vocabularyOpen && <ContentTablesEditor tables={referenceTables} onChange={updateVocabularyTables} />}
+                    {vocabularyOpen && <ValidationScope path={firstVocabularyPath(draft)}><ContentTablesEditor validationPath={[]} tables={referenceTables} onChange={updateVocabularyTables} /></ValidationScope>}
                   </div>
                 </details>
                 <h2>Assessments</h2>
@@ -422,6 +467,7 @@ export function LessonManagementPage() {
                   </button>
                 </div>
                 {draft.chapters.map((chapter, chapterIndex) => (
+                  <ValidationScope key={`validation-${chapter.id}`} path={['chapters', chapterIndex]}>
                   <ReorderableItem key={chapter.id} group={`lesson-${draft.id}-chapters`} id={chapter.id}
                     label={`chapter ${chapterIndex + 1}`}
                     onReorder={(source, target, side) => changeChapters(reorderById(draft.chapters, source, target, side, (item) => item.id))}>
@@ -446,8 +492,9 @@ export function LessonManagementPage() {
                       />
                     </div>
                     <div className="admin-fields">
-                      <FormField
+                      <ValidatedFormField
                         label="Chapter title"
+                        validationPath={['title']}
                         required
                         value={chapter.title}
                         onChange={(event) =>
@@ -460,8 +507,9 @@ export function LessonManagementPage() {
                           )
                         }
                       />
-                      <FormField
+                      <ValidatedFormField
                         label="Chapter description"
+                        validationPath={['description']}
                         value={chapter.description ?? ''}
                         onChange={(event) =>
                           changeChapters(
@@ -542,6 +590,7 @@ export function LessonManagementPage() {
                         </div>
                         <InstructionalContentEditor
                           block={block}
+                          validationPath={['instructionalContent', contentIndex]}
                           onChange={(next) =>
                             changeChapters(
                               draft.chapters.map((item) =>
@@ -660,6 +709,7 @@ export function LessonManagementPage() {
                         </div>
                         <ActivityEditor
                           activity={activity}
+                          validationPath={['activities', activityIndex]}
                           onChange={(next) =>
                             changeChapters(
                               draft.chapters.map((item) =>
@@ -703,6 +753,7 @@ export function LessonManagementPage() {
                     </details>
                   </div>}
                   </ReorderableItem>
+                  </ValidationScope>
                 ))}
                 <div className="admin-actions">
                   {totalLessonActivities(draft) >= MAX_ACTIVITIES && (
@@ -739,6 +790,7 @@ export function LessonManagementPage() {
                   </div>
                 </div>
               </fieldset>
+              </LessonValidationProvider>
             </form>
           )}
         </>

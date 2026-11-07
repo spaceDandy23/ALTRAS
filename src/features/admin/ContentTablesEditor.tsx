@@ -5,6 +5,7 @@ import { newContentTable } from '@/features/lessons/domain/content-tables';
 import { AdminIconButton } from './AdminIconButton';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { moveItem } from './lesson-management.service';
+import { ValidationScope, ValidatedFormField, ValidatedTextareaField, type ValidationPathPart } from './lesson-validation';
 
 function OrderActions({
   label,
@@ -48,9 +49,11 @@ function OrderActions({
 export function ContentTablesEditor({
   tables,
   onChange,
+  validationPath = [],
 }: {
   tables: ContentTable[];
   onChange: (tables: ContentTable[]) => void;
+  validationPath?: ValidationPathPart[];
 }) {
   const group = useId();
   const [removal, setRemoval] = useState<{
@@ -82,6 +85,7 @@ export function ContentTablesEditor({
     setRemoval(null);
   };
   return (
+    <ValidationScope path={validationPath}>
     <div className="content-tables-editor">
       {tables.map((table, tableIndex) => (
         <ReorderableItem
@@ -94,6 +98,7 @@ export function ContentTablesEditor({
           }
         >
           {(handle) => (
+            <ValidationScope path={[tableIndex]}>
             <details className="content-table-editor" open>
               <summary>
                 {handle}
@@ -110,13 +115,12 @@ export function ContentTablesEditor({
                   move={(direction) => onChange(moveItem(tables, tableIndex, direction))}
                   remove={() => setRemoval({ tableId: table.id })}
                 />
-                <label>
-                  Table title (optional)
-                  <input
+                <ValidatedFormField
+                  label="Table title (optional)"
+                  validationPath={['title']}
                     value={table.title ?? ''}
                     onChange={(event) => update({ ...table, title: event.target.value })}
                   />
-                </label>
                 <fieldset>
                   <legend>Columns</legend>
                   {table.columns.map((column, index) => (
@@ -139,11 +143,12 @@ export function ContentTablesEditor({
                       }
                     >
                       {(columnHandle) => (
+                        <ValidationScope path={['columns', index]}>
                         <div className="content-table-editor__column">
                           {columnHandle}
-                          <label>
-                            Column {index + 1}
-                            <input
+                          <ValidatedFormField
+                            label={`Column ${index + 1}`}
+                            validationPath={['label']}
                               required
                               value={column.label}
                               onChange={(event) =>
@@ -157,7 +162,6 @@ export function ContentTablesEditor({
                                 })
                               }
                             />
-                          </label>
                           <OrderActions
                             label={`column ${index + 1}`}
                             index={index}
@@ -172,6 +176,7 @@ export function ContentTablesEditor({
                             remove={() => setRemoval({ tableId: table.id, columnId: column.id })}
                           />
                         </div>
+                        </ValidationScope>
                       )}
                     </ReorderableItem>
                   ))}
@@ -212,6 +217,7 @@ export function ContentTablesEditor({
                       }
                     >
                       {(rowHandle) => (
+                        <ValidationScope path={['rows', index]}>
                         <div className="content-table-editor__row">
                           <div className="content-table-editor__actions">
                             {rowHandle}
@@ -228,9 +234,10 @@ export function ContentTablesEditor({
                           </div>
                           <div className="content-table-editor__cells">
                             {table.columns.map((column) => (
-                              <label key={column.id}>
-                                {column.label} {index + 1}
-                                <textarea
+                              <ValidatedTextareaField
+                                key={column.id}
+                                label={`${column.label} ${index + 1}`}
+                                validationPath={['cells', column.id]}
                                   value={row.cells[column.id] ?? ''}
                                   onChange={(event) =>
                                     update({
@@ -249,10 +256,10 @@ export function ContentTablesEditor({
                                     })
                                   }
                                 />
-                              </label>
                             ))}
                           </div>
                         </div>
+                        </ValidationScope>
                       )}
                     </ReorderableItem>
                   ))}
@@ -279,6 +286,7 @@ export function ContentTablesEditor({
                 </fieldset>
               </div>
             </details>
+            </ValidationScope>
           )}
         </ReorderableItem>
       ))}
@@ -303,5 +311,6 @@ export function ContentTablesEditor({
         draft. Published content stays unchanged until publishing.
       </ConfirmDialog>
     </div>
+    </ValidationScope>
   );
 }

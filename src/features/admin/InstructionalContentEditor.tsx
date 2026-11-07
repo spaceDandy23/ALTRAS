@@ -1,16 +1,18 @@
-import { FormField } from '@/components/ui/FormField';
 import type { InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
 import { newContentTable } from '@/features/lessons/domain/content-tables';
 import { ContentTablesEditor } from './ContentTablesEditor';
+import { ValidationScope, ValidatedFormField, ValidatedTextareaField, ValidatedSelectField, type ValidationPathPart } from './lesson-validation';
 
 type EditableInstructionalContent = Exclude<InstructionalContentBlock, { type: 'vocabulary-table' }>;
 
 export function InstructionalContentEditor({
   block,
   onChange,
+  validationPath = [],
 }: {
   block: EditableInstructionalContent;
   onChange: (block: EditableInstructionalContent) => void;
+  validationPath?: ValidationPathPart[];
 }) {
   const changeType = (type: Exclude<InstructionalContentBlock['type'], 'vocabulary-table'>) => {
     if (type === 'example') {
@@ -23,10 +25,11 @@ export function InstructionalContentEditor({
   };
 
   return (
+    <ValidationScope path={validationPath}>
     <div className={`admin-instruction-fields${block.type === 'content-table' ? ' admin-instruction-fields--tables' : ''}`}>
-      <label>
-        Content type
-        <select
+      <ValidatedSelectField
+        label="Content type"
+        validationPath={['type']}
           value={block.type}
           onChange={(event) =>
             changeType(event.target.value as Exclude<InstructionalContentBlock['type'], 'vocabulary-table'>)
@@ -36,46 +39,47 @@ export function InstructionalContentEditor({
           <option value="example">Example</option>
           <option value="warning">Important note</option>
           <option value="content-table">Dynamic tables</option>
-        </select>
-      </label>
+      </ValidatedSelectField>
       {block.type === 'content-table' ? (
-        <ContentTablesEditor tables={block.tables} onChange={(tables) => onChange({ ...block, tables })} />
+        <ContentTablesEditor validationPath={['tables']} tables={block.tables} onChange={(tables) => onChange({ ...block, tables })} />
       ) : block.type === 'example' ? (
         <>
-          <FormField
+          <ValidatedFormField
             label="Example phrase"
+            validationPath={['phrase']}
             value={block.phrase}
             onChange={(event) => onChange({ ...block, phrase: event.target.value })}
           />
-          <FormField
+          <ValidatedFormField
             label="Mathematical expression"
+            validationPath={['expression']}
             value={block.expression}
             onChange={(event) => onChange({ ...block, expression: event.target.value })}
           />
-          <label className="admin-textarea-field">
-            Explanation
-            <textarea
+          <ValidatedTextareaField
+            label="Explanation"
+            validationPath={['note']}
               value={block.note}
               onChange={(event) => onChange({ ...block, note: event.target.value })}
             />
-          </label>
         </>
       ) : (
         <>
-          <FormField
+          <ValidatedFormField
             label="Teaching content title"
+            validationPath={['title']}
             value={block.title}
             onChange={(event) => onChange({ ...block, title: event.target.value })}
           />
-          <label className="admin-textarea-field">
-            Teaching content
-            <textarea
+          <ValidatedTextareaField
+            label="Teaching content"
+            validationPath={['body']}
               value={block.body}
               onChange={(event) => onChange({ ...block, body: event.target.value })}
             />
-          </label>
         </>
       )}
     </div>
+    </ValidationScope>
   );
 }

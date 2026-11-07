@@ -9,6 +9,7 @@ import { ChoiceRowsEditor } from './ChoiceRowsEditor';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { AdminIconButton } from './AdminIconButton';
 import { ChevronDown } from 'lucide-react';
+import { ValidationFieldError, ValidationScope, ValidatedTextareaField } from './lesson-validation';
 
 export function LessonAssessmentQuestionsEditor({
   assessment,
@@ -30,6 +31,7 @@ export function LessonAssessmentQuestionsEditor({
   ) => onChange(questions.map((question) => question.id === questionId ? update(question) : question));
 
   return (
+    <ValidationScope path={['assessmentQuestions', assessment]}>
     <section className="admin-lesson-assessment" aria-label={`Lesson ${label}`}>
       <details className="admin-assessment-details">
         <summary>
@@ -46,6 +48,9 @@ export function LessonAssessmentQuestionsEditor({
             Require lesson {label.toLowerCase()}
           </label>
           {required ? <>
+          <div data-validation-path={JSON.stringify(['assessmentQuestions', assessment])} tabIndex={-1}>
+            <ValidationFieldError path={[]} />
+          </div>
           {questions.length === 0 ? <p>No questions added yet.</p> : null}
           <ol className="admin-assessment-questions">
             {questions.map((question, questionIndex) => (
@@ -53,6 +58,7 @@ export function LessonAssessmentQuestionsEditor({
                 label={`${label} question ${questionIndex + 1}`}
                 onReorder={(source, target, side) => onChange(reorderById(questions, source, target, side, (item) => item.id))}>
                 {(handle) => (
+                <ValidationScope path={[questionIndex]}>
                 <details className="admin-assessment-question">
                   <summary>
                     {handle}
@@ -75,9 +81,10 @@ export function LessonAssessmentQuestionsEditor({
                         onClick={() => onChange(moveAssessmentQuestion(questions, questionIndex, 1))}
                       />
                     </div>
-                    <label className="admin-assessment-prompt">
-                      <span>Question text</span>
-                      <textarea
+                    <ValidatedTextareaField
+                      className="admin-assessment-prompt"
+                      label="Question text"
+                      validationPath={['prompt']}
                         maxLength={2000}
                         required
                         value={question.prompt}
@@ -89,7 +96,6 @@ export function LessonAssessmentQuestionsEditor({
                           }))
                         }
                       />
-                    </label>
                     <ChoiceRowsEditor
                       choices={question.choices}
                       legend="Answer choices"
@@ -97,6 +103,7 @@ export function LessonAssessmentQuestionsEditor({
                       controlLabel="choice"
                       addLabel="Add choice"
                       maxChoices={10}
+                      validationPath={['choices']}
                       choiceMaxLength={1000}
                       choiceRequired
                       choiceIdPrefix="choice-"
@@ -119,8 +126,12 @@ export function LessonAssessmentQuestionsEditor({
                         }))
                       }
                     />
+                    <div data-validation-path={JSON.stringify(['assessmentQuestions', assessment, questionIndex, 'correctChoiceId'])} tabIndex={-1}>
+                      <ValidationFieldError path={['correctChoiceId']} />
+                    </div>
                   </div>
                 </details>
+                </ValidationScope>
                 )}
               </ReorderableItem>
             ))}
@@ -138,5 +149,6 @@ export function LessonAssessmentQuestionsEditor({
         </div>
       </details>
     </section>
+    </ValidationScope>
   );
 }

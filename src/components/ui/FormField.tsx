@@ -1,9 +1,10 @@
 import { useId, useState, type InputHTMLAttributes } from 'react';
 
-interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
   hint?: string;
+  validationPath?: string;
 }
 
 export function FormField({
@@ -13,6 +14,7 @@ export function FormField({
   id,
   className = '',
   type,
+  validationPath,
   ...props
 }: FormFieldProps) {
   const generatedId = useId();
@@ -38,6 +40,7 @@ export function FormField({
           className={`form-field__input ${error ? 'form-field__input--error' : ''} ${className}`}
           aria-invalid={Boolean(error)}
           aria-describedby={error || hint ? messageId : undefined}
+          data-validation-path={validationPath}
           {...props}
         />
         {isPassword && (
