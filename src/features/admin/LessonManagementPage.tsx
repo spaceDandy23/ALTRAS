@@ -70,6 +70,7 @@ export function LessonManagementPage() {
   const [deletingChapterId, setDeletingChapterId] = useState<string | null>(null);
   const [removingTeachingChapterId, setRemovingTeachingChapterId] = useState<string | null>(null);
   const [newTeachingBlockId, setNewTeachingBlockId] = useState<string | null>(null);
+  const focusValidationFieldRef = useRef(false);
   useLayoutEffect(() => {
     if (!newTeachingBlockId) return;
     const editor = document.getElementById(`teaching-${newTeachingBlockId}`);
@@ -97,12 +98,13 @@ export function LessonManagementPage() {
     };
   }, [reload]);
   useEffect(() => {
-    if (!error || !draft || preview) return;
+    if (!error || !draft || preview || busy) return;
     saveFeedbackRef.current?.scrollIntoView?.({ behavior: 'auto', block: 'center' });
     saveFeedbackRef.current?.focus({ preventScroll: true });
-  }, [error, draft, preview]);
+  }, [error, draft, preview, busy]);
   useEffect(() => {
-    if (validationIssues.length === 0 || preview) return;
+    if (validationIssues.length === 0 || preview || !focusValidationFieldRef.current) return;
+    focusValidationFieldRef.current = false;
     const key = JSON.stringify(validationIssues[0].path);
     const target = [...document.querySelectorAll<HTMLElement>('[data-validation-path]')]
       .find((element) => element.dataset.validationPath === key);
@@ -181,6 +183,17 @@ export function LessonManagementPage() {
   };
   const save = async (publish?: boolean) => {
     if (!draft || busy) return;
+    if (publish === true) {
+      const issues = getLessonValidationIssues(draft, 'publish');
+      if (issues.length > 0) {
+        focusValidationFieldRef.current = true;
+        setValidationIssues(issues);
+        setValidationAction('publish');
+        setError('');
+        setNotice('');
+        return;
+      }
+    }
     setBusy(true);
     setError('');
     setNotice('');
@@ -199,6 +212,7 @@ export function LessonManagementPage() {
       );
     } catch (e) {
       if (e instanceof LessonManagementValidationError) {
+        focusValidationFieldRef.current = true;
         setValidationIssues(e.issues);
         setValidationAction(publish ? 'publish' : 'save');
       } else {
@@ -353,6 +367,7 @@ export function LessonManagementPage() {
             <LessonContentPreview key={draft.id} lesson={draft} />
           ) : (
             <form
+              noValidate
               onSubmit={(e) => {
                 e.preventDefault();
                 void save();

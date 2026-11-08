@@ -215,6 +215,10 @@ export function getLessonValidationIssues(
   operation: 'save' | 'publish',
 ): LessonValidationIssue[] {
   const issues: LessonValidationIssue[] = [];
+  if (!draft.title.trim())
+    issues.push({ path: ['title'], label: 'Lesson title', message: 'Title is required.' });
+  if (!Number.isInteger(draft.displayOrder) || draft.displayOrder < 1 || draft.displayOrder > 99999)
+    issues.push({ path: ['displayOrder'], label: 'Lesson order', message: 'Lesson order must be a positive integer.' });
   if (draft.activities.length > MAX_ACTIVITIES)
     issues.push({ path: ['chapters'], label: 'Lesson activities', message: `A lesson supports at most ${MAX_ACTIVITIES} activities.` });
   try {
@@ -245,7 +249,7 @@ export function getLessonValidationIssues(
 }
 
 export class LessonManagementValidationError extends Error {
-  constructor(public readonly issues: LessonValidationIssue[], message = 'Lesson fields need attention.') {
+  constructor(public readonly issues: LessonValidationIssue[], message = issues[0]?.message ?? 'Lesson fields need attention.') {
     super(message);
     this.name = 'LessonManagementValidationError';
   }
@@ -307,19 +311,22 @@ export async function saveManagedLesson(
   revision: number,
 ): Promise<ManagedLesson> {
   const normalized = normalizeAuthoredLesson(draft);
-  if (normalized.activities.length > MAX_ACTIVITIES)
-    throw new LessonManagementValidationError([{ path: ['chapters'], label: 'Lesson activities', message: `A lesson supports at most ${MAX_ACTIVITIES} activities.` }], `A lesson supports at most ${MAX_ACTIVITIES} activities.`);
+  const issues = getLessonValidationIssues(normalized, 'save');
+  if (issues.length > 0) throw new LessonManagementValidationError(issues);
   try {
-    lessonAssessmentQuestionsSchema.parse(normalized.assessmentQuestions);
+    return (await call('save_admin_lesson', {
+      p_lesson: normalized,
+      p_revision: revision,
+    })) as ManagedLesson;
   } catch (cause) {
-    if (cause instanceof z.ZodError)
-      throw new LessonManagementValidationError(lessonValidationIssues(cause, normalized, ['assessmentQuestions']));
+    if (cause instanceof Error && cause.message === 'Lesson ID and title are required.' && !normalized.title.trim())
+      throw new LessonManagementValidationError([{ path: ['title'], label: 'Lesson title', message: 'Title is required.' }]);
+    if (cause instanceof Error && cause.message === 'Lesson order must be a positive integer.')
+      throw new LessonManagementValidationError([{ path: ['displayOrder'], label: 'Lesson order', message: cause.message }]);
+    if (cause instanceof Error && cause.message.includes('Prerequisite'))
+      throw new LessonManagementValidationError([{ path: ['prerequisiteLessonId'], label: 'Prerequisite', message: cause.message }]);
     throw cause;
   }
-  return (await call('save_admin_lesson', {
-    p_lesson: normalized,
-    p_revision: revision,
-  })) as ManagedLesson;
 }
 export async function publishManagedLesson(
   item: ManagedLesson,
