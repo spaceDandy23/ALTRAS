@@ -1,5 +1,8 @@
 # ALTRAS
 
+**Live demo:** https://altras.vercel.app/
+
+
 ALTRAS is an offline-first educational desktop web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Phase 2 provides a complete local learning loop with validated bundled lessons, two playable activity types, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
 
 > ALTRAS accounts are local device accounts. They are not online identities, and no server verifies or synchronizes them.
