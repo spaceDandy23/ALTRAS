@@ -1,5 +1,7 @@
 # ALTRAS
 
+**Live demo:** https://altras.vercel.app/
+
 ALTRAS is an online-first educational web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Students authenticate with Supabase and access validated lessons, activities, assessments, and progress tracking. Phase 2 provides a complete learning loop with bundled lessons, two playable activity types, pre/post-tests, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
 
 > Assessments, authentication, and progress are stored online with Supabase. The app works best with a stable internet connection.
