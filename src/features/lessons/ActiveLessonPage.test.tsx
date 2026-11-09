@@ -434,6 +434,7 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByRole('heading', { name: lesson.activities[0].title })).toBeVisible();
+    expect(screen.getByText(`1 / ${lesson.activities.length}`)).toBeVisible();
     expect(
       screen.queryByRole('heading', { name: 'Lesson attempt unavailable' }),
     ).not.toBeInTheDocument();
@@ -483,6 +484,7 @@ describe('active lesson loading failures', () => {
     );
 
     await user.click(await screen.findByRole('radio', { name: 'sum' }));
+    expect(screen.getByText(`1 / ${lesson.activities.length}`)).toBeVisible();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
     await user.click(screen.getByRole('button', { name: 'Submit answer' }));
     expect(await screen.findByText(/Saved on this device · Waiting to sync/)).toBeVisible();
@@ -490,6 +492,7 @@ describe('active lesson loading failures', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
+    expect(screen.getByText(`2 / ${lesson.activities.length}`)).toBeVisible();
     await expect(getLessonDraft(userId, lesson.id, attemptId)).resolves.toMatchObject({
       currentActivityIndex: 1,
       pendingAnswers: [{ activityId: lesson.activities[0].id, answer: 'sum' }],
@@ -507,6 +510,7 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
+    expect(screen.getByText(`2 / ${lesson.activities.length}`)).toBeVisible();
     expect(getLesson).not.toHaveBeenCalled();
     expect(getAttempt).not.toHaveBeenCalled();
   });

@@ -609,8 +609,16 @@ export function ActiveLessonPage() {
             {saveState === 'error' && 'Could not save. Try again.'}
           </span>
         </header>
-        <div className="lesson-progress" aria-label={`${progressPercent}% complete`}>
-          <span style={{ width: `${progressPercent}%` }} />
+        <div className="lesson-progress-row">
+          <div className="lesson-progress" aria-label={`${progressPercent}% complete`}>
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
+          <span
+            className="lesson-progress__count"
+            aria-label={`Activity ${activityIndex + 1} of ${lesson.activities.length}`}
+          >
+            {activityIndex + 1} / {lesson.activities.length}
+          </span>
         </div>
         <main className="lesson-player__stage">
           <div className="lesson-player__activity-column">

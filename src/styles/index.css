@@ -2763,8 +2763,26 @@ h3 {
   color: #ffaaa4;
 }
 
+.lesson-progress-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .lesson-progress {
   width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.lesson-progress__count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .lesson-player__stage {
