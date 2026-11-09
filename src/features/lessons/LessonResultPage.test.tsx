@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
@@ -38,6 +38,10 @@ function deferred<T>() {
 }
 
 describe('final lesson result actions', () => {
+  beforeEach(() => {
+    document.documentElement.dataset.motion = 'on';
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ status: 'guest', user: null });
@@ -106,6 +110,7 @@ describe('final lesson result actions', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText('Loading your result…')).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     expect(audio.playCompletion).not.toHaveBeenCalled();
     expect(audio.playReward).not.toHaveBeenCalled();
 
@@ -115,6 +120,7 @@ describe('final lesson result actions', () => {
       entries: [{ lesson, progress }],
     });
     expect(await screen.findByRole('heading', { name: 'Lesson complete' })).toBeVisible();
+    expect(await screen.findByTestId('completion-celebration')).toBeInTheDocument();
     expect(audio.playReward).toHaveBeenCalledOnce();
     expect(audio.playCompletion).not.toHaveBeenCalled();
 
@@ -379,6 +385,7 @@ describe('final lesson result actions', () => {
     expect(audio.playReward).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     expect(audio.playCompletion).toHaveBeenCalledOnce();
     expect(audio.playReward).not.toHaveBeenCalled();
   });

@@ -43,6 +43,7 @@ import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateAct
 import type { ActivityAnswer } from './domain/evaluation';
 import { chapterActivityPosition, hasChapterTeachingContent, lessonChapters } from './domain/lesson-flow';
 import { ContentState } from './components/ContentState';
+import { CompletionCelebration } from '@/components/ui/CompletionCelebration';
 import { TeachingContentRenderer } from './components/TeachingContentRenderer';
 import { playSfx } from '@/services/audio/audio.manager';
 import {
@@ -637,6 +638,9 @@ export function ActiveLessonPage() {
           </span>
         </div>
         <main className="lesson-player__stage">
+          {submitted?.isCorrect && !completingSyncedLesson && (
+            <CompletionCelebration eventKey={`activity:${attemptId}:${activity.id}`} />
+          )}
           <div className="lesson-player__activity-column">
             <ActivityCharacterAssistant
               activity={activity}

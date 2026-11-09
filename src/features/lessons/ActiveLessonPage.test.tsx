@@ -123,9 +123,11 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByText(activity.prompt)).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'n + 5' }));
     await user.click(screen.getByRole('button', { name: 'Submit answer' }));
     expect(await screen.findByText('Correct')).toBeVisible();
+    expect(await screen.findByTestId('completion-celebration')).toBeInTheDocument();
     expect(submitActivityAnswer).toHaveBeenCalledWith(db, attemptId, activity.id, 'sum', expect.anything());
   });
 
@@ -193,6 +195,7 @@ describe('active lesson loading failures', () => {
     await user.click(screen.getByRole('button', { name: 'Submit answer' }));
 
     expect(await screen.findByText('Not quite')).toBeVisible();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     expect(document.querySelector('.answer-feedback__correct-answer')?.textContent).toBe(
       'Correct answer: n + 5',
     );

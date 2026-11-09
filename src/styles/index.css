@@ -2786,6 +2786,7 @@ h3 {
 }
 
 .lesson-player__stage {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
@@ -3151,12 +3152,54 @@ h3 {
 }
 
 .result-board {
+  position: relative;
   display: grid;
   width: min(720px, 100%);
   justify-items: center;
   border-block: 1px solid var(--line);
   padding: 2rem 2.5rem;
   text-align: center;
+}
+
+.completion-celebration {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.completion-celebration__piece {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--yellow);
+  animation: completion-confetti 950ms ease-out both;
+  animation-delay: var(--celebration-delay);
+}
+
+.completion-celebration__piece:nth-child(3n + 1) { background: var(--blue); }
+.completion-celebration__piece:nth-child(3n + 2) { background: var(--green); }
+
+@keyframes completion-confetti {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--celebration-from), -12px, 0) rotate(0deg);
+  }
+  12% { opacity: 1; }
+  to {
+    opacity: 0;
+    transform: translate3d(var(--celebration-to), 190px, 0) rotate(520deg);
+  }
+}
+
+:root[data-motion='off'] .completion-celebration { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .completion-celebration { display: none; }
 }
 
 .result-board__mark {

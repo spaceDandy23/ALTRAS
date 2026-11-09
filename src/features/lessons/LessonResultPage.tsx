@@ -21,6 +21,7 @@ import {
 import { hasPendingLessonUnlock } from './progress/progress-transitions';
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
+import { CompletionCelebration } from '@/components/ui/CompletionCelebration';
 import { useLessonTransition } from './navigation/useLessonTransition';
 import {
   playNeutralClickOnKeyDown,
@@ -163,6 +164,7 @@ export function LessonResultPage() {
       >
         <LessonResultAudio attempt={attempt} />
         <main className="result-board" aria-live="polite">
+          {attempt.cleared && <CompletionCelebration eventKey={`lesson:${attempt.id}`} />}
           <div className="result-board__mark" aria-hidden="true">
             {attempt.cleared ? '✓' : '↻'}
           </div>
