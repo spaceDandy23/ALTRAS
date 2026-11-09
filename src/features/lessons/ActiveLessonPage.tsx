@@ -41,7 +41,13 @@ import {
 import { FindWordActivityView } from './activities/FindWordActivityView';
 import { OrganizeTranslateActivityView } from './activities/OrganizeTranslateActivityView';
 import type { ActivityAnswer } from './domain/evaluation';
-import { chapterActivityPosition, hasChapterTeachingContent, lessonChapters } from './domain/lesson-flow';
+import {
+  chapterActivityPosition,
+  hasChapterTeachingContent,
+  lessonChapters,
+  nextLessonFlowState,
+} from './domain/lesson-flow';
+import { activityResultForAttempt } from './domain/activity-result';
 import { ContentState } from './components/ContentState';
 import { CompletionCelebration } from '@/components/ui/CompletionCelebration';
 import { TeachingContentRenderer } from './components/TeachingContentRenderer';
@@ -50,6 +56,9 @@ import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
 } from '@/services/audio/click.handlers';
+
+const formatDuration = (seconds: number) =>
+  seconds < 60 ? `${seconds} sec` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
 
 export function ActiveLessonPage() {
   const { lessonId = '', attemptId = '' } = useParams();
@@ -71,6 +80,11 @@ export function ActiveLessonPage() {
   const loadKey = `${user?.id ?? 'guest'}:${lessonId}:${attemptId}:${loadRevision}`;
   const [launchMode] = useState(() => consumeLessonAttemptLaunchMode(attemptId));
   const activeSegmentStartedAt = useRef<number | null>(null);
+  const activityAnswerTimer = useRef<{
+    activityId: string | null;
+    startedAt: number | null;
+    elapsedMs: number;
+  }>({ activityId: null, startedAt: null, elapsedMs: 0 });
   const activeTimeFlushRef = useRef<Promise<void>>(Promise.resolve());
   const synchronizerRef = useRef<LessonDraftSynchronizer | null>(null);
   const audibleAnswerIdRef = useRef<string | null>(null);
@@ -79,6 +93,32 @@ export function ActiveLessonPage() {
   const [localSaving, setLocalSaving] = useState(false);
   const latestDraftRef = useRef<LessonDraft | null>(null);
   const draftId = draft?.id;
+  const timerStage = attempt?.flowStage ?? null;
+  const timerActivityId = lesson?.activities[draft?.currentActivityIndex ?? 0]?.id ?? null;
+
+  useEffect(() => {
+    const isActivityStage =
+      timerStage === 'chapter-activity' || timerStage === 'legacy-activity' || timerStage === null;
+    const timer = {
+      activityId: isActivityStage ? timerActivityId : null,
+      startedAt:
+        isActivityStage && timerActivityId && document.visibilityState === 'visible'
+          ? Date.now()
+          : null,
+      elapsedMs: 0,
+    };
+    activityAnswerTimer.current = timer;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && timer.startedAt !== null) {
+        timer.elapsedMs += Date.now() - timer.startedAt;
+        timer.startedAt = null;
+      } else if (document.visibilityState === 'visible' && timer.activityId && timer.startedAt === null) {
+        timer.startedAt = Date.now();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [timerActivityId, timerStage]);
 
   const applyDraft = useCallback((next: LessonDraft) => {
     const current = latestDraftRef.current;
@@ -219,12 +259,6 @@ export function ActiveLessonPage() {
         const next = await acknowledgeLessonStageTransition(snapshot.id, transition, serverAttempt);
         if (!next || !canApply()) return;
         applyDraft(next);
-        if (next.attempt.flowStage === 'pre-test' || next.attempt.flowStage === 'post-test') {
-          navigate(
-            `/lessons/${next.lessonId}/play/${next.attemptId}/assessment/${next.attempt.flowStage}`,
-            { replace: true },
-          );
-        }
       },
       submit: (snapshot, answer) =>
         submitActivityAnswer(
@@ -383,6 +417,7 @@ export function ActiveLessonPage() {
   }
 
   const stage = attempt.flowStage ?? 'legacy-activity';
+  const activityResult = activityResultForAttempt(attempt, lesson);
   const chapters = lessonChapters(lesson);
   const currentChapter =
     chapters.find((chapter) => chapter.id === attempt.currentChapterId) ?? chapters[0];
@@ -514,9 +549,17 @@ export function ActiveLessonPage() {
   const submit = async (answer: ActivityAnswer) => {
     if (localActionInFlightRef.current) return;
     localActionInFlightRef.current = true;
+    const timer = activityAnswerTimer.current;
+    const submittedAt = Date.now();
+    const answeringSeconds =
+      timer.activityId === activity.id
+        ? Math.floor((timer.elapsedMs + (timer.startedAt === null ? 0 : submittedAt - timer.startedAt)) / 1000)
+        : 0;
+    timer.startedAt = null;
+    timer.elapsedMs = 0;
     try {
       const next = await updateStoredLessonDraft(draft.id, (current) =>
-        queueLessonAnswer(current, activity.id, activity.type, answer, activityIndex),
+        queueLessonAnswer(current, activity.id, activity.type, answer, activityIndex, submittedAt, answeringSeconds),
       );
       applyDraft(next);
       setSaveState(navigator.onLine ? 'saving' : 'pending');
@@ -525,6 +568,7 @@ export function ActiveLessonPage() {
         synchronizerRef.current?.requestSync();
       }
     } catch {
+      if (timer.activityId === activity.id) timer.startedAt = Date.now();
       setSaveState('error');
     } finally {
       localActionInFlightRef.current = false;
@@ -534,6 +578,30 @@ export function ActiveLessonPage() {
   const continueLesson = async () => {
     if (!submitted && !pending) return;
     audibleAnswerIdRef.current = null;
+    if (draft.activityResultPending && stageAdvanceInFlightRef.current) return;
+    if (
+      !draft.activityResultPending &&
+      activityIndex === lesson.activities.length - 1 &&
+      activityResult &&
+      draft.pendingAnswers.length === 0
+    ) {
+      if (stageAdvanceInFlightRef.current) return;
+      stageAdvanceInFlightRef.current = true;
+      try {
+        const next = await updateStoredLessonDraft(draft.id, (current) => ({
+          ...current,
+          activityResultPending: true,
+          revision: current.revision + 1,
+          updatedAt: Date.now(),
+        }));
+        applyDraft(next);
+      } catch {
+        setSaveState('error');
+      } finally {
+        stageAdvanceInFlightRef.current = false;
+      }
+      return;
+    }
     if (stage === 'chapter-activity') {
       const position = chapterActivityPosition(lesson, currentChapter.id, activity.id);
       if (!position) {
@@ -558,6 +626,18 @@ export function ActiveLessonPage() {
       try {
         await flushActiveTime();
         const next = await queueLessonStageTransition(draft.id);
+        if (next.attempt.flowStage === 'post-test') {
+          navigate(`/lessons/${lessonId}/play/${attemptId}/assessment/post-test`, {
+            replace: true,
+            state: {
+              lessonId,
+              attemptId,
+              assessment: 'post-test',
+              questions: next.assessmentQuestions['post-test'],
+            },
+          });
+          return;
+        }
         applyDraft(next);
         setSaveState(navigator.onLine ? 'saving' : 'pending');
         if (navigator.onLine) synchronizerRef.current?.requestSync();
@@ -569,6 +649,8 @@ export function ActiveLessonPage() {
       return;
     }
     if (activityIndex === lesson.activities.length - 1) {
+      if (stageAdvanceInFlightRef.current) return;
+      stageAdvanceInFlightRef.current = true;
       try {
         if (draft.pendingCompletion) {
           if (navigator.onLine) await synchronizerRef.current?.flush();
@@ -585,6 +667,8 @@ export function ActiveLessonPage() {
         if (navigator.onLine) await synchronizerRef.current?.flush();
       } catch {
         setSaveState('error');
+      } finally {
+        stageAdvanceInFlightRef.current = false;
       }
       return;
     }
@@ -597,6 +681,44 @@ export function ActiveLessonPage() {
       setSaveState('error');
     }
   };
+
+  if (draft.activityResultPending && activityResult) {
+    const nextStage = nextLessonFlowState(lesson, attempt)?.flowStage;
+    return (
+      <ContentState>
+        <section className="assessment-shell assessment-state assessment-result panel page-enter">
+          <p className="assessment-kicker">Activities complete</p>
+          <h1>{activityResult.percentage}%</h1>
+          <p>Your activity score</p>
+          <dl className="assessment-result__details assessment-result__details--activities">
+            <div>
+              <dt>Correct answers</dt>
+              <dd>{activityResult.correct} / {activityResult.total}</dd>
+            </div>
+            <div>
+              <dt>Activities</dt>
+              <dd>{activityResult.total}</dd>
+            </div>
+            <div>
+              <dt>Time spent answering</dt>
+              <dd>{draft.activityAnsweringSeconds === undefined
+                ? 'Not recorded'
+                : formatDuration(draft.activityAnsweringSeconds)}</dd>
+            </div>
+          </dl>
+          <div className="result-actions assessment-result__actions">
+            <Button
+              onPointerDown={playNeutralClickOnPointerDown}
+              onKeyDown={playNeutralClickOnKeyDown}
+              onClick={() => void continueLesson()}
+            >
+              {nextStage === 'post-test' ? 'Continue to Post-test' : 'Continue'}
+            </Button>
+          </div>
+        </section>
+      </ContentState>
+    );
+  }
 
   return (
     <ContentState>

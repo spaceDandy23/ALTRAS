@@ -36,6 +36,7 @@ const remoteAttemptSchema = z.object({
   submitted_at: z.string().nullable(),
   score: z.number().int().nullable(),
   completion_seconds: z.number().int().nullable(),
+  answering_seconds: z.number().int().nullable().optional().default(null),
   content_version: z.number().int(),
   expected_question_count: z.number().int(),
   accepted_revision: z.number().int().nonnegative(),
@@ -105,6 +106,7 @@ export function toAssessmentAttempt(input: unknown): AssessmentAttempt {
     submittedAt: record.submitted_at ? Date.parse(record.submitted_at) : null,
     score: record.score,
     completionSeconds: record.completion_seconds,
+    answeringSeconds: record.answering_seconds,
     contentVersion: record.content_version,
     expectedQuestionCount: record.expected_question_count,
     acceptedRevision: record.accepted_revision,
@@ -202,6 +204,7 @@ export async function completeAssessment(
   revision: number,
   scope?: AssessmentScope,
   checkSync: () => void = () => undefined,
+  answeringSeconds = 0,
 ): Promise<AssessmentAttempt> {
   checkSync();
   assertParticipantLearningAccess();
@@ -209,6 +212,7 @@ export async function completeAssessment(
     requireOnlineServices().rpc('complete_assessment_revision', {
       p_attempt_id: attemptId,
       p_revision: revision,
+      p_answering_seconds: answeringSeconds,
     }),
   );
   if (error)

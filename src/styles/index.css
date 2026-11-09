@@ -1554,6 +1554,10 @@ h3 {
   margin: 1.5rem 0;
 }
 
+.assessment-result__details--activities {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .assessment-result__details div {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);

@@ -59,6 +59,7 @@ async function flushPendingAssessmentDraftOnce(
         draft.revision,
         scopeFor(draft),
         check,
+        draft.answeringSeconds ?? 0,
       ),
     acknowledge: async (snapshot) => {
       const current = await db.assessmentDrafts.get(currentId);

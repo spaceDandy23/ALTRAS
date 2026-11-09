@@ -65,6 +65,7 @@ export function createAssessmentDraft(
     lessonId: attempt.lessonId ?? undefined,
     lessonAttemptId: attempt.lessonAttemptId ?? undefined,
     startedAt: attempt.startedAt,
+    answeringSeconds: attempt.answeringSeconds ?? undefined,
     contentVersion: attempt.contentVersion,
     expectedQuestionCount: attempt.expectedQuestionCount,
     questions,
@@ -127,6 +128,7 @@ export function draftToAttempt(draft: AssessmentDraft): AssessmentAttempt {
     assessment: draft.assessment,
     status: 'active',
     startedAt: draft.startedAt,
+    answeringSeconds: draft.answeringSeconds ?? null,
     submittedAt: null,
     score: null,
     completionSeconds: null,
@@ -147,6 +149,10 @@ export function validateLocalDraft(draft: AssessmentDraft, userId: string, kind:
     Boolean(draft.lessonId) !== Boolean(draft.lessonAttemptId) ||
     !Number.isSafeInteger(draft.revision) ||
     !Number.isSafeInteger(draft.syncedRevision) ||
+    (draft.answeringSeconds !== undefined &&
+      (!Number.isSafeInteger(draft.answeringSeconds) ||
+        draft.answeringSeconds < 0 ||
+        draft.answeringSeconds > 86400)) ||
     draft.syncedRevision < 0 ||
     draft.revision < draft.syncedRevision ||
     !Number.isInteger(draft.currentQuestionIndex) ||
@@ -192,10 +198,16 @@ export function updateDraftPosition(
 ): AssessmentDraft {
   return { ...draft, currentQuestionIndex, updatedAt: now };
 }
-export function markDraftPendingSubmission(draft: AssessmentDraft): AssessmentDraft {
+export function markDraftPendingSubmission(
+  draft: AssessmentDraft,
+  now = Date.now(),
+): AssessmentDraft {
   // Submission intent is metadata, not a new answer snapshot.
   return {
     ...draft,
+    answeringSeconds:
+      draft.answeringSeconds ??
+      Math.min(86400, Math.max(0, Math.floor((now - draft.startedAt) / 1000))),
     revision: draft.revision === 0 ? 1 : draft.revision,
     syncStatus: 'pending_submission',
   };

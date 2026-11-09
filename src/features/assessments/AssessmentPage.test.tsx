@@ -1,3 +1,4 @@
+import { Profiler } from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -132,23 +133,28 @@ function renderAssessment(kind: 'pre-test' | 'post-test' = 'pre-test') {
     </MemoryRouter>,
   );
 }
-function renderLessonAssessment(kind: 'pre-test' | 'post-test' = 'pre-test') {
+function renderLessonAssessment(
+  kind: 'pre-test' | 'post-test' = 'pre-test',
+  onCommit?: () => void,
+) {
   const lessonId = 'lesson-operation-signals';
   const lessonAttemptId = '40000000-0000-4000-8000-000000000004';
   return render(
-    <MemoryRouter
-      initialEntries={[`/lessons/${lessonId}/play/${lessonAttemptId}/assessment/${kind}`]}
-    >
-      <Routes>
-        <Route
-          path="/lessons/:lessonId/play/:attemptId/assessment/:kind"
-          element={<AssessmentPage />}
-        />
-        <Route path="/lessons/:lessonId/play/:attemptId" element={<p>Lesson player resumed</p>} />
-        <Route path="/lessons/:lessonId" element={<p>Lesson overview</p>} />
-        <Route path="/lessons/:lessonId/result/:attemptId" element={<p>Official lesson result</p>} />
-      </Routes>
-    </MemoryRouter>,
+    <Profiler id="lesson-assessment" onRender={onCommit ?? (() => undefined)}>
+      <MemoryRouter
+        initialEntries={[`/lessons/${lessonId}/play/${lessonAttemptId}/assessment/${kind}`]}
+      >
+        <Routes>
+          <Route
+            path="/lessons/:lessonId/play/:attemptId/assessment/:kind"
+            element={<AssessmentPage />}
+          />
+          <Route path="/lessons/:lessonId/play/:attemptId" element={<p>Lesson player resumed</p>} />
+          <Route path="/lessons/:lessonId" element={<p>Lesson overview</p>} />
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<p>Official lesson result</p>} />
+        </Routes>
+      </MemoryRouter>
+    </Profiler>,
   );
 }
 
@@ -507,7 +513,10 @@ describe('assessment UX and bootstrap', () => {
       });
 
       const user = userEvent.setup();
-      const first = renderLessonAssessment('post-test');
+      const committedScreens: string[] = [];
+      const first = renderLessonAssessment('post-test', () => {
+        committedScreens.push(document.body.textContent ?? '');
+      });
 
       expect(await screen.findByRole('button', { name: 'Start post-test' })).toBeEnabled();
       expect(screen.queryByRole('heading', { name: 'We couldnâ€™t load this test' })).toBeNull();
@@ -530,18 +539,50 @@ describe('assessment UX and bootstrap', () => {
       await screen.findByText('Question 2 of 2');
       await user.click(await screen.findByRole('radio', { name: 'The quotient of two values' }));
       const confirmation = online ? deferred<void>() : null;
-      if (confirmation)
+      const lessonCompletion = online ? deferred<void>() : null;
+      if (confirmation) {
         vi.mocked(flushPendingAssessmentDraft).mockReturnValueOnce(confirmation.promise);
+      }
       await user.click(screen.getByRole('button', { name: 'Submit test' }));
       const notice =
         'Your answers are saved on this device. Your results will be available once you’re back online.';
       if (online) {
-        expect(await screen.findByText('Confirming your official result…')).toBeVisible();
+        expect(await screen.findByText('Submitting your Post-test…')).toBeVisible();
+        expect(screen.queryByText('Confirming your official result…')).not.toBeInTheDocument();
         expect(screen.queryByText(/Answers saved on this device/)).toBeNull();
+        const officialPostTest = {
+          ...submittedAttempt(80),
+          assessment: 'post-test' as const,
+          id: '10000000-0000-4000-8000-000000000001',
+          lessonId: lesson.id,
+          lessonAttemptId,
+          contentVersion: 2,
+        };
+        vi.mocked(getAssessmentAttempt).mockResolvedValueOnce(officialPostTest);
         await act(async () => confirmation!.resolve());
+        server = officialPostTest;
+        expect(await screen.findByText('Post-test complete')).toBeVisible();
+        expect(screen.getByRole('heading', { name: '80%' })).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeEnabled();
+        expect(screen.queryByText('Submission saved')).not.toBeInTheDocument();
+        expect(flushPendingLessonAttempt).not.toHaveBeenCalled();
+        vi.mocked(flushPendingLessonAttempt).mockReturnValueOnce(lessonCompletion!.promise);
+        await user.click(screen.getByRole('button', { name: 'Finish lesson' }));
+        expect(screen.getByRole('button', { name: 'Continuing…' })).toBeVisible();
+        expect(screen.queryByText('Official lesson result')).not.toBeInTheDocument();
+        await act(async () => lessonCompletion!.resolve());
         expect(await screen.findByText('Official lesson result')).toBeVisible();
+        expect(screen.queryByText('Lesson player resumed')).not.toBeInTheDocument();
+        expect(committedScreens.some((screenText) => screenText.includes('Submission saved'))).toBe(false);
+        expect(committedScreens.some((screenText) => screenText.includes('Post-test complete'))).toBe(true);
         expect(flushPendingAssessmentDraft).toHaveBeenCalledOnce();
         expect(flushPendingLessonAttempt).toHaveBeenCalledWith(userId, lesson.id, lessonAttemptId);
+        expect(queueAttemptStageTransition).toHaveBeenCalledWith(
+          userId,
+          lesson.id,
+          lessonAttemptId,
+          'post-test',
+        );
         expect(screen.queryByText(notice)).toBeNull();
         return;
       }

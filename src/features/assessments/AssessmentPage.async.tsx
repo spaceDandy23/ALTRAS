@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { captureSyncSession, requireSyncSession } from '@/services/sync-session';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
@@ -64,10 +65,34 @@ export function AssessmentPage() {
   const parsedKind = assessmentKindSchema.safeParse(kindParam ?? '');
   const kind = parsedKind.success ? parsedKind.data : null;
   const user = useAuthStore((state) => state.user);
+  const location = useLocation();
+  const navigate = useNavigate();
   const scope = useMemo(
     () => (lessonId && attemptId ? { lessonId, lessonAttemptId: attemptId } : undefined),
     [attemptId, lessonId],
   );
+  const initialQuestions = useMemo(() => {
+    if (!kind || !lessonId || !attemptId || !location.state || typeof location.state !== 'object')
+      return undefined;
+    const state = location.state as Record<string, unknown>;
+    if (
+      state.lessonId !== lessonId ||
+      state.attemptId !== attemptId ||
+      state.assessment !== kind
+    )
+      return undefined;
+    const parsed = z.array(assessmentQuestionSchema).safeParse(state.questions);
+    return parsed.success && parsed.data.length > 0 && parsed.data.every((q) => q.assessment === kind)
+      ? parsed.data
+      : undefined;
+  }, [attemptId, kind, lessonId, location.state]);
+  useEffect(() => {
+    if (!initialQuestions) return;
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+  }, [initialQuestions, location.hash, location.pathname, location.search, navigate]);
   if (!kind)
     return (
       <section className="assessment-shell assessment-state panel">
@@ -82,6 +107,7 @@ export function AssessmentPage() {
       userId={user.id}
       kind={kind}
       scope={scope}
+      initialQuestions={initialQuestions}
     />
   );
 }
@@ -90,17 +116,19 @@ function AssessmentSession({
   userId,
   kind,
   scope,
+  initialQuestions,
 }: {
   userId: string;
   kind: AssessmentKind;
   scope?: AssessmentScope;
+  initialQuestions?: AssessmentQuestion[];
 }) {
   const navigate = useNavigate();
   const localLessonAssessment = Boolean(scope);
-  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  const [questions, setQuestions] = useState<AssessmentQuestion[]>(initialQuestions ?? []);
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
   const [draft, setDraft] = useState<AssessmentDraft | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialQuestions?.length);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncNotice, setSyncNotice] = useState<SyncNotice>('none');
@@ -337,7 +365,15 @@ function AssessmentSession({
         ).catch(() => undefined);
       },
       complete: (current) =>
-        completeAssessment(userId, kind, current.attemptId, current.revision, scope, check),
+        completeAssessment(
+          userId,
+          kind,
+          current.attemptId,
+          current.revision,
+          scope,
+          check,
+          current.answeringSeconds ?? 0,
+        ),
       acknowledge: async (snapshot) => {
         const current = draftRef.current;
         if (!active || !current || current.id !== snapshot.id) return;
@@ -477,9 +513,17 @@ function AssessmentSession({
                     scope.lessonAttemptId,
                     kind,
                   );
-                  navigate(`/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`, {
-                    replace: true,
-                  });
+                  if (kind === 'post-test')
+                    await flushPendingLessonAttempt(
+                      userId,
+                      scope.lessonId,
+                      scope.lessonAttemptId,
+                    );
+                  const destination =
+                    kind === 'post-test'
+                      ? `/lessons/${scope.lessonId}/result/${scope.lessonAttemptId}`
+                      : `/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`;
+                  navigate(destination, { replace: true });
                 }
               : undefined
           }
@@ -489,7 +533,16 @@ function AssessmentSession({
     );
   if (draft?.syncStatus === 'pending_submission') {
     if (localLessonAssessment && navigator.onLine && submitting) {
-      return <LoadingState variant="page" message="Confirming your official result…" />;
+      return (
+        <LoadingState
+          variant="page"
+          message={
+            kind === 'post-test'
+              ? 'Submitting your Post-test…'
+              : 'Confirming your official result…'
+          }
+        />
+      );
     }
     if (localLessonAssessment && scope) {
       return (
@@ -660,7 +713,12 @@ function AssessmentSession({
     try {
       if (localLessonAssessment) {
         await localSaveQueueRef.current;
-        const saved = await submitLocalLessonAssessment(current);
+        if (kind === 'post-test' && navigator.onLine && scope) {
+          // Supabase accepts the Post-test only after queued lesson progress
+          // advances the attempt to the Post-test stage.
+          await flushPendingLessonAttempt(userId, scope.lessonId, scope.lessonAttemptId);
+        }
+        const saved = await submitLocalLessonAssessment(pending);
         if (!mounted.current) return;
         applyDraft(saved);
         setDurability('saved');
@@ -676,11 +734,12 @@ function AssessmentSession({
         await flushPendingAssessmentDraft(saved);
         if (!mounted.current) return;
         if (kind === 'post-test') {
-          await flushPendingLessonAttempt(userId, scope!.lessonId, scope!.lessonAttemptId);
-          if (!mounted.current) return;
-          navigate(`/lessons/${scope!.lessonId}/result/${scope!.lessonAttemptId}`, {
-            replace: true,
-          });
+          const completed = await getAssessmentAttempt(userId, kind, scope);
+          if (!completed || completed.status !== 'submitted')
+            throw new Error('Unable to confirm this result. Please retry.');
+          applyDraft(null);
+          setAttempt(completed);
+          setSyncNotice('none');
           return;
         }
         const completed = await getAssessmentAttempt(userId, kind, scope);
@@ -954,8 +1013,10 @@ function AssessmentResult({
           <dd>{attempt.expectedQuestionCount}</dd>
         </div>
         <div>
-          <dt>Completion time</dt>
-          <dd>{duration(attempt.completionSeconds ?? 0)}</dd>
+          <dt>Time spent answering</dt>
+          <dd>{attempt.answeringSeconds === null || attempt.answeringSeconds === undefined
+            ? 'Not recorded'
+            : duration(attempt.answeringSeconds)}</dd>
         </div>
       </dl>
       <div className="result-actions assessment-result__actions">

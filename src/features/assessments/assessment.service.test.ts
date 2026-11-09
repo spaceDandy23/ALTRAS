@@ -199,6 +199,7 @@ describe('online assessment attempt mapping', () => {
     expect(remote.rpc).toHaveBeenNthCalledWith(1, 'complete_assessment_revision', {
       p_attempt_id: record.id,
       p_revision: 3,
+      p_answering_seconds: 0,
     });
   });
   it('times out without claiming the remote operation definitely failed and clears its timer', async () => {

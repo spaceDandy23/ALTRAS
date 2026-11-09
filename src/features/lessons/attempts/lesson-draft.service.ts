@@ -49,6 +49,8 @@ export interface LessonDraft {
   pendingActiveTimeSegments: LessonPendingActiveTimeSegment[];
   pendingStageTransitions: LessonPendingStageTransition[];
   currentActivityIndex: number;
+  activityAnsweringSeconds?: number;
+  activityResultPending: boolean;
   pendingCompletion: boolean;
   revision: number;
   updatedAt: number;
@@ -65,6 +67,7 @@ function normalizeLessonDraft(draft: LessonDraft): LessonDraft {
   return {
     ...draft,
     assessmentQuestions: draft.assessmentQuestions ?? {},
+    activityResultPending: draft.activityResultPending ?? false,
     pendingActiveTimeSegments:
       draft.pendingActiveTimeSegments === undefined ? [] : draft.pendingActiveTimeSegments,
     pendingStageTransitions:
@@ -86,6 +89,8 @@ function validateLessonDraft(draft: LessonDraft): void {
     !Number.isInteger(draft.currentActivityIndex) ||
     draft.currentActivityIndex < 0 ||
     draft.currentActivityIndex >= draft.lesson.activities.length ||
+    (draft.activityAnsweringSeconds !== undefined &&
+      (!Number.isSafeInteger(draft.activityAnsweringSeconds) || draft.activityAnsweringSeconds < 0)) ||
     Object.entries(draft.assessmentQuestions).some(([kind, questions]) => {
       const expectedVersion =
         kind === 'pre-test'
@@ -177,6 +182,8 @@ export function createLessonDraft(
     pendingActiveTimeSegments: [],
     pendingStageTransitions: [],
     currentActivityIndex: index,
+    activityAnsweringSeconds: 0,
+    activityResultPending: false,
     pendingCompletion: false,
     revision: 0,
     updatedAt: Date.now(),
@@ -234,6 +241,7 @@ export function queueLessonAnswer(
   answer: ActivityAnswer,
   currentActivityIndex: number,
   now = Date.now(),
+  answeringSeconds = 0,
 ): LessonDraft {
   validateLessonDraft(draft);
   const activity = draft.lesson.activities.find((item) => item.id === activityId);
@@ -256,6 +264,8 @@ export function queueLessonAnswer(
         sequence: draft.revision + 1,
       },
     ],
+    activityAnsweringSeconds:
+      (draft.activityAnsweringSeconds ?? 0) + Math.max(0, Math.floor(answeringSeconds)),
     currentActivityIndex: Math.max(
       0,
       Math.min(currentActivityIndex, draft.lesson.activities.length - 1),
@@ -290,6 +300,7 @@ export function markLessonDraftPendingCompletion(
   validateLessonDraft(draft);
   return {
     ...draft,
+    activityResultPending: false,
     pendingCompletion: true,
     revision: draft.revision + 1,
     updatedAt: now,
@@ -345,6 +356,7 @@ export async function queueLessonStageTransition(
         lastUpdatedAt: Math.max(current.attempt.lastUpdatedAt, now),
       },
       pendingStageTransitions: [...current.pendingStageTransitions, transition],
+      activityResultPending: false,
       currentActivityIndex: firstTargetActivity
         ? Math.max(
             0,

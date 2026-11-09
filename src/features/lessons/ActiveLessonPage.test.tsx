@@ -670,6 +670,104 @@ describe('active lesson loading failures', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
+  it.each([0, 1, packagedContent.lessons[0].activities.length])(
+    'renders the %i-correct activity result once and restores it without repeating progression',
+    async (correctCount) => {
+    const lesson = {
+      ...structuredClone(packagedContent.lessons[0]),
+      chapters: [{
+        id: 'chapter-practice',
+        title: 'Practice',
+        displayOrder: 1,
+        instructionalContent: [],
+        activities: structuredClone(packagedContent.lessons[0].activities),
+      }],
+    };
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const activeAttempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: lesson.activities.map((activity, index) => ({
+        activityId: activity.id,
+        activityType: activity.type,
+        answer: activity.type === 'organize-translate'
+          ? activity.correctTokenSequence
+          : activity.correctChoiceId,
+        isCorrect: index < correctCount,
+        submittedAt: index + 2,
+      })),
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+      flowStage: 'chapter-activity',
+      currentChapterId: 'chapter-practice',
+    };
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    await saveLessonDraft(createLessonDraft(activeAttempt, lesson));
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(activeAttempt);
+    useAuthStore.setState({ status: 'authenticated', user: {
+      id: userId,
+      normalizedUsername: 'student',
+      displayName: 'Student',
+      createdAt: 1,
+      lastLoginAt: 1,
+    } });
+    useContentStore.setState({ status: 'ready', error: null });
+    const user = userEvent.setup();
+    const route = `/lessons/${lesson.id}/play/${attemptId}`;
+    const renderPage = () => render(<MemoryRouter initialEntries={[route]}><Routes>
+      <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+    </Routes></MemoryRouter>);
+    const view = renderPage();
+
+    expect(await screen.findByRole('heading', { name: lesson.activities.at(-1)?.title })).toBeVisible();
+    expect(screen.queryByText('Activities complete')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'See results' }));
+    expect(await screen.findByText('Activities complete')).toBeVisible();
+    expect(screen.getByRole('heading', {
+      name: `${Math.round((correctCount / lesson.activities.length) * 100)}%`,
+    })).toBeVisible();
+    expect(screen.getByText(`${correctCount} / ${lesson.activities.length}`)).toBeVisible();
+    await expect(getLessonDraft(userId, lesson.id, attemptId)).resolves.toMatchObject({
+      activityResultPending: true,
+    });
+    expect(completeAttempt).not.toHaveBeenCalled();
+    expect(advanceAttemptStage).not.toHaveBeenCalled();
+    expect(playSfx).toHaveBeenCalledWith('click');
+    expect(playSfx).not.toHaveBeenCalledWith('reward');
+    expect(playSfx).not.toHaveBeenCalledWith('complete');
+
+    view.unmount();
+    vi.mocked(playSfx).mockClear();
+    renderPage();
+    expect(await screen.findByText('Activities complete')).toBeVisible();
+    expect(screen.getByText(`${correctCount} / ${lesson.activities.length}`)).toBeVisible();
+    expect(completeAttempt).not.toHaveBeenCalled();
+    expect(advanceAttemptStage).not.toHaveBeenCalled();
+    expect(playSfx).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await expect(getLessonDraft(userId, lesson.id, attemptId)).resolves.toMatchObject({
+      activityResultPending: false,
+      pendingCompletion: true,
+      pendingStageTransitions: [{
+        fromStage: 'chapter-activity',
+        toStage: 'ready-to-complete',
+      }],
+    });
+    },
+  );
+
   it('leaves no pending work for global sync after completing a lesson online', async () => {
     const lesson = packagedContent.lessons[0];
     const userId = '20000000-0000-4000-8000-000000000002';
