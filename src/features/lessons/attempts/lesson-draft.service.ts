@@ -596,6 +596,7 @@ export async function acknowledgeLessonAnswer(
   answer: LessonPendingAnswer,
   attempt: LessonAttempt,
   database: AltrasDatabase = db,
+  releasedLesson?: LearningLesson,
 ): Promise<LessonDraft | null> {
   return database.transaction('rw', database.lessonDrafts, async () => {
     const stored = await database.lessonDrafts.get(draftId);
@@ -606,8 +607,15 @@ export async function acknowledgeLessonAnswer(
       return null;
     }
     const pendingAnswers = current.pendingAnswers.slice(1);
+    if (
+      releasedLesson &&
+      (releasedLesson.id !== current.lessonId || releasedLesson.contentVersion !== current.contentVersion)
+    ) {
+      throw new Error('Released activity feedback does not match this lesson attempt.');
+    }
     const next: LessonDraft = {
       ...current,
+      ...(releasedLesson ? { lesson: releasedLesson } : {}),
       attempt: reconciledAttempt(attempt, current.pendingStageTransitions),
       pendingAnswers,
       revision: current.revision + 1,

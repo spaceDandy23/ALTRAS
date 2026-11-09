@@ -228,8 +228,11 @@ async function flushPendingLessonAttemptOnce(
         draft.attempt,
         check,
       ),
-    acknowledge: (draft, answer, attempt) =>
-      acknowledgeLessonAnswer(draft.id, answer, attempt).then(() => undefined),
+    acknowledge: async (draft, answer, attempt) => {
+      const releasedLesson = await getLesson(db, draft.lessonId, draft.attemptId);
+      check();
+      await acknowledgeLessonAnswer(draft.id, answer, attempt, db, releasedLesson);
+    },
     complete: () => completeOnlineAttempt(db, attemptId, check),
     onCompleted: (draft, attempt) => acknowledgeLessonCompletion(draft, attempt),
     retryDelays: [],

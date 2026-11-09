@@ -3131,6 +3131,14 @@ h3 {
   line-height: 1.55;
 }
 
+.answer-feedback__explanation {
+  white-space: pre-line;
+}
+
+.answer-feedback__correct-answer {
+  color: var(--paper);
+}
+
 .answer-feedback .button {
   width: 100%;
   margin-top: auto;

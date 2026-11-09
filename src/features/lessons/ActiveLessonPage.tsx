@@ -234,7 +234,14 @@ export function ActiveLessonPage() {
           snapshot.attempt,
         ),
       acknowledge: async (snapshot, answer, serverAttempt) => {
-        const next = await acknowledgeLessonAnswer(snapshot.id, answer, serverAttempt);
+        const releasedLesson = await getLesson(db, snapshot.lessonId, snapshot.attemptId);
+        const next = await acknowledgeLessonAnswer(
+          snapshot.id,
+          answer,
+          serverAttempt,
+          db,
+          releasedLesson,
+        );
         if (!next || !canApply()) return;
         const submittedAnswer = serverAttempt.answers.find(
           (item) => item.activityId === answer.activityId,
@@ -493,6 +500,15 @@ export function ActiveLessonPage() {
   const progressPercent = Math.round(
     ((activityIndex + (submitted ? 1 : 0)) / lesson.activities.length) * 100,
   );
+  const correctAnswer = (() => {
+    if (activity.type === 'organize-translate') {
+      return activity.correctTokenSequence
+        ?.map((tokenId) => activity.tokens.find((token) => token.id === tokenId)?.label)
+        .filter((label): label is string => Boolean(label))
+        .join(' ') || null;
+    }
+    return activity.choices.find((choice) => choice.id === activity.correctChoiceId)?.label ?? null;
+  })();
 
   const submit = async (answer: ActivityAnswer) => {
     if (localActionInFlightRef.current) return;
@@ -687,8 +703,15 @@ export function ActiveLessonPage() {
                 </p>
                 {submitted ? (
                   <>
-                    <h2>{activity.explanation.title}</h2>
-                    <p>{activity.explanation.body}</p>
+                    {!submitted.isCorrect && correctAnswer && (
+                      <p className="answer-feedback__correct-answer">
+                        <strong>Correct answer:</strong> {correctAnswer}
+                      </p>
+                    )}
+                    {activity.explanation?.title && <h2>{activity.explanation.title}</h2>}
+                    {activity.explanation?.body && (
+                      <p className="answer-feedback__explanation">{activity.explanation.body}</p>
+                    )}
                   </>
                 ) : (
                   <p>

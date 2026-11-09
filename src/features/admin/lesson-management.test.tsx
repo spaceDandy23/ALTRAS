@@ -672,6 +672,15 @@ describe('Basic Lesson Management editor and preview', () => {
       acceptedTokenSequences: [['a', 'b', 'c'], ['c', 'b', 'a']],
     }));
   });
+  it('keeps the authored activity explanation optional in the CMS', () => {
+    const activity = newActivity('find-word');
+    const onChange = vi.fn();
+    render(<ActivityEditor activity={activity} onChange={onChange} />);
+
+    expect(screen.getByLabelText('Feedback title (optional)')).toHaveValue('');
+    expect(screen.getByLabelText('Explanation / step-by-step solution (optional)')).toHaveValue('');
+    expect(activity).not.toHaveProperty('explanation');
+  });
   it('rejects eleven activities in the service before any RPC', async () => {
     const draft = item().draft;
     draft.chapters[0].activities = Array.from({ length: 11 }, () => newActivity('find-word'));
@@ -685,7 +694,7 @@ describe('Basic Lesson Management editor and preview', () => {
     row.draft.chapters[0].activities.push(blankActivity);
 
     await expect(publishManagedLesson(row, true)).rejects.toThrow(
-      `Complete the required fields before publishing. Activity ${row.draft.activities.length}: title, instructions, feedback title, feedback explanation, choice 1 text, choice 2 text.`,
+      `Complete the required fields before publishing. Activity ${row.draft.activities.length}: title, instructions, choice 1 text, choice 2 text.`,
     );
     expect(client.rpc).not.toHaveBeenCalled();
   });

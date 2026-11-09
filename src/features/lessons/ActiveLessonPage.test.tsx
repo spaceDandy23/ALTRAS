@@ -129,6 +129,82 @@ describe('active lesson loading failures', () => {
     expect(submitActivityAnswer).toHaveBeenCalledWith(db, attemptId, activity.id, 'sum', expect.anything());
   });
 
+  it('shows the server-released correct answer and authored multiline explanation after a wrong answer', async () => {
+    const parsed = activitySchema.parse({
+      id: 'wrong-answer-translation',
+      type: 'choose-correct-translation',
+      title: 'Choose the correct expression',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'sum', label: 'n + 5' },
+        { id: 'difference', label: 'n - 5' },
+      ],
+      correctChoiceId: 'sum',
+      explanation: { title: 'Check the operation', body: 'Step 1:\nAdd both sides' },
+    });
+    if (parsed.type !== 'choose-correct-translation') throw new Error('Invalid test activity.');
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const lesson = {
+      ...structuredClone(packagedContent.lessons[0]),
+      activities: [{ ...parsed, correctChoiceId: undefined, explanation: undefined }],
+    };
+    const releasedLesson = { ...lesson, activities: [parsed] };
+    const activeAttempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: [],
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+    };
+    vi.mocked(getLesson)
+      .mockResolvedValueOnce(lesson)
+      .mockResolvedValueOnce(releasedLesson);
+    vi.mocked(getAttempt).mockResolvedValue(activeAttempt);
+    vi.mocked(submitActivityAnswer).mockResolvedValue({
+      ...activeAttempt,
+      answers: [{
+        activityId: parsed.id,
+        activityType: parsed.type,
+        answer: 'difference',
+        isCorrect: false,
+        submittedAt: 2,
+      }],
+    });
+    useAuthStore.setState({ status: 'authenticated', user: {
+      id: userId, normalizedUsername: 'student', displayName: 'Student', createdAt: 1, lastLoginAt: 1,
+    } });
+    useContentStore.setState({ status: 'ready', error: null });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}><Routes>
+      <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+    </Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('radio', { name: 'n - 5' }));
+    await user.click(screen.getByRole('button', { name: 'Submit answer' }));
+
+    expect(await screen.findByText('Not quite')).toBeVisible();
+    expect(document.querySelector('.answer-feedback__correct-answer')?.textContent).toBe(
+      'Correct answer: n + 5',
+    );
+    expect(screen.getByRole('heading', { name: 'Check the operation' })).toBeVisible();
+    const explanation = screen.getByText((_content, element) =>
+      element?.classList.contains('answer-feedback__explanation') ?? false,
+    );
+    expect(explanation.textContent).toBe('Step 1:\nAdd both sides');
+    expect(getLesson).toHaveBeenLastCalledWith(db, lesson.id, attemptId);
+    expect(playSfx).toHaveBeenCalledWith('incorrect');
+  });
+
   it.each([
     ['first', 'Starting your lesson…'],
     ['retry', 'Starting a new attempt…'],

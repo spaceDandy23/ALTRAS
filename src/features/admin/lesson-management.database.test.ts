@@ -153,6 +153,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070002_chapter_vocabulary_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070003_revert_chapter_vocabulary_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070004_optional_chapter_teaching_tables.sql'), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations/202611090001_optional_lesson_activity_feedback.sql'), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -975,6 +976,57 @@ describe('Basic Lesson Management SQL and RLS', () => {
       packagedContent.lessons[0].activities[0].explanation,
     );
     expect(JSON.stringify(content.activities[1])).not.toContain('correctChoiceId');
+  });
+  it('accepts an omitted authored explanation and releases only the submitted activity answer', async () => {
+    const authored = draft({ prerequisiteLessonId: undefined });
+    const activity = authored.chapters[0].activities[0];
+    delete activity.explanation;
+    const published = await publish(await save(authored));
+
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    const before = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, attempt.id]);
+    expect(before.activities[0]).not.toHaveProperty('correctChoiceId');
+
+    const wrongChoice = activity.type === 'organize-translate'
+      ? activity.tokens.map((token) => token.id).reverse()
+      : activity.choices.find((choice) => choice.id !== activity.correctChoiceId)!.id;
+    await rpc('submit_lesson_activity_answer', [attempt.id, activity.id, wrongChoice]);
+    const after = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, attempt.id]);
+    const releasedActivity = after.activities.find((item) => item.id === activity.id);
+    expect(releasedActivity).toBeDefined();
+    if (activity.type === 'organize-translate') {
+      expect(releasedActivity?.type === 'organize-translate' ? releasedActivity.correctTokenSequence : undefined)
+        .toEqual(activity.correctTokenSequence);
+    } else {
+      expect(releasedActivity && releasedActivity.type !== 'organize-translate'
+        ? releasedActivity.correctChoiceId
+        : undefined).toBe(activity.correctChoiceId);
+    }
+    expect(after.activities[0].explanation).toBeUndefined();
+  });
+  it('releases the correct Arrange Words sequence after its answer is submitted without exposing alternatives', async () => {
+    const activity = structuredClone(packagedContent.lessons[0].activities.find(
+      (candidate) => candidate.type === 'organize-translate',
+    )!);
+    if (activity.type !== 'organize-translate') throw new Error('Expected Arrange Words activity.');
+    activity.acceptedTokenSequences = [activity.correctTokenSequence, [...activity.correctTokenSequence].reverse()];
+    const authored = draft({ prerequisiteLessonId: undefined, activities: [activity] });
+    const published = await publish(await save(authored));
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    const before = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, attempt.id]);
+    expect(before.activities[0]).not.toHaveProperty('correctTokenSequence');
+    const wrongOrder = [
+      ...activity.correctTokenSequence.slice(1),
+      activity.correctTokenSequence[0],
+    ];
+    await rpc('submit_lesson_activity_answer', [attempt.id, activity.id, wrongOrder]);
+    const after = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, attempt.id]);
+    const releasedActivity = after.activities.find((item) => item.id === activity.id);
+    expect(releasedActivity?.type === 'organize-translate' ? releasedActivity.correctTokenSequence : undefined)
+      .toEqual(activity.correctTokenSequence);
+    expect(releasedActivity).not.toHaveProperty('acceptedTokenSequences');
   });
   it.each(['lesson_catalog', 'lesson_definitions', 'lesson_activity_keys', 'admin_users'])(
     'students cannot mutate %s',

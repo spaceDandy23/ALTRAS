@@ -3,7 +3,7 @@ import { ChoiceRowsEditor } from './ChoiceRowsEditor';
 import { ReorderableItem, reorderById } from './ReorderableItem';
 import { AdminIconButton } from './AdminIconButton';
 import { moveItem, newActivity, type AuthoredLesson } from './lesson-management.service';
-import { ValidationFieldError, ValidationScope, ValidatedFormField, useLessonValidation, type ValidationPathPart } from './lesson-validation';
+import { ValidationFieldError, ValidationScope, ValidatedFormField, ValidatedTextareaField, useLessonValidation, type ValidationPathPart } from './lesson-validation';
 type Activity = AuthoredLesson['activities'][number];
 
 export function ActivityEditor({
@@ -207,17 +207,18 @@ export function ActivityEditor({
         }
       />
       <ValidatedFormField
-        label="Feedback title"
+        label="Feedback title (optional)"
         validationPath={['explanation', 'title']}
-        value={activity.explanation.title}
+        value={activity.explanation?.title ?? ''}
         onChange={(e) =>
           onChange({ ...activity, explanation: { ...activity.explanation, title: e.target.value } })
         }
       />
-      <ValidatedFormField
-        label="Feedback explanation"
+      <ValidatedTextareaField
+        label="Explanation / step-by-step solution (optional)"
         validationPath={['explanation', 'body']}
-        value={activity.explanation.body}
+        value={activity.explanation?.body ?? ''}
+        rows={4}
         onChange={(e) =>
           onChange({ ...activity, explanation: { ...activity.explanation, body: e.target.value } })
         }

@@ -455,7 +455,6 @@ export function newActivity(
     id: `activity-${crypto.randomUUID()}`,
     title: '',
     prompt: '',
-    explanation: { title: '', body: '' },
   };
   if (type === 'choose-correct-translation')
     return {

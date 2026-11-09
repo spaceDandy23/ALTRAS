@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const explanationSchema = z.object({
-  title: z.string().min(1),
-  body: z.string().min(1),
+  title: z.string().optional(),
+  body: z.string().optional(),
 });
 
 export const hintSchema = z.object({
@@ -37,7 +37,7 @@ const activityBaseSchema = z.object({
   title: z.string().min(1),
   prompt: z.string().min(1),
   hint: hintSchema.optional(),
-  explanation: explanationSchema,
+  explanation: explanationSchema.optional(),
   characterDialogue: activityCharacterDialogueSchema.optional(),
 });
 
@@ -351,6 +351,7 @@ export const publicActivitySchema = z.discriminatedUnion('type', [
     mathStatement: z.string().min(1),
     tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string()).optional(),
+    explanation: explanationSchema.optional(),
   }),
   z.object({
     ...chooseCorrectTranslationActivitySchema.shape,

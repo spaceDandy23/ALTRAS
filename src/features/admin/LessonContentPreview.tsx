@@ -73,7 +73,7 @@ export function LessonContentPreview({ lesson }: { lesson: AuthoredLesson }) {
       )}
       {answer && (
         <p role="status">
-          {answer.isCorrect ? 'Correct.' : 'Not quite.'} {activity.explanation.body}
+          {answer.isCorrect ? 'Correct.' : 'Not quite.'} {activity.explanation?.body}
         </p>
       )}
       <div className="admin-actions lesson-preview-navigation">
