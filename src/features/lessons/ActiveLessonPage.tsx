@@ -51,6 +51,7 @@ import { activityResultForAttempt } from './domain/activity-result';
 import { ContentState } from './components/ContentState';
 import { CompletionCelebration } from '@/components/ui/CompletionCelebration';
 import { TeachingContentRenderer } from './components/TeachingContentRenderer';
+import { LessonElapsedTimer } from './components/LessonElapsedTimer';
 import { playSfx } from '@/services/audio/audio.manager';
 import {
   playNeutralClickOnKeyDown,
@@ -449,7 +450,8 @@ export function ActiveLessonPage() {
   if (stage === 'chapter-teaching') {
     return (
       <ContentState>
-        <div className="lesson-player page-enter">
+        <div className="lesson-player lesson-timer-host page-enter">
+          <LessonElapsedTimer startedAt={attempt.startedAt} />
           <header className="lesson-player__header">
             <button className="lesson-exit" onClick={exit}>
               ← Exit lesson
@@ -460,12 +462,14 @@ export function ActiveLessonPage() {
                 Chapter {chapterIndex + 1} of {chapters.length}
               </strong>
             </div>
-            <span className={`lesson-player__save-state lesson-player__save-state--${saveState}`}>
-              {saveState === 'saving' && 'Saving…'}
-              {saveState === 'saved' && 'Saved'}
-              {saveState === 'pending' && 'Saved on this device. Account sync is pending.'}
-              {saveState === 'error' && 'Could not continue. Try again.'}
-            </span>
+            <div className="lesson-player__status">
+              <span className={`lesson-player__save-state lesson-player__save-state--${saveState}`}>
+                {saveState === 'saving' && 'Saving…'}
+                {saveState === 'saved' && 'Saved'}
+                {saveState === 'pending' && 'Saved on this device. Account sync is pending.'}
+                {saveState === 'error' && 'Could not continue. Try again.'}
+              </span>
+            </div>
           </header>
           <main className="chapter-teaching panel" aria-labelledby="chapter-teaching-title">
             <p className="assessment-kicker">Chapter {chapterIndex + 1}</p>
@@ -686,7 +690,8 @@ export function ActiveLessonPage() {
     const nextStage = nextLessonFlowState(lesson, attempt)?.flowStage;
     return (
       <ContentState>
-        <section className="assessment-shell assessment-state assessment-result panel page-enter">
+        <section className="assessment-shell assessment-state assessment-result panel lesson-timer-host page-enter">
+          <LessonElapsedTimer startedAt={attempt.startedAt} />
           <p className="assessment-kicker">Activities complete</p>
           <h1>{activityResult.percentage}%</h1>
           <p>Your activity score</p>
@@ -722,7 +727,8 @@ export function ActiveLessonPage() {
 
   return (
     <ContentState>
-      <div className="lesson-player page-enter">
+      <div className="lesson-player lesson-timer-host page-enter">
+        <LessonElapsedTimer startedAt={attempt.startedAt} />
         <header className="lesson-player__header">
           <button className="lesson-exit" onClick={exit}>
             ← Exit lesson
@@ -737,16 +743,18 @@ export function ActiveLessonPage() {
                 : `Activity ${activityIndex + 1} of ${lesson.activities.length}`}
             </strong>
           </div>
-          <span
-            className={`lesson-player__save-state lesson-player__save-state--${saveState}`}
-            role="status"
-            aria-live="polite"
-          >
-            {saveState === 'saving' && 'Saving…'}
-            {saveState === 'saved' && 'Answer saved'}
-            {saveState === 'pending' && 'Saved on this device · Waiting to sync'}
-            {saveState === 'error' && 'Could not save. Try again.'}
-          </span>
+          <div className="lesson-player__status">
+            <span
+              className={`lesson-player__save-state lesson-player__save-state--${saveState}`}
+              role="status"
+              aria-live="polite"
+            >
+              {saveState === 'saving' && 'Saving…'}
+              {saveState === 'saved' && 'Answer saved'}
+              {saveState === 'pending' && 'Saved on this device · Waiting to sync'}
+              {saveState === 'error' && 'Could not save. Try again.'}
+            </span>
+          </div>
         </header>
         <div className="lesson-progress-row">
           <div className="lesson-progress" aria-label={`${progressPercent}% complete`}>

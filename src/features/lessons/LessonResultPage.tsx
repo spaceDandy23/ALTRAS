@@ -33,6 +33,7 @@ import {
   playReward,
 } from '@/services/audio/audio.manager';
 import { StudentStreak } from '@/features/streaks/StudentStreak';
+import { LessonElapsedTimer } from './components/LessonElapsedTimer';
 
 function LessonResultAudio({ attempt }: { attempt: LessonAttempt }) {
   const playedAttemptRef = useRef<string | null>(null);
@@ -163,7 +164,8 @@ export function LessonResultPage() {
         className={`result-page result-page--${attempt.cleared ? 'cleared' : 'failed'} page-enter`}
       >
         <LessonResultAudio attempt={attempt} />
-        <main className="result-board" aria-live="polite">
+        <main className="result-board lesson-timer-host" aria-live="polite">
+          <LessonElapsedTimer startedAt={attempt.startedAt} stoppedAt={attempt.completedAt} />
           {attempt.cleared && <CompletionCelebration eventKey={`lesson:${attempt.id}`} />}
           <div className="result-board__mark" aria-hidden="true">
             {attempt.cleared ? '✓' : '↻'}

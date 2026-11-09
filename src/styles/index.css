@@ -2716,6 +2716,77 @@ h3 {
   margin-bottom: 0.65rem;
 }
 
+.lesson-timer-host {
+  position: relative;
+}
+
+.lesson-timer-host > .lesson-elapsed-timer {
+  position: absolute;
+  z-index: 2;
+  top: 0.65rem;
+  right: 0.65rem;
+}
+
+.lesson-player.lesson-timer-host {
+  padding-top: 3.4rem;
+}
+
+.assessment-shell.lesson-timer-host,
+.assessment-player.lesson-timer-host,
+.result-board.lesson-timer-host {
+  padding-top: 4.1rem;
+}
+
+.assessment-loading-with-timer {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding-top: 3.4rem;
+}
+
+.assessment-loading-with-timer > .loading-state--page {
+  flex: 1;
+}
+
+.lesson-elapsed-timer {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.lesson-elapsed-timer svg {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  color: var(--yellow);
+}
+
+.lesson-elapsed-timer strong {
+  color: var(--paper);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-player__status {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+
 .lesson-exit {
   justify-self: start;
   border: 0;
@@ -5806,6 +5877,15 @@ html[data-experience='student'] .loading-state p {
   .lesson-player__save-state {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+
+  .lesson-player__status {
+    grid-column: 1 / -1;
+    justify-items: start;
+  }
+
+  .assessment-player__header {
+    flex-wrap: wrap;
   }
 
   .activity-card,
