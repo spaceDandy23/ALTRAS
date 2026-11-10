@@ -51,7 +51,7 @@ import { activityResultForAttempt } from './domain/activity-result';
 import { ContentState } from './components/ContentState';
 import { CompletionCelebration } from '@/components/ui/CompletionCelebration';
 import { TeachingContentRenderer } from './components/TeachingContentRenderer';
-import { LessonElapsedTimer } from './components/LessonElapsedTimer';
+import { LessonElapsedTimer, lessonTimerStorageKey } from './components/LessonElapsedTimer';
 import { playSfx } from '@/services/audio/audio.manager';
 import {
   playNeutralClickOnKeyDown,
@@ -451,7 +451,10 @@ export function ActiveLessonPage() {
     return (
       <ContentState>
         <div className="lesson-player lesson-timer-host page-enter">
-          <LessonElapsedTimer startedAt={attempt.startedAt} />
+          <LessonElapsedTimer
+            startedAt={attempt.startedAt}
+            storageKey={lessonTimerStorageKey(user.id, lesson.id, attempt.id)}
+          />
           <header className="lesson-player__header">
             <button className="lesson-exit" onClick={exit}>
               ← Exit lesson
@@ -691,7 +694,10 @@ export function ActiveLessonPage() {
     return (
       <ContentState>
         <section className="assessment-shell assessment-state assessment-result panel lesson-timer-host page-enter">
-          <LessonElapsedTimer startedAt={attempt.startedAt} />
+          <LessonElapsedTimer
+            startedAt={attempt.startedAt}
+            storageKey={lessonTimerStorageKey(user.id, lesson.id, attempt.id)}
+          />
           <p className="assessment-kicker">Activities complete</p>
           <h1>{activityResult.percentage}%</h1>
           <p>Your activity score</p>
@@ -728,7 +734,10 @@ export function ActiveLessonPage() {
   return (
     <ContentState>
       <div className="lesson-player lesson-timer-host page-enter">
-        <LessonElapsedTimer startedAt={attempt.startedAt} />
+        <LessonElapsedTimer
+          startedAt={attempt.startedAt}
+          storageKey={lessonTimerStorageKey(user.id, lesson.id, attempt.id)}
+        />
         <header className="lesson-player__header">
           <button className="lesson-exit" onClick={exit}>
             ← Exit lesson

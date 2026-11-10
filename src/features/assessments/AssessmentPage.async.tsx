@@ -47,7 +47,10 @@ import {
   getCachedLessonAssessmentQuestions,
   getLessonDraft,
 } from '@/features/lessons/attempts/lesson-draft.service';
-import { LessonElapsedTimer } from '@/features/lessons/components/LessonElapsedTimer';
+import {
+  LessonElapsedTimer,
+  lessonTimerStorageKey,
+} from '@/features/lessons/components/LessonElapsedTimer';
 import {
   completeAssessment,
   getAssessmentAttempt,
@@ -126,6 +129,9 @@ function AssessmentSession({
 }) {
   const navigate = useNavigate();
   const localLessonAssessment = Boolean(scope);
+  const lessonTimerKey = scope
+    ? lessonTimerStorageKey(userId, scope.lessonId, scope.lessonAttemptId)
+    : undefined;
   const [questions, setQuestions] = useState<AssessmentQuestion[]>(initialQuestions ?? []);
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
   const [draft, setDraft] = useState<AssessmentDraft | null>(null);
@@ -479,7 +485,7 @@ function AssessmentSession({
   if (loading)
     return (
       <div className="assessment-loading-with-timer lesson-timer-host">
-        <LessonElapsedTimer startedAt={lessonStartedAt} />
+        <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
         <LoadingState variant="page" message={`Preparing the ${title.toLowerCase()}…`} />
       </div>
     );
@@ -487,7 +493,7 @@ function AssessmentSession({
     return (
       <section className="assessment-shell assessment-state panel lesson-timer-host">
         <p className="assessment-kicker">{title}</p>
-        <LessonElapsedTimer startedAt={lessonStartedAt} />
+        <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
         <h1>We couldn&rsquo;t load this test</h1>
         <p role="alert">{bootstrapError}</p>
         <div className="result-actions">
@@ -514,6 +520,7 @@ function AssessmentSession({
           kind={kind}
           attempt={attempt}
           lessonStartedAt={lessonStartedAt}
+          lessonTimerKey={lessonTimerKey}
           continueLesson={
             scope
               ? async () => {
@@ -558,7 +565,7 @@ function AssessmentSession({
       return (
         <section className="assessment-shell assessment-state panel lesson-timer-host">
           <p className="assessment-kicker">{title}</p>
-          <LessonElapsedTimer startedAt={lessonStartedAt} />
+          <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
           <h1>{connectionOnline ? 'Submission saved' : 'Answers saved on this device'}</h1>
           {!connectionOnline && (
             <p role="status">
@@ -591,7 +598,7 @@ function AssessmentSession({
     return (
       <section className="assessment-shell assessment-state panel lesson-timer-host">
         <p className="assessment-kicker">{title}</p>
-        <LessonElapsedTimer startedAt={lessonStartedAt} />
+        <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
         <h1>Submission saved</h1>
         <LoadingState
           variant="page"
@@ -661,6 +668,7 @@ function AssessmentSession({
         kind={kind}
         questionCount={questions.length}
         lessonStartedAt={lessonStartedAt}
+        lessonTimerKey={lessonTimerKey}
         placeholders={placeholders}
         error={error}
         starting={starting}
@@ -824,7 +832,7 @@ function AssessmentSession({
           : '';
   return (
     <section className="assessment-player lesson-timer-host page-enter" aria-labelledby="assessment-question">
-      <LessonElapsedTimer startedAt={lessonStartedAt} />
+      <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
       <header className="assessment-player__header">
         <Link to={scope ? `/lessons/${scope.lessonId}` : '/'}>← Save and exit</Link>
         <div>
@@ -921,6 +929,7 @@ function AssessmentIntroduction({
   kind,
   questionCount,
   lessonStartedAt,
+  lessonTimerKey,
   placeholders,
   error,
   starting,
@@ -931,6 +940,7 @@ function AssessmentIntroduction({
   kind: 'pre-test' | 'post-test';
   questionCount: number;
   lessonStartedAt: number | null;
+  lessonTimerKey?: string;
   placeholders: boolean;
   error: string;
   starting: boolean;
@@ -940,7 +950,7 @@ function AssessmentIntroduction({
   return (
     <section className="assessment-shell panel lesson-timer-host page-enter">
       <p className="assessment-kicker">{title}</p>
-      <LessonElapsedTimer startedAt={lessonStartedAt} />
+      <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
       <h1>{kind === 'pre-test' ? 'Check what you know' : 'Show what you learned'}</h1>
       <p>
         This test has {questionCount} questions. Progress is saved on this device and synced
@@ -982,12 +992,14 @@ function AssessmentResult({
   kind,
   attempt,
   lessonStartedAt,
+  lessonTimerKey,
   continueLesson,
 }: {
   title: string;
   kind: 'pre-test' | 'post-test';
   attempt: AssessmentAttempt;
   lessonStartedAt: number | null;
+  lessonTimerKey?: string;
   continueLesson?: () => Promise<void>;
 }) {
   const completionPlayedRef = useRef<string | null>(null);
@@ -1017,7 +1029,7 @@ function AssessmentResult({
   return (
     <section className="assessment-shell assessment-state assessment-result panel lesson-timer-host page-enter">
       <p className="assessment-kicker">{title} complete</p>
-      <LessonElapsedTimer startedAt={lessonStartedAt} stoppedAt={attempt.submittedAt} />
+      <LessonElapsedTimer startedAt={lessonStartedAt} stoppedAt={attempt.submittedAt} storageKey={lessonTimerKey} />
       <h1>{attempt.score}%</h1>
       <p>Your official score has been saved to your account.</p>
       <CharacterAssistant
