@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
@@ -152,6 +152,33 @@ describe('settings save status', () => {
     await screen.findByRole('button', { name: 'Standard' });
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'));
     expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
+  });
+
+  it('marks text-size controls for their narrow-screen wrapping layout', async () => {
+    vi.mocked(getUserSettings).mockResolvedValue({ ...initialSettings, readabilityScale: 1.3 });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: 'user-1',
+        normalizedUsername: 'large_text',
+        displayName: 'Large Text',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+
+    const { container } = render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('button', { name: 'Largest' });
+    const textSizeGroup = container.querySelector<HTMLElement>('.choice-setting--text-size');
+    expect(textSizeGroup).toBeInTheDocument();
+    expect(
+      within(textSizeGroup!).getByRole('button', { name: 'Largest' }),
+    ).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows a recoverable state when Supabase settings cannot load', async () => {

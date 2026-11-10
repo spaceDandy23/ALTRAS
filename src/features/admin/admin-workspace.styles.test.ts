@@ -69,4 +69,20 @@ describe('Admin workspace layout styles', () => {
       /@media \(max-width: 650px\) \{[\s\S]*\.lesson-preview-navigation\s*\{[\s\S]*grid-template-columns: 1fr;/,
     );
   });
+
+  it('overlays the expanded admin menu so it does not push page content down on mobile', () => {
+    expect(adminStyles).toMatch(
+      /@media \(max-width: 650px\) \{[\s\S]*?\.admin-mobile-nav__panel\s*\{[\s\S]*?position: absolute;[\s\S]*?max-height: calc\(100svh - 4rem\);[\s\S]*?overflow-y: auto;/,
+    );
+  });
+
+  it('uses labeled stacked dynamic-table rows and wrapping text-size controls on phones', () => {
+    expect(sharedStyles).toMatch(
+      /@media \(max-width: 600px\) \{[\s\S]*?\.content-table-wrap\s*\{[\s\S]*?overflow: visible;[\s\S]*?\.content-table td::before\s*\{[\s\S]*?content: attr\(data-label\);/,
+    );
+    expect(sharedStyles).toMatch(
+      /@media \(max-width: 600px\) \{[\s\S]*?\.choice-setting--text-size \.segmented-control\s*\{[\s\S]*?flex-wrap: wrap;/,
+    );
+    expect(sharedStyles).toMatch(/\.chapter-teaching__block > p\s*\{\s*white-space: pre-line;/);
+  });
 });

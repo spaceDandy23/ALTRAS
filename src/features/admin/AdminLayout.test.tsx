@@ -41,12 +41,13 @@ describe('Admin workspace navigation', () => {
     },
   );
 
-  it('keeps an accessible compact navigation in the mobile layout', () => {
+  it('keeps an accessible compact navigation that closes after choosing a destination', () => {
     render(
       <MemoryRouter initialEntries={['/admin/users']}>
         <Routes>
           <Route path="/admin" element={<AdminLayout />}>
             <Route path="users" element={<h1>Users page</h1>} />
+            <Route path="lessons" element={<h1>Lessons page</h1>} />
           </Route>
         </Routes>
       </MemoryRouter>,
@@ -57,5 +58,13 @@ describe('Admin workspace navigation', () => {
     expect(
       screen.getByRole('navigation', { name: 'Admin navigation mobile', hidden: true }),
     ).toBeInTheDocument();
+    const mobileMenu = document.querySelector<HTMLDetailsElement>('.admin-mobile-nav');
+    expect(mobileMenu?.open).toBe(true);
+    fireEvent.click(
+      document.querySelector<HTMLAnchorElement>(
+        '.admin-mobile-nav nav a[href="/admin/lessons"]',
+      )!,
+    );
+    expect(mobileMenu?.open).toBe(false);
   });
 });

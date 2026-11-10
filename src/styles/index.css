@@ -1872,6 +1872,22 @@ h3 {
   background: color-mix(in srgb, var(--blue) 10%, transparent);
 }
 
+@media (max-width: 600px) {
+  .choice-setting--text-size .segmented-control {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .choice-setting--text-size .segmented-control button {
+    min-width: min(100%, 6.5rem);
+    flex: 1 1 6.5rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
 .settings-section__heading {
   display: flex;
   align-items: center;
@@ -3003,6 +3019,10 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.chapter-teaching__block > p {
+  white-space: pre-line;
+}
+
 .chapter-teaching__block--warning {
   border-left-color: var(--yellow);
 }
@@ -3898,6 +3918,60 @@ a.almanac-option:hover {
   }
   .vocabulary-table th::before,
   .vocabulary-table td::before {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.75em;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .content-table-wrap {
+    overflow: visible;
+  }
+
+  .content-table,
+  .content-table tbody,
+  .content-table tr,
+  .content-table th,
+  .content-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .content-table caption {
+    display: block;
+    width: 100%;
+  }
+
+  .content-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .content-table tr {
+    margin-bottom: 0.85rem;
+    border: 1px solid var(--line);
+    background: var(--panel-bg);
+  }
+
+  .content-table th,
+  .content-table td {
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
+  }
+
+  .content-table tr > :last-child {
+    border-bottom: 0;
+  }
+
+  .content-table td::before {
     display: block;
     margin-bottom: 0.25rem;
     color: var(--muted);

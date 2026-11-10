@@ -210,7 +210,7 @@ export function SettingsPage() {
               ))}
             </div>
           </fieldset>
-          <fieldset className="choice-setting">
+          <fieldset className="choice-setting choice-setting--text-size">
             <legend>Text size</legend>
             <div className="segmented-control">
               {textSizeOptions.map((option) => (

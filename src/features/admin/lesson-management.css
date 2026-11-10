@@ -933,14 +933,30 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
     background: var(--header-bg);
   }
   .admin-mobile-nav summary {
+    display: flex;
+    align-items: center;
     min-height: 44px;
     color: var(--paper);
     cursor: pointer;
     font-size: 0.82rem;
     font-weight: 800;
   }
-  .admin-mobile-nav nav {
-    margin-top: 0.5rem;
+  .admin-mobile-nav__panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: 21;
+    max-height: calc(100svh - 4rem);
+    overflow-y: auto;
+    border: 1px solid var(--line-strong);
+    border-top: 0;
+    padding: 0 1rem 1rem;
+    background: var(--header-bg);
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.3);
+  }
+  .admin-mobile-nav__panel nav {
+    margin-top: 0;
   }
   .admin-mobile-nav__account {
     display: flex;
