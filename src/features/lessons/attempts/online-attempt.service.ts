@@ -139,6 +139,9 @@ async function createOnlineAttempt(
   if (error) {
     const existing = await getOnlineActiveAttempt(userId, lessonId);
     if (existing) return { attempt: existing, created: false };
+    if (error.message.includes('Lesson attempt limit reached.')) {
+      throw new AttemptError('You’ve reached the maximum number of attempts for this lesson.');
+    }
     throw new AttemptError('Unable to start this online attempt.');
   }
   const id = z.object({ id: z.string().uuid() }).parse(data).id;

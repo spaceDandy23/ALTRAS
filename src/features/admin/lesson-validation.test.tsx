@@ -29,6 +29,29 @@ function validLesson(): ManagedLesson {
 }
 
 describe('lesson CMS validation paths', () => {
+  it('defaults existing lessons to Unlimited and validates Limited as a positive whole number', () => {
+    const current = validLesson().draft;
+    expect(normalizeAuthoredLesson({
+      ...structuredClone(packagedContent.lessons[0]),
+    }).attemptLimit).toEqual({ mode: 'unlimited', maxAttempts: null });
+
+    for (const maxAttempts of [null, 0, -1, 2.5]) {
+      const invalid = {
+        ...current,
+        attemptLimit: { mode: 'limited' as const, maxAttempts },
+      };
+      const issues = getLessonValidationIssues(invalid, 'save');
+      expect(issues).toContainEqual(expect.objectContaining({
+        path: ['attemptLimit', 'maxAttempts'],
+        label: 'Maximum lesson attempts',
+      }));
+    }
+    expect(getLessonValidationIssues({
+      ...current,
+      attemptLimit: { mode: 'limited', maxAttempts: 3 },
+    }, 'save')).toEqual([]);
+  });
+
   it('maps one invalid setting to its researcher-facing label and message', () => {
     const draft = validLesson().draft;
     const invalid = { ...draft, title: '' };

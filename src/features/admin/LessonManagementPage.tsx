@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, X } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AdminContentLoading } from './AdminContentLoading';
 import { ActivityEditor } from './ActivityEditor';
@@ -36,6 +36,27 @@ function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message.trim() ? cause.message : fallback;
 }
 
+function FeedbackToast({
+  kind,
+  message,
+  onDismiss,
+}: {
+  kind: 'success' | 'error';
+  message: string;
+  onDismiss: () => void;
+}) {
+  const Icon = kind === 'success' ? Check : AlertCircle;
+  return (
+    <div className={`admin-feedback-toast admin-feedback-toast--${kind}`}>
+      <span className="admin-feedback-toast__icon" aria-hidden="true"><Icon size={18} /></span>
+      <p role={kind === 'error' ? 'alert' : 'status'}>{message}</p>
+      <button className="admin-feedback-toast__dismiss" type="button" aria-label="Dismiss message" onClick={onDismiss}>
+        <X size={18} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 function keepOverviewPosition(
   blocks: InstructionalContentBlock[],
   teaching: InstructionalContentBlock[],
@@ -62,6 +83,7 @@ export function LessonManagementPage() {
   const [vocabularyOpen, setVocabularyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [feedbackError, setFeedbackError] = useState('');
   const [validationIssues, setValidationIssues] = useState<LessonValidationIssue[]>([]);
   const [validationAction, setValidationAction] = useState<'save' | 'publish' | null>(null);
   const [notice, setNotice] = useState('');
@@ -76,7 +98,6 @@ export function LessonManagementPage() {
     const editor = document.getElementById(`teaching-${newTeachingBlockId}`);
     if (editor instanceof HTMLDetailsElement) editor.open = true;
   }, [newTeachingBlockId]);
-  const saveFeedbackRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
     void listManagedLessons()
@@ -97,11 +118,6 @@ export function LessonManagementPage() {
       active = false;
     };
   }, [reload]);
-  useEffect(() => {
-    if (!error || !draft || preview || busy) return;
-    saveFeedbackRef.current?.scrollIntoView?.({ behavior: 'auto', block: 'center' });
-    saveFeedbackRef.current?.focus({ preventScroll: true });
-  }, [error, draft, preview, busy]);
   useEffect(() => {
     if (validationIssues.length === 0 || preview || !focusValidationFieldRef.current) return;
     focusValidationFieldRef.current = false;
@@ -130,6 +146,7 @@ export function LessonManagementPage() {
     setDraft(normalized);
     setDirty(true);
     setError('');
+    setFeedbackError('');
     setNotice('');
     if (validationAction) {
       const nextIssues = getLessonValidationIssues(normalized, validationAction);
@@ -191,11 +208,15 @@ export function LessonManagementPage() {
         setValidationAction('publish');
         setError('');
         setNotice('');
+        setFeedbackError(
+          `${issues.length} ${issues.length === 1 ? 'field needs' : 'fields need'} attention. Review the highlighted fields below.`,
+        );
         return;
       }
     }
     setBusy(true);
     setError('');
+    setFeedbackError('');
     setNotice('');
     setValidationIssues([]);
     setValidationAction(null);
@@ -215,8 +236,13 @@ export function LessonManagementPage() {
         focusValidationFieldRef.current = true;
         setValidationIssues(e.issues);
         setValidationAction(publish ? 'publish' : 'save');
+        setFeedbackError(
+          `${e.issues.length} ${e.issues.length === 1 ? 'field needs' : 'fields need'} attention. Review the highlighted fields below.`,
+        );
       } else {
-        setError(errorMessage(e, 'Unable to save or publish lesson.'));
+        const message = errorMessage(e, 'Unable to save or publish lesson.');
+        setError(message);
+        setFeedbackError(message);
       }
     } finally {
       setBusy(false);
@@ -227,6 +253,7 @@ export function LessonManagementPage() {
     setPreview(false);
     setDirty(false);
     setError('');
+    setFeedbackError('');
     setNotice('');
     setLeaving(false);
   };
@@ -267,7 +294,10 @@ export function LessonManagementPage() {
           {error}
         </p>
       )}
-      {notice && !draft && <p role="status">{notice}</p>}
+      {notice && !draft && <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />}
+      {feedbackError && !draft && (
+        <FeedbackToast kind="error" message={feedbackError} onDismiss={() => setFeedbackError('')} />
+      )}
       {!draft ? (
         <>
           <div className="admin-actions">
@@ -280,6 +310,7 @@ export function LessonManagementPage() {
                   setRevision(0);
                   setDirty(true);
                   setNotice('');
+                  setFeedbackError('');
                 }}
               >
                 Create lesson
@@ -330,6 +361,7 @@ export function LessonManagementPage() {
                           setDirty(false);
                           setError('');
                           setNotice('');
+                          setFeedbackError('');
                         }}
                       >
                         Edit {item.draft.title}
@@ -363,6 +395,10 @@ export function LessonManagementPage() {
                 : 'Not visible to students'}
             </span>
           </div>
+          {notice && <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />}
+          {feedbackError && (
+            <FeedbackToast kind="error" message={feedbackError} onDismiss={() => setFeedbackError('')} />
+          )}
           {preview ? (
             <LessonContentPreview key={draft.id} lesson={draft} />
           ) : (
@@ -411,6 +447,37 @@ export function LessonManagementPage() {
                     value={draft.passingThreshold}
                     onChange={(e) => change({ ...draft, passingThreshold: Number(e.target.value) })}
                   />
+                  <ValidatedSelectField
+                    label="Lesson attempt limit"
+                    validationPath={['attemptLimit', 'mode']}
+                    value={draft.attemptLimit.mode}
+                    onChange={(event) => change({
+                      ...draft,
+                      attemptLimit: event.target.value === 'limited'
+                        ? { mode: 'limited', maxAttempts: draft.attemptLimit.maxAttempts }
+                        : { mode: 'unlimited', maxAttempts: null },
+                    })}
+                  >
+                    <option value="unlimited">Unlimited</option>
+                    <option value="limited">Limited</option>
+                  </ValidatedSelectField>
+                  {draft.attemptLimit.mode === 'limited' && (
+                    <ValidatedFormField
+                      label="Maximum attempts"
+                      validationPath={['attemptLimit', 'maxAttempts']}
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={draft.attemptLimit.maxAttempts ?? ''}
+                      onChange={(event) => change({
+                        ...draft,
+                        attemptLimit: {
+                          mode: 'limited',
+                          maxAttempts: event.target.value === '' ? null : Number(event.target.value),
+                        },
+                      })}
+                    />
+                  )}
                   <ValidatedSelectField
                     label="Prerequisite"
                     validationPath={['prerequisiteLessonId']}
@@ -776,16 +843,6 @@ export function LessonManagementPage() {
                   )}
                 </div>
                 <div className="admin-actions">
-                  {(error || notice) && (
-                    <div
-                      ref={saveFeedbackRef}
-                      className="admin-save-feedback"
-                      tabIndex={error ? -1 : undefined}
-                    >
-                      {error && <p className="form-alert" role="alert">{error}</p>}
-                      {notice && <p role="status">{notice}</p>}
-                    </div>
-                  )}
                   <div className="lesson-actions">
                     <button className="button" type="submit">
                       {busy ? 'Saving…' : 'Save draft'}

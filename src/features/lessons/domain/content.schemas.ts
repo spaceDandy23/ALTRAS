@@ -32,6 +32,23 @@ export const lessonCharacterDialogueSchema = z.object({
   completion: z.string().trim().min(1).optional(),
 });
 
+export const lessonAttemptLimitSchema = z
+  .object({
+    mode: z.enum(['unlimited', 'limited']),
+    maxAttempts: z.number().int().positive().nullable(),
+  })
+  .superRefine((limit, context) => {
+    if (limit.mode === 'limited' && limit.maxAttempts === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['maxAttempts'],
+        message: 'A limited lesson must have a positive whole-number attempt limit.',
+      });
+    }
+  });
+
+export const unlimitedLessonAttempts = { mode: 'unlimited', maxAttempts: null } as const;
+
 const activityBaseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -266,6 +283,7 @@ export const lessonMetadataSchema = z.object({
   prerequisiteLessonId: z.string().min(1).optional(),
   contentStatus: z.enum(['playable', 'preview']),
   passingThreshold: z.number().int().min(0).max(100),
+  attemptLimit: lessonAttemptLimitSchema.optional(),
   contentVersion: z.number().int().positive(),
   characterId: z.string().trim().min(1).optional(),
   characterDialogue: lessonCharacterDialogueSchema.optional(),
@@ -367,6 +385,8 @@ export const publicLessonChapterSchema = z.object({
   activities: z.array(publicActivitySchema),
 });
 export const publicLessonSchema = lessonMetadataSchema.extend({
+  attemptsUsed: z.number().int().nonnegative().optional(),
+  attemptLimitReached: z.boolean().optional(),
   instructionalContent: z.array(instructionalContentBlockSchema),
   activities: z.array(publicActivitySchema).min(1).max(10),
   chapters: z.array(publicLessonChapterSchema).optional(),
@@ -387,5 +407,6 @@ export type LessonChapter = z.infer<typeof lessonChapterSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
 export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
+export type LessonAttemptLimit = z.infer<typeof lessonAttemptLimitSchema>;
 export type LearningLesson = z.infer<typeof publicLessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

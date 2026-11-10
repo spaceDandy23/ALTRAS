@@ -16,6 +16,7 @@ import { getLessonHubData, getTotalXp, type LessonHubData } from './progress/pro
 import { useLessonDrafts } from './attempts/useLessonDrafts';
 import { catalogShell } from './content/catalog-shell';
 import { lessonChapters } from './domain/lesson-flow';
+import { formatLessonAttemptAvailability, getConfiguredLessonAttemptLimit } from './domain/lesson-attempt-limit';
 
 export function LessonsPage() {
   const user = useAuthStore((state) => state.user);
@@ -103,6 +104,13 @@ export function LessonsPage() {
               const showChapters = lesson.contentStatus !== 'preview' && chapters.length > 0;
               const chaptersExpanded = !collapsedChapterLessons.has(lesson.id);
               const lessonStatus = pending ? 'pending' : result ? (result.cleared ? 'cleared' : 'needs-retry') : displayStatus;
+              const attemptLimit = getConfiguredLessonAttemptLimit(lesson.attemptLimit);
+              const attemptAvailability = attemptLimit === null
+                ? null
+                : formatLessonAttemptAvailability(
+                    attemptLimit,
+                    navigator.onLine && !pending ? lesson.attemptsUsed : undefined,
+                  );
               const node = (
                 <article className={`lesson-node lesson-node--${displayStatus}`}>
                   <Link
@@ -131,6 +139,9 @@ export function LessonsPage() {
                       ) : progress?.status === 'locked' || lesson.contentStatus === 'preview' ? (
                         <span className="lesson-node__not-started">{progress?.status === 'locked' ? 'Clear Lesson 1 to unlock' : 'Lesson preview'}</span>
                       ) : null}
+                      {attemptAvailability && progress?.status !== 'locked' && lesson.contentStatus !== 'preview' && (
+                        <p className="lesson-attempt-limit-count">{attemptAvailability}</p>
+                      )}
                       {progress?.status !== 'locked' && (
                         <span className="lesson-node__action">
                           {pending ? 'View saved attempt' : result ? 'Lesson overview' : lesson.contentStatus === 'preview' ? 'View lesson' : displayStatus === 'in-progress' ? 'Resume lesson' : displayStatus === 'cleared' ? 'Review lesson' : displayStatus === 'needs-retry' ? 'Try lesson again' : 'Start lesson'}

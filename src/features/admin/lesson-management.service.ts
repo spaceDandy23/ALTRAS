@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import {
   lessonSchema,
+  lessonAttemptLimitSchema,
+  unlimitedLessonAttempts,
+  type LessonAttemptLimit,
   type InstructionalContentBlock,
   type LessonChapter,
 } from '@/features/lessons/domain/content.schemas';
@@ -22,6 +25,7 @@ export const lessonAssessmentQuestionsSchema = z.object({
 });
 export type LessonAssessmentQuestions = Record<AssessmentKind, AdminAssessmentQuestion[]>;
 export type AuthoredLesson = LegacyAuthoredLesson & {
+  attemptLimit: LessonAttemptLimit;
   chapters: LessonChapter[];
   assessmentQuestions: LessonAssessmentQuestions;
 };
@@ -124,7 +128,12 @@ function validationLabel(path: ValidationPathPart[], draft: AuthoredLesson): str
     passingThreshold: 'Passing score', prerequisiteLessonId: 'Prerequisite', concepts: 'Lesson concepts',
     sectionId: 'Lesson section', unitId: 'Lesson unit', contentStatus: 'Lesson availability',
     contentVersion: 'Lesson content version',
+    attemptLimit: 'Lesson attempt limit',
   };
+  if (root === 'attemptLimit') {
+    if (path.includes('maxAttempts')) return 'Maximum lesson attempts';
+    return 'Lesson attempt limit';
+  }
   if (root === 'title' || root === 'shortDescription' || root === 'displayOrder' || root === 'passingThreshold' || root === 'prerequisiteLessonId') return labels[String(root)];
   if (root === 'activities' || root === 'instructionalContent') return 'Lesson content';
   return 'Lesson settings';
@@ -151,6 +160,9 @@ function friendlyValidationMessage(path: ValidationPathPart[], message: string):
     if (leaf === 'label') return 'Text is required.';
     if (isTitle) return 'Title is required.';
     return 'This field is required.';
+  }
+  if (leaf === 'maxAttempts' || path.includes('attemptLimit')) {
+    return 'Enter a positive whole number of attempts, or choose Unlimited.';
   }
   if (message === 'Each accepted answer must use every token exactly once.') return 'Use every available token exactly once.';
   if (message === 'Accepted answers must use different token orders.') return 'This answer duplicates another accepted order.';
@@ -221,6 +233,12 @@ export function getLessonValidationIssues(
     issues.push({ path: ['displayOrder'], label: 'Lesson order', message: 'Lesson order must be a positive integer.' });
   if (draft.activities.length > MAX_ACTIVITIES)
     issues.push({ path: ['chapters'], label: 'Lesson activities', message: `A lesson supports at most ${MAX_ACTIVITIES} activities.` });
+  try {
+    lessonAttemptLimitSchema.parse(draft.attemptLimit);
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      issues.push(...lessonValidationIssues(error, draft, ['attemptLimit']));
+  }
   try {
     lessonAssessmentQuestionsSchema.parse(draft.assessmentQuestions);
   } catch (error) {
@@ -383,6 +401,7 @@ export function newLesson(order: number): AuthoredLesson {
     contentStatus: 'playable',
     contentVersion: 1,
     passingThreshold: 70,
+    attemptLimit: { ...unlimitedLessonAttempts },
     instructionalContent: [],
     activities: [],
     chapters: [newChapter(1)],
@@ -438,6 +457,7 @@ export function normalizeAuthoredLesson(
     .map((chapter, index) => ({ ...chapter, displayOrder: index + 1 }));
   return {
     ...lesson,
+    attemptLimit: lesson.attemptLimit ?? { ...unlimitedLessonAttempts },
     chapters,
     instructionalContent: chapters.flatMap((chapter) => chapter.instructionalContent),
     activities: chapters.flatMap((chapter) => chapter.activities),

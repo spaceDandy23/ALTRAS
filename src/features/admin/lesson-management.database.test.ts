@@ -28,6 +28,7 @@ const completedActiveTimeMigration = '202611040002_reconcile_completed_attempt_a
 const chooseTranslationMigration = '202611040003_choose_correct_translation_activity.sql';
 const vocabularyMigration = '202611040004_vocabulary_word_list_star_thresholds.sql';
 const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_answers.sql';
+const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -154,6 +155,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070003_revert_chapter_vocabulary_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070004_optional_chapter_teaching_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611090001_optional_lesson_activity_feedback.sql'), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', lessonAttemptLimitsMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -1261,5 +1263,116 @@ describe('Basic Lesson Management SQL and RLS', () => {
       [segmentId],
     );
     expect(segments.rows[0].count).toBe(1);
+  });
+
+  it('publishes a custom attempt limit and blocks a direct server start at the cap', async () => {
+    const authored = draft({
+      prerequisiteLessonId: undefined,
+      attemptLimit: { mode: 'limited', maxAttempts: 2 },
+    });
+    const saved = await save(authored);
+    expect(saved.draft.attemptLimit).toEqual({ mode: 'limited', maxAttempts: 2 });
+    const published = await publish(saved);
+    await pg.exec('reset role');
+    const version = await pg.query<{ attempt_limit: unknown }>(
+      "select presentation->'attemptLimit' as attempt_limit from public.lesson_definitions where lesson_id=$1 and content_version=$2",
+      [published.lesson_id, published.published_version],
+    );
+    expect(version.rows[0].attempt_limit).toEqual({ mode: 'limited', maxAttempts: 2 });
+
+    await asUser(studentId);
+    const first = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    await rpc('abandon_lesson_attempt', [first.id]);
+    const second = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    await rpc('abandon_lesson_attempt', [second.id]);
+
+    const catalog = await rpc<Array<Record<string, unknown>>>('get_lesson_catalog');
+    expect(catalog.find((lesson) => lesson.id === published.lesson_id)).toMatchObject({
+      attemptsUsed: 2,
+      attemptLimitReached: true,
+      attemptLimit: { mode: 'limited', maxAttempts: 2 },
+    });
+    const overview = await rpc<Record<string, unknown>>('get_lesson_content', [published.lesson_id, null]);
+    expect(overview).toMatchObject({ attemptsUsed: 2, attemptLimitReached: true });
+
+    await pg.exec('savepoint attempt_limit_blocked');
+    await expect(rpc('start_lesson_attempt', [published.lesson_id])).rejects.toThrow(
+      'Lesson attempt limit reached.',
+    );
+    await pg.exec('rollback to savepoint attempt_limit_blocked');
+    await pg.exec('reset role');
+    const count = await pg.query<{ count: number }>(
+      'select count(*)::int as count from public.lesson_attempts where user_id=$1 and lesson_id=$2',
+      [studentId, published.lesson_id],
+    );
+    expect(count.rows[0].count).toBe(2);
+  });
+
+  it('serializes rapid starts so duplicate requests cannot exceed a one-attempt limit', async () => {
+    const authored = draft({
+      prerequisiteLessonId: undefined,
+      attemptLimit: { mode: 'limited', maxAttempts: 1 },
+    });
+    const published = await publish(await save(authored));
+    await asUser(studentId);
+
+    const [first, duplicate] = await Promise.all([
+      rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]),
+      rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]),
+    ]);
+    expect(duplicate.id).toBe(first.id);
+    await rpc('abandon_lesson_attempt', [first.id]);
+    await pg.exec('savepoint duplicate_limit_blocked');
+    await expect(rpc('start_lesson_attempt', [published.lesson_id])).rejects.toThrow(
+      'Lesson attempt limit reached.',
+    );
+    await pg.exec('rollback to savepoint duplicate_limit_blocked');
+    await pg.exec('reset role');
+    const count = await pg.query<{ count: number }>(
+      'select count(*)::int as count from public.lesson_attempts where user_id=$1 and lesson_id=$2',
+      [studentId, published.lesson_id],
+    );
+    expect(count.rows[0].count).toBe(1);
+  });
+
+  it('keeps old lessons Unlimited and preserves attempt history when the cap changes', async () => {
+    const legacy = normalizeAuthoredLesson(structuredClone(packagedContent.lessons[0]));
+    expect(legacy.attemptLimit).toEqual({ mode: 'unlimited', maxAttempts: null });
+
+    const authored = draft({ prerequisiteLessonId: undefined });
+    const firstPublished = await publish(await save(authored));
+    await asUser(studentId);
+    const existing = await rpc<{ id: string }>('start_lesson_attempt', [firstPublished.lesson_id]);
+    await rpc('abandon_lesson_attempt', [existing.id]);
+
+    await asUser(adminId);
+    const changed = {
+      ...firstPublished,
+      draft: { ...firstPublished.draft, attemptLimit: { mode: 'limited' as const, maxAttempts: 1 } },
+    };
+    const saved = await save(changed.draft, changed.revision);
+    const republished = await publish(saved);
+    await asUser(studentId);
+    await pg.exec('savepoint lowered_limit_blocked');
+    await expect(rpc('start_lesson_attempt', [republished.lesson_id])).rejects.toThrow(
+      'Lesson attempt limit reached.',
+    );
+    await pg.exec('rollback to savepoint lowered_limit_blocked');
+    await pg.exec('reset role');
+    const history = await pg.query<{ count: number }>(
+      'select count(*)::int as count from public.lesson_attempts where user_id=$1 and lesson_id=$2',
+      [studentId, republished.lesson_id],
+    );
+    expect(history.rows[0].count).toBe(1);
+  });
+
+  it('does not block repeated retries when a lesson is Unlimited', async () => {
+    const authored = draft({ prerequisiteLessonId: undefined });
+    const published = await publish(await save(authored));
+    await asUser(studentId);
+    const first = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    await rpc('abandon_lesson_attempt', [first.id]);
+    const second = await rpc<{ id: string }>('start_lesson_attempt', [published.lesson_id]);
+    expect(second.id).not.toBe(first.id);
   });
 });

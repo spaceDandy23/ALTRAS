@@ -135,6 +135,72 @@ body {
   gap: 12px;
 }
 
+.admin-feedback-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 1rem);
+  left: 50%;
+  z-index: 1200;
+  display: flex;
+  width: min(560px, calc(100vw - 2rem));
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  color: var(--paper);
+  box-shadow: var(--shadow);
+  font-weight: 700;
+  line-height: 1.45;
+  transform: translateX(-50%);
+}
+
+.admin-feedback-toast--success {
+  border: 1px solid var(--green);
+  border-left-width: 5px;
+  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+}
+
+.admin-feedback-toast--error {
+  border: 2px solid var(--red);
+  border-left-width: 6px;
+  background: color-mix(in srgb, var(--red) 16%, var(--surface));
+}
+
+.admin-feedback-toast__icon {
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 1.6rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--board-deep);
+  font-weight: 900;
+}
+
+.admin-feedback-toast--error .admin-feedback-toast__icon {
+  background: var(--red);
+  color: var(--board-deep);
+}
+
+.admin-feedback-toast p {
+  min-width: 0;
+  margin: 0;
+}
+
+.admin-feedback-toast__dismiss {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+}
+
 body::before {
   position: fixed;
   inset: 0;
@@ -2342,6 +2408,11 @@ h3 {
   font-size: var(--progress-meta-size);
 }
 
+.lesson-attempt-limit-count {
+  color: var(--yellow) !important;
+  font-weight: 700;
+}
+
 .lesson-node__action {
   display: inline-flex;
   align-items: center;
@@ -2542,6 +2613,42 @@ h3 {
   display: flex;
   gap: 0.7rem;
   margin-top: 1.2rem;
+}
+
+.lesson-attempt-limit-notice {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  border: 1px solid var(--yellow);
+  border-left-width: 5px;
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--yellow) 14%, var(--surface));
+  color: var(--paper);
+  line-height: 1.45;
+}
+
+.lesson-attempt-limit-notice__icon {
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 1.6rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--board-deep);
+  font-weight: 900;
+}
+
+.lesson-attempt-limit-notice__content {
+  min-width: 0;
+}
+
+.lesson-attempt-limit-notice__content p {
+  margin: 0.15rem 0 0;
+  color: var(--paper);
 }
 
 .lesson-overview__equation {

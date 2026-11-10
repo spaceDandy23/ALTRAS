@@ -206,6 +206,30 @@ describe('Basic Lesson Management editor and preview', () => {
     );
     expect(client.rpc).not.toHaveBeenCalledWith('set_lesson_publication', expect.anything());
   });
+
+  it('saves the lesson attempt-limit mode and value through the existing draft flow', async () => {
+    const row = item();
+    client.rpc.mockImplementation(async (name: string, args?: { p_lesson: AuthoredLesson }) => ({
+      error: null,
+      data: name === 'get_admin_lessons' ? [row] : { ...row, draft: args?.p_lesson ?? row.draft, revision: 2 },
+    }));
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${row.draft.title}` }));
+
+    const mode = screen.getByLabelText('Lesson attempt limit');
+    expect(mode).toHaveValue('unlimited');
+    fireEvent.change(mode, { target: { value: 'limited' } });
+    expect(mode).toHaveValue('limited');
+    const count = screen.getByLabelText('Maximum attempts');
+    fireEvent.change(count, { target: { value: '5' } });
+    expect(count).toHaveValue(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(client.rpc.mock.calls.some(([name]) => name === 'save_admin_lesson')).toBe(true), { timeout: 1000 });
+    expect(client.rpc).toHaveBeenCalledWith('save_admin_lesson', expect.objectContaining({
+      p_lesson: expect.objectContaining({ attemptLimit: { mode: 'limited', maxAttempts: 5 } }),
+    }));
+  }, 15000);
   it('shows publish failures beside the lesson actions without requiring a scroll back to the heading', async () => {
     const row = item();
     client.rpc.mockImplementation(async (name: string) =>

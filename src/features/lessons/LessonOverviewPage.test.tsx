@@ -407,4 +407,49 @@ describe('lesson overview transitions', () => {
     expect(screen.getByRole('heading', { name: secondLesson.title })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: firstLesson.title })).not.toBeInTheDocument();
   });
+
+  it('blocks retry and explains the server-reported attempt limit', async () => {
+    const lesson = { ...packagedContent.lessons[0], attemptLimitReached: true };
+    const userId = '20000000-0000-4000-8000-000000000010';
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getLessonProgress).mockResolvedValue({
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'available',
+      bestScore: 40,
+      bestStarCount: 0,
+      attemptCount: 1,
+      xpAwarded: 0,
+      firstStartedAt: 1,
+      lastAttemptedAt: 2,
+      clearedAt: null,
+    });
+    vi.mocked(getActiveAttempt).mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'attempt_limit',
+        displayName: 'Attempt Limit',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You’ve reached the maximum number of attempts for this lesson.',
+    );
+    expect(startOrResumeAttempt).not.toHaveBeenCalled();
+  });
 });
