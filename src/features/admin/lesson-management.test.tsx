@@ -82,6 +82,28 @@ function dragAfter(source: HTMLElement, target: HTMLElement) {
 }
 
 describe('Basic Lesson Management editor and preview', () => {
+  it('blocks publication before the RPC when a published lesson already owns the requested order', async () => {
+    const row = item();
+    client.rpc.mockImplementation(async (name: string) => ({
+      error: null,
+      data: name === 'get_admin_lesson_order_conflict'
+        ? { lessonId: 'lesson-operation-signals', title: 'Operation Words', displayOrder: 1 }
+        : row,
+    }));
+
+    await expect(publishManagedLesson(row, true)).rejects.toMatchObject({
+      name: 'LessonManagementValidationError',
+      issues: [expect.objectContaining({
+        path: ['displayOrder'],
+        message: 'Lesson order 1 is already used by "Operation Words".',
+      })],
+    });
+    expect(client.rpc).not.toHaveBeenCalledWith(
+      'set_lesson_publication',
+      expect.anything(),
+    );
+  });
+
   it('drag-reorders chapters, chapter content, activities and both assessments in the saved draft', async () => {
     const row = item();
     const firstChapter = row.draft.chapters[0];
@@ -727,8 +749,16 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(client.rpc).not.toHaveBeenCalled();
   });
   it('publishes/unpublishes only through the guarded publication RPC', async () => {
+    client.rpc.mockImplementation(async (name: string) => ({
+      error: null,
+      data: name === 'get_admin_lesson_order_conflict' ? null : item(),
+    }));
     await publishManagedLesson(item(), true);
     await publishManagedLesson(item(), false);
+    expect(client.rpc).toHaveBeenCalledWith('get_admin_lesson_order_conflict', {
+      p_lesson_id: item().lesson_id,
+      p_display_order: item().draft.displayOrder,
+    });
     expect(client.rpc).toHaveBeenCalledWith('set_lesson_publication', {
       p_lesson_id: item().lesson_id,
       p_publish: true,

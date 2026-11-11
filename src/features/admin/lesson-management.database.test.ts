@@ -30,6 +30,7 @@ const vocabularyMigration = '202611040004_vocabulary_word_list_star_thresholds.s
 const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_answers.sql';
 const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
 const securityHardeningMigration = '202611110001_secure_username_login_and_active_time.sql';
+const lessonOrderReconciliationMigration = '202611120001_reconcile_lesson_catalog_orders.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -158,6 +159,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations/202611090001_optional_lesson_activity_feedback.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonAttemptLimitsMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', securityHardeningMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', lessonOrderReconciliationMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -777,6 +779,52 @@ describe('Basic Lesson Management SQL and RLS', () => {
       item.lesson_id,
     );
     await expect(rpc('get_lesson_content', [item.lesson_id, null])).rejects.toThrow('unavailable');
+  });
+  it('aligns only the known stale visual-test draft order and preserves unrelated draft edits', async () => {
+    await pg.exec('reset role');
+    await pg.exec(`
+      update public.lesson_catalog
+      set draft = draft || jsonb_build_object(
+        'displayOrder', 2,
+        'title', 'Operation Words, edited draft',
+        'temporaryMarker', 'temporary'
+      )
+      where lesson_id = 'lesson-operation-signals';
+      update public.lesson_catalog
+      set draft = draft || jsonb_build_object(
+        'displayOrder', 4,
+        'temporaryMarker', 'temporary'
+      )
+      where lesson_id = 'lesson-order-matters';
+    `);
+    const migrationSql = readFileSync(
+      resolve('supabase/migrations', lessonOrderReconciliationMigration),
+      'utf8',
+    ).replace(/^\s*begin;\s*/i, '').replace(/\s*commit;\s*$/i, '');
+    await pg.exec(migrationSql);
+
+    const rows = await pg.query<{ lesson_id: string; draft: AuthoredLesson }>(
+      "select lesson_id, draft from public.lesson_catalog where lesson_id in ('lesson-operation-signals', 'lesson-order-matters') order by lesson_id",
+    );
+    const operationWords = rows.rows.find((row) => row.lesson_id === 'lesson-operation-signals')!;
+    const orderMatters = rows.rows.find((row) => row.lesson_id === 'lesson-order-matters')!;
+    expect(operationWords.draft.displayOrder).toBe(1);
+    expect(operationWords.draft.title).toBe('Operation Words, edited draft');
+    expect(orderMatters.draft.displayOrder).toBe(4);
+  });
+  it('names the published lesson that already uses an order and exposes the same conflict for CMS preflight', async () => {
+    const candidate = await save(draft({ displayOrder: 1, prerequisiteLessonId: undefined }));
+
+    await pg.exec('savepoint published_order_conflict');
+    await expect(publish(candidate)).rejects.toThrow(
+      'Lesson order 1 is already used by "Words That Signal Operations".',
+    );
+    await pg.exec('rollback to savepoint published_order_conflict');
+    await expect(rpc('get_admin_lesson_order_conflict', [candidate.lesson_id, 1])).resolves.toEqual({
+      lessonId: 'lesson-operation-signals',
+      title: 'Words That Signal Operations',
+      displayOrder: 1,
+    });
   });
   it('publishes and unpublishes a lesson without resetting existing student scores', async () => {
     let item = await publish(await save(draft()));

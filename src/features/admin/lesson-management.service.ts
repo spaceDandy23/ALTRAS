@@ -310,6 +310,20 @@ export interface ManagedLesson {
   published_version: number | null;
 }
 
+interface LessonOrderConflict {
+  lessonId: string;
+  title: string;
+  displayOrder: number;
+}
+
+function isLessonOrderConflict(value: unknown): value is LessonOrderConflict {
+  if (!value || typeof value !== 'object') return false;
+  const conflict = value as Record<string, unknown>;
+  return typeof conflict.lessonId === 'string'
+    && typeof conflict.title === 'string'
+    && typeof conflict.displayOrder === 'number';
+}
+
 async function call(name: string, args?: Record<string, unknown>) {
   const { data, error } = await getSupabaseClient().rpc(name, args);
   if (error) throw new Error(error.message || 'Unable to manage lessons.');
@@ -323,6 +337,16 @@ export async function listManagedLessons(): Promise<ManagedLesson[]> {
     ...item,
     draft: normalizeAuthoredLesson(item.draft),
   }));
+}
+async function getLessonPublicationOrderConflict(
+  lessonId: string,
+  displayOrder: number,
+): Promise<LessonOrderConflict | null> {
+  const conflict = await call('get_admin_lesson_order_conflict', {
+    p_lesson_id: lessonId,
+    p_display_order: displayOrder,
+  });
+  return isLessonOrderConflict(conflict) ? conflict : null;
 }
 export async function saveManagedLesson(
   draft: AuthoredLesson,
@@ -382,12 +406,34 @@ export async function publishManagedLesson(
         }
       }
     }
+    const conflict = await getLessonPublicationOrderConflict(
+      item.lesson_id,
+      item.draft.displayOrder,
+    );
+    if (conflict) {
+      throw new LessonManagementValidationError([{
+        path: ['displayOrder'],
+        label: 'Lesson order',
+        message: `Lesson order ${item.draft.displayOrder} is already used by "${conflict.title}".`,
+      }]);
+    }
   }
-  return (await call('set_lesson_publication', {
-    p_lesson_id: item.lesson_id,
-    p_publish: published,
-    p_revision: item.revision,
-  })) as ManagedLesson;
+  try {
+    return (await call('set_lesson_publication', {
+      p_lesson_id: item.lesson_id,
+      p_publish: published,
+      p_revision: item.revision,
+    })) as ManagedLesson;
+  } catch (cause) {
+    if (cause instanceof Error && /^Lesson order \d+ is already used by /.test(cause.message)) {
+      throw new LessonManagementValidationError([{
+        path: ['displayOrder'],
+        label: 'Lesson order',
+        message: cause.message,
+      }]);
+    }
+    throw cause;
+  }
 }
 export function newLesson(order: number): AuthoredLesson {
   return normalizeAuthoredLesson({
