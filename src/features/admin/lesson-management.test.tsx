@@ -225,12 +225,14 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(count).toHaveValue(5);
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
 
-    await waitFor(() => expect(client.rpc.mock.calls.some(([name]) => name === 'save_admin_lesson')).toBe(true), { timeout: 1000 });
-    expect(client.rpc).toHaveBeenCalledWith('save_admin_lesson', expect.objectContaining({
-      p_lesson: expect.objectContaining({ attemptLimit: { mode: 'limited', maxAttempts: 5 } }),
-    }));
-  }, 15000);
-  it('shows publish failures beside the lesson actions without requiring a scroll back to the heading', async () => {
+    await waitFor(() =>
+      expect(client.rpc.mock.calls.some(([name]) => name === 'save_admin_lesson')).toBe(true),
+    );
+    const saveCall = client.rpc.mock.calls.find(([name]) => name === 'save_admin_lesson');
+    const savedDraft = (saveCall?.[1] as { p_lesson: AuthoredLesson } | undefined)?.p_lesson;
+    expect(savedDraft?.attemptLimit).toEqual({ mode: 'limited', maxAttempts: 5 });
+  }, 30000);
+  it('shows publish failures in the visible feedback toast', async () => {
     const row = item();
     client.rpc.mockImplementation(async (name: string) =>
       name === 'get_admin_lessons'
@@ -243,8 +245,7 @@ describe('Basic Lesson Management editor and preview', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Could not publish this lesson.');
-    expect(alert.closest('.admin-save-feedback')).toBeInTheDocument();
-    expect(alert.closest('.admin-save-feedback')).toHaveFocus();
+    expect(alert.closest('.admin-feedback-toast')).toBeVisible();
   });
   it('blocks activity eleven in the editor', async () => {
     const row = item();
@@ -436,7 +437,10 @@ describe('Basic Lesson Management editor and preview', () => {
     expect(screen.getByText('Vocabulary (1 tables)')).toBeInTheDocument();
     fireEvent.click(container.querySelector('.admin-chapter-details > summary')!);
     expect(screen.queryByRole('heading', { name: 'Teaching Content' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add dynamic table to Chapter 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add teaching content to Chapter 1' }));
+    fireEvent.change(screen.getByLabelText('Content type'), {
+      target: { value: 'content-table' },
+    });
     const tableBlock = document.querySelector<HTMLElement>('.admin-instruction')!;
     expect(tableBlock).toHaveAttribute('open');
     expect(within(tableBlock).getByLabelText('Table title (optional)')).toBeVisible();

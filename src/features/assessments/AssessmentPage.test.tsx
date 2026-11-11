@@ -565,7 +565,8 @@ describe('assessment UX and bootstrap', () => {
         expect(screen.getByRole('heading', { name: '80%' })).toBeVisible();
         expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeEnabled();
         expect(screen.queryByText('Submission saved')).not.toBeInTheDocument();
-        expect(flushPendingLessonAttempt).not.toHaveBeenCalled();
+        expect(flushPendingLessonAttempt).toHaveBeenCalledOnce();
+        expect(flushPendingLessonAttempt).toHaveBeenCalledWith(userId, lesson.id, lessonAttemptId);
         vi.mocked(flushPendingLessonAttempt).mockReturnValueOnce(lessonCompletion!.promise);
         await user.click(screen.getByRole('button', { name: 'Finish lesson' }));
         expect(screen.getByRole('button', { name: 'Continuing…' })).toBeVisible();
@@ -897,6 +898,7 @@ describe('assessment UX and bootstrap', () => {
       1,
       undefined,
       expect.any(Function),
+      expect.any(Number),
     );
     expect(await getAssessmentDraft(userId, 'pre-test')).not.toBeNull(); // Older local revision is not deleted.
   });

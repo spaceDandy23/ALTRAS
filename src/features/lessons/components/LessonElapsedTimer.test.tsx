@@ -63,4 +63,18 @@ describe('lesson elapsed timer', () => {
 
     expect(screen.getByRole('timer')).toHaveTextContent('0:00');
   });
+
+  it('uses the saved time for the current attempt when the attempt changes', () => {
+    const firstKey = lessonTimerStorageKey('user-1', 'lesson-1', 'attempt-4');
+    const secondKey = lessonTimerStorageKey('user-1', 'lesson-1', 'attempt-5');
+    localStorage.setItem(firstKey, '90000');
+    localStorage.setItem(secondKey, '12000');
+    const view = render(
+      <LessonElapsedTimer startedAt={1} stoppedAt={2} storageKey={firstKey} />,
+    );
+
+    expect(screen.getByRole('timer')).toHaveTextContent('1:30');
+    view.rerender(<LessonElapsedTimer startedAt={1} stoppedAt={2} storageKey={secondKey} />);
+    expect(screen.getByRole('timer')).toHaveTextContent('0:12');
+  });
 });

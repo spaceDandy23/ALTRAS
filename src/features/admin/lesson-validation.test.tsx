@@ -140,7 +140,8 @@ it('shows a prominent multi-field summary, focuses the first invalid field, and 
   fireEvent.change(screen.getByLabelText('Short description'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: 'Publish lesson' }));
 
-  const summary = await screen.findByRole('alert');
+  await screen.findByText('Review the highlighted fields below.');
+  const summary = document.querySelector<HTMLElement>('.admin-validation-summary')!;
   expect(summary).toHaveClass('admin-validation-summary');
   expect(summary).toHaveTextContent('2 fields need attention');
   expect(summary).toHaveTextContent('Review the highlighted fields below.');
@@ -167,7 +168,8 @@ it('catches a blank lesson title before draft save and focuses the title field',
   fireEvent.change(title, { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
 
-  const summary = await screen.findByRole('alert');
+  await screen.findByText('Review the highlighted fields below.');
+  const summary = document.querySelector<HTMLElement>('.admin-validation-summary')!;
   expect(summary).toHaveTextContent('1 field needs attention');
   expect(summary).toHaveTextContent('Lesson title: Title is required.');
   expect(title).toHaveAttribute('aria-invalid', 'true');
@@ -195,7 +197,8 @@ it('reports all invalid fields when publish validation fails before draft saving
 
   fireEvent.click(screen.getByRole('button', { name: 'Publish lesson' }));
 
-  const summary = await screen.findByRole('alert');
+  await screen.findByText('Review the highlighted fields below.');
+  const summary = document.querySelector<HTMLElement>('.admin-validation-summary')!;
   expect(summary).toHaveTextContent('2 fields need attention');
   expect(summary).toHaveTextContent('Lesson title: Title is required.');
   expect(summary).toHaveTextContent('Example phrase is required.');

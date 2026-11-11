@@ -43,16 +43,16 @@ export function LessonElapsedTimer({
   storageKey?: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
-  const [activeElapsedMs, setActiveElapsedMs] = useState(() =>
-    storageKey ? (readElapsed(storageKey) ?? 0) : 0,
-  );
+  const [activeElapsed, setActiveElapsed] = useState(() => ({
+    storageKey,
+    milliseconds: storageKey ? (readElapsed(storageKey) ?? 0) : 0,
+  }));
 
   useEffect(() => {
     if (!startedAt) return;
     if (storageKey) {
       const saved = readElapsed(storageKey);
       if (stoppedAt) {
-        setActiveElapsedMs(saved ?? 0);
         return;
       }
 
@@ -60,7 +60,7 @@ export function LessonElapsedTimer({
       let segmentStartedAt = document.visibilityState === 'visible' ? Date.now() : null;
       const checkpoint = () => {
         const current = elapsed + (segmentStartedAt === null ? 0 : Date.now() - segmentStartedAt);
-        setActiveElapsedMs(current);
+        setActiveElapsed({ storageKey, milliseconds: current });
         saveElapsed(storageKey, current);
       };
       const onVisibilityChange = () => {
@@ -91,6 +91,11 @@ export function LessonElapsedTimer({
   }, [startedAt, stoppedAt, storageKey]);
 
   if (!startedAt) return null;
+  const activeElapsedMs = storageKey
+    ? activeElapsed.storageKey === storageKey
+      ? activeElapsed.milliseconds
+      : (readElapsed(storageKey) ?? 0)
+    : 0;
   const elapsedSeconds = Math.max(
     0,
     Math.floor(

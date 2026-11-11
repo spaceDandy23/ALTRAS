@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 
 const pieces = [
@@ -27,11 +27,18 @@ function motionIsReduced() {
 }
 
 export function CompletionCelebration({ eventKey }: { eventKey: string }) {
-  const [visible, setVisible] = useState(false);
+  const key = `altras:completion-celebration:${eventKey}`;
+  const visible = useMemo(() => {
+    if (celebratedEvents.has(key) || motionIsReduced()) return false;
+    try {
+      return !window.sessionStorage.getItem(key);
+    } catch {
+      return true;
+    }
+  }, [key]);
 
   useEffect(() => {
-    const key = `altras:completion-celebration:${eventKey}`;
-    if (celebratedEvents.has(key) || motionIsReduced()) return;
+    if (!visible || celebratedEvents.has(key)) return;
     try {
       if (window.sessionStorage.getItem(key)) {
         celebratedEvents.add(key);
@@ -42,8 +49,7 @@ export function CompletionCelebration({ eventKey }: { eventKey: string }) {
       // The in-memory guard still prevents repeats when session storage is unavailable.
     }
     celebratedEvents.add(key);
-    setVisible(true);
-  }, [eventKey]);
+  }, [key, visible]);
 
   if (!visible) return null;
   return (
