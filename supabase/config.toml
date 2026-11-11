@@ -384,6 +384,9 @@ deno_version = 2
 [functions.admin-users]
 verify_jwt = true
 
+[functions.username-login]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

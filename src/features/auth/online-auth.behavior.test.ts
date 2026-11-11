@@ -13,7 +13,8 @@ import {
 const mocks = vi.hoisted(() => ({
   signUp: vi.fn(),
   signInWithPassword: vi.fn(),
-  rpc: vi.fn(),
+  invoke: vi.fn(),
+  setSession: vi.fn(),
   from: vi.fn(),
   select: vi.fn(),
   eq: vi.fn(),
@@ -24,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/supabase.client', () => ({
-  getSupabaseClient: () => ({ auth: mocks, rpc: mocks.rpc, from: mocks.from }),
+  getSupabaseClient: () => ({ auth: mocks, functions: { invoke: mocks.invoke }, from: mocks.from }),
 }));
 
 const registration = {
@@ -127,49 +128,52 @@ describe('Supabase authentication behavior', () => {
     await expect(
       loginOnlineUser({ username: 'NOVA_STUDENT', password: registration.password }),
     ).resolves.toMatchObject({ id: remoteUser.id, normalizedUsername: 'nova_student' });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
 
     mocks.signInWithPassword.mockResolvedValueOnce({
       data: { user: null },
       error: { message: 'Invalid login credentials' },
     });
-    mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
+    mocks.invoke.mockResolvedValueOnce({ data: null, error: { message: 'Unauthorized' } });
     await expect(
       loginOnlineUser({ username: registration.username, password: 'Wrong999' }),
     ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' } satisfies Partial<AuthError>);
   });
 
-  it('resolves a manually provisioned Auth email only after the synthetic login is rejected', async () => {
-    mocks.signInWithPassword
-      .mockResolvedValueOnce({
-        data: { user: null },
-        error: { message: 'Invalid login credentials' },
-      })
-      .mockResolvedValueOnce({ data: { user: manualRemoteUser }, error: null });
-    mocks.rpc.mockResolvedValue({ data: 'researchertest@test.com', error: null });
+  it('uses the rate-limited login function only after the synthetic login is rejected', async () => {
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'Invalid login credentials' },
+    });
+    mocks.invoke.mockResolvedValue({
+      data: { accessToken: 'access-token', refreshToken: 'refresh-token' },
+      error: null,
+    });
+    mocks.setSession.mockResolvedValue({ data: { user: manualRemoteUser }, error: null });
 
     await expect(
       loginOnlineUser({ username: 'researchertest', password: registration.password }),
     ).resolves.toMatchObject({ normalizedUsername: 'researchertest' });
 
-    expect(mocks.rpc).toHaveBeenCalledWith('resolve_login_email', {
-      p_username: 'researchertest',
-      p_password: registration.password,
+    expect(mocks.invoke).toHaveBeenCalledWith('username-login', {
+      body: { username: 'researchertest', password: registration.password },
     });
-    expect(mocks.signInWithPassword).toHaveBeenNthCalledWith(2, {
-      email: 'researchertest@test.com',
-      password: registration.password,
+    expect(mocks.setSession).toHaveBeenCalledWith({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
     });
   });
 
   it('maps a manually provisioned user from the authenticated user profile when Auth metadata is absent', async () => {
-    mocks.signInWithPassword
-      .mockResolvedValueOnce({
-        data: { user: null },
-        error: { message: 'Invalid login credentials' },
-      })
-      .mockResolvedValueOnce({ data: { user: metadataFreeManualUser }, error: null });
-    mocks.rpc.mockResolvedValue({ data: 'testresearcher@test.com', error: null });
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'Invalid login credentials' },
+    });
+    mocks.invoke.mockResolvedValue({
+      data: { accessToken: 'access-token', refreshToken: 'refresh-token' },
+      error: null,
+    });
+    mocks.setSession.mockResolvedValue({ data: { user: metadataFreeManualUser }, error: null });
     mocks.single.mockResolvedValue({
       data: { username: 'testresearcher', display_name: 'testresearcher' },
       error: null,
@@ -210,7 +214,7 @@ describe('Supabase authentication behavior', () => {
         data: { user: null },
         error: { message: 'Invalid login credentials' },
       });
-      mocks.rpc.mockResolvedValue({ data: null, error: null });
+      mocks.invoke.mockResolvedValue({ data: null, error: { message: 'Unauthorized' } });
 
       await expect(loginOnlineUser({ username, password: 'Wrong999' })).rejects.toMatchObject({
         code: 'INVALID_CREDENTIALS',

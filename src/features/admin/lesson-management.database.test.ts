@@ -29,6 +29,7 @@ const chooseTranslationMigration = '202611040003_choose_correct_translation_acti
 const vocabularyMigration = '202611040004_vocabulary_word_list_star_thresholds.sql';
 const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_answers.sql';
 const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
+const securityHardeningMigration = '202611110001_secure_username_login_and_active_time.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -93,7 +94,7 @@ async function completeLesson(id: string) {
 }
 beforeAll(async () => {
   pg = new PGlite();
-  await pg.exec(`create role anon; create role authenticated; create schema auth;
+  await pg.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
     create table auth.users(id uuid primary key,email text,encrypted_password text,raw_user_meta_data jsonb default '{}',
       created_at timestamptz not null default now(), last_sign_in_at timestamptz, banned_until timestamptz);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid; $$;
@@ -156,6 +157,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070004_optional_chapter_teaching_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611090001_optional_lesson_activity_feedback.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonAttemptLimitsMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', securityHardeningMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -175,7 +177,6 @@ afterEach(async () => {
 afterAll(async () => {
   await pg?.close();
 });
-
 describe('Basic Lesson Management SQL and RLS', () => {
   it('publishes mixed chapter teaching tables without moving the Overview, and skips empty teaching', async () => {
     const base = structuredClone(packagedContent.lessons[0]);
@@ -1224,6 +1225,10 @@ describe('Basic Lesson Management SQL and RLS', () => {
     const attempt = await rpc<{ id: string }>('start_lesson_attempt', ['lesson-operation-signals']);
     const segmentId = randomUUID();
 
+    await pg.exec('reset role');
+    await pg.query("update public.lesson_attempts set started_at=now()-interval '2 minutes' where id=$1", [attempt.id]);
+    await asUser(studentId);
+
     await rpc('add_attempt_active_seconds', [attempt.id, 30, segmentId]);
     await rpc('add_attempt_active_seconds', [attempt.id, 30, segmentId]);
 
@@ -1249,6 +1254,10 @@ describe('Basic Lesson Management SQL and RLS', () => {
     const attempt = completed.rows[0];
     const segmentId = randomUUID();
 
+    await pg.exec('reset role');
+    await pg.query("update public.lesson_attempts set started_at=completed_at-interval '2 minutes' where id=$1", [attempt.id]);
+    await asUser(studentId);
+
     await rpc('add_attempt_active_seconds', [attempt.id, 12, segmentId]);
     await rpc('add_attempt_active_seconds', [attempt.id, 12, segmentId]);
 
@@ -1263,6 +1272,24 @@ describe('Basic Lesson Management SQL and RLS', () => {
       [segmentId],
     );
     expect(segments.rows[0].count).toBe(1);
+  });
+
+  it('rejects active time beyond server-observed attempt duration', async () => {
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', ['lesson-operation-signals']);
+
+    await pg.exec('savepoint inflated_active_time');
+    await expect(
+      rpc('add_attempt_active_seconds', [attempt.id, 3600, randomUUID()]),
+    ).rejects.toThrow('exceeds server-observed attempt duration');
+    await pg.exec('rollback to savepoint inflated_active_time');
+
+    await pg.exec('reset role');
+    const recorded = await pg.query<{ active_seconds: number }>(
+      'select active_seconds from public.lesson_attempts where id=$1',
+      [attempt.id],
+    );
+    expect(recorded.rows[0].active_seconds).toBe(0);
   });
 
   it('publishes a custom attempt limit and blocks a direct server start at the cap', async () => {
