@@ -573,6 +573,14 @@ h3 {
   background-size: 36px 36px;
 }
 
+:root[data-theme='light'] .auth-screen__visual {
+  border-right-color: rgba(36, 39, 43, 0.12);
+  background-color: #f1eee5;
+  background-image:
+    linear-gradient(rgba(36, 39, 43, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 39, 43, 0.07) 1px, transparent 1px);
+}
+
 .translation-demo {
   position: relative;
   z-index: 1;
@@ -590,6 +598,10 @@ h3 {
   font-size: 1.35rem;
 }
 
+:root[data-theme='light'] .translation-demo__words {
+  color: #4f5961;
+}
+
 .translation-demo__arrow {
   color: var(--red);
   font-family: sans-serif;
@@ -602,6 +614,10 @@ h3 {
   color: white;
   font-size: clamp(3.5rem, 6vw, 6rem);
   font-weight: 800;
+}
+
+:root[data-theme='light'] .translation-demo__math {
+  color: #24272b;
 }
 
 .floating-math {
@@ -630,6 +646,14 @@ h3 {
   transform: rotate(7deg);
 }
 
+:root[data-theme='light'] .floating-math {
+  color: rgba(36, 39, 43, 0.2);
+}
+
+:root[data-theme='light'] .floating-math--two {
+  color: rgba(23, 110, 170, 0.42);
+}
+
 .auth-card {
   display: flex;
   width: min(680px, calc(100% - 3rem));
@@ -647,6 +671,29 @@ h3 {
   width: min(580px, calc(100% - 5rem));
   align-items: center;
   justify-content: space-between;
+}
+
+@media (max-width: 1000px) {
+  .auth-screen {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-screen__visual {
+    display: none;
+  }
+
+  .auth-card {
+    width: 100%;
+    min-height: 100svh;
+    padding: 5.5rem 1.25rem 2rem;
+  }
+
+  .auth-card__topline {
+    top: 1.25rem;
+    width: calc(100% - 2.5rem);
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
 }
 
 .auth-card__heading {
