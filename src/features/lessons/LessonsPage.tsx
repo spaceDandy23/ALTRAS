@@ -91,7 +91,8 @@ export function LessonsPage() {
             </section>
           )}
           <ol className="lesson-path" aria-label="Lesson sequence">
-            {entries.map(({ lesson, progress }, index) => {
+            {entries.map(({ lesson, progress }) => {
+              const lessonNumber = lesson.displayOrder;
               const local = drafts?.get(lesson.id);
               const pending = local?.pendingCompletion;
               const result = local?.attempt.status === 'completed' ? local.attempt : null;
@@ -121,11 +122,11 @@ export function LessonsPage() {
                     onClick={progress?.status === 'locked' ? (event) => event.preventDefault() : undefined}
                   >
                     <div className="lesson-node__marker" aria-hidden="true">
-                      {progress?.status === 'locked' ? '⌁' : !pending && (result?.cleared || progress?.status === 'cleared') ? '✓' : index + 1}
+                      {progress?.status === 'locked' ? '⌁' : !pending && (result?.cleared || progress?.status === 'cleared') ? '✓' : lessonNumber}
                     </div>
                     <div className="lesson-node__content">
                       <div className="lesson-node__title-line">
-                        <span>Lesson {index + 1}</span>
+                        <span>Lesson {lessonNumber}</span>
                         <span className={`lesson-node__status-label lesson-node__status-label--${lessonStatus}`} role={pending ? 'status' : undefined}>
                           {pending ? 'Results pending sync' : result ? (result.cleared ? 'Cleared' : 'Needs retry') : progress ? <LessonStatusBadge progress={progress} /> : 'In progress'}
                         </span>

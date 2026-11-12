@@ -12,6 +12,7 @@ import {
   saveLessonDraft,
 } from '@/features/lessons/attempts/lesson-draft.service';
 import type { AssessmentAttempt, AssessmentDraft, AssessmentQuestion } from '@/types/assessment';
+import type { LearningLesson } from '@/features/lessons/domain/content.schemas';
 import { AssessmentPage } from './AssessmentPage.async';
 import {
   flushPendingLessonAttempt,
@@ -151,15 +152,25 @@ function renderLessonAssessment(
           />
           <Route path="/lessons/:lessonId/play/:attemptId" element={<p>Lesson player resumed</p>} />
           <Route path="/lessons/:lessonId" element={<p>Lesson overview</p>} />
-          <Route path="/lessons/:lessonId/result/:attemptId" element={<p>Official lesson result</p>} />
+          <Route
+            path="/lessons/:lessonId/result/:attemptId"
+            element={<p>Official lesson result</p>}
+          />
         </Routes>
       </MemoryRouter>
     </Profiler>,
   );
 }
 
-async function cacheLessonPreTest(snapshot = questions) {
-  const lesson = { ...packagedContent.lessons[0], assessments: { preTest: 'pre-test' as const } };
+async function cacheLessonPreTest(
+  snapshot = questions,
+  assessmentInstructions?: LearningLesson['assessmentInstructions'],
+) {
+  const lesson = {
+    ...packagedContent.lessons[0],
+    assessments: { preTest: 'pre-test' as const },
+    ...(assessmentInstructions ? { assessmentInstructions } : {}),
+  };
   await saveLessonDraft(
     createLessonDraft(
       {
@@ -235,7 +246,10 @@ describe('assessment UX and bootstrap', () => {
   it.each(['pre-test', 'post-test'] as const)(
     'shows readable choice markers without exposing internal IDs in the %s',
     async (kind) => {
-      const ids = ['choice-11aa1111-1111-4111-8111-111111111111', 'choice-22bb2222-2222-4222-8222-222222222222'];
+      const ids = [
+        'choice-11aa1111-1111-4111-8111-111111111111',
+        'choice-22bb2222-2222-4222-8222-222222222222',
+      ];
       const question = {
         ...questions[0],
         assessment: kind,
@@ -269,7 +283,9 @@ describe('assessment UX and bootstrap', () => {
       await waitFor(async () => {
         expect(await getAssessmentDraft(userId, kind)).toMatchObject({ syncStatus: 'synced' });
       });
-      expect(screen.queryByText(/Saved on this device|Synced to your account/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Saved on this device|Synced to your account/),
+      ).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /retry sync/i })).not.toBeInTheDocument();
     },
   );
@@ -385,13 +401,40 @@ describe('assessment UX and bootstrap', () => {
       lessonId: 'lesson-operation-signals',
       lessonAttemptId: '40000000-0000-4000-8000-000000000004',
     });
-    expect(screen.queryByText('Unable to load the assessment result. Please retry.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Unable to load the assessment result. Please retry.'),
+    ).not.toBeInTheDocument();
+  });
+  it('renders the lesson-specific pre-test instructions from the cached lesson', async () => {
+    server = null;
+    await cacheLessonPreTest(questions, {
+      'pre-test': {
+        heading: 'Before you begin',
+        body: 'This test has {{questionCount}} questions. Read each question carefully.',
+        dialogue: 'You can do this.',
+      },
+    });
+    renderLessonAssessment();
+
+    expect(await screen.findByRole('heading', { name: 'Before you begin' })).toBeVisible();
+    expect(
+      screen.getByText('This test has 1 questions. Read each question carefully.'),
+    ).toBeVisible();
+    expect(screen.getByText('You can do this.')).toBeVisible();
   });
   it('uses cached lesson questions when the scoped question lookup returns no rows', async () => {
     await cacheLessonPreTest();
-    const cached = await getLessonDraft(userId, 'lesson-operation-signals', '40000000-0000-4000-8000-000000000004');
+    const cached = await getLessonDraft(
+      userId,
+      'lesson-operation-signals',
+      '40000000-0000-4000-8000-000000000004',
+    );
     expect(cached).not.toBeNull();
-    await saveLessonDraft({ ...cached!, attempt: { ...cached!.attempt, flowStage: 'chapter-teaching' }, revision: cached!.revision + 1 });
+    await saveLessonDraft({
+      ...cached!,
+      attempt: { ...cached!.attempt, flowStage: 'chapter-teaching' },
+      revision: cached!.revision + 1,
+    });
     server = null;
     vi.mocked(getAssessmentQuestions).mockResolvedValueOnce([]);
     renderLessonAssessment();
@@ -411,7 +454,9 @@ describe('assessment UX and bootstrap', () => {
       'href',
       '/lessons/lesson-operation-signals',
     );
-    expect(screen.getByRole('button', { name: 'Try again' }).parentElement).toHaveClass('result-actions');
+    expect(screen.getByRole('button', { name: 'Try again' }).parentElement).toHaveClass(
+      'result-actions',
+    );
   });
 
   it('continues a completed lesson pre-test into the owning lesson attempt', async () => {
@@ -574,8 +619,12 @@ describe('assessment UX and bootstrap', () => {
         await act(async () => lessonCompletion!.resolve());
         expect(await screen.findByText('Official lesson result')).toBeVisible();
         expect(screen.queryByText('Lesson player resumed')).not.toBeInTheDocument();
-        expect(committedScreens.some((screenText) => screenText.includes('Submission saved'))).toBe(false);
-        expect(committedScreens.some((screenText) => screenText.includes('Post-test complete'))).toBe(true);
+        expect(committedScreens.some((screenText) => screenText.includes('Submission saved'))).toBe(
+          false,
+        );
+        expect(
+          committedScreens.some((screenText) => screenText.includes('Post-test complete')),
+        ).toBe(true);
         expect(flushPendingAssessmentDraft).toHaveBeenCalledOnce();
         expect(flushPendingLessonAttempt).toHaveBeenCalledWith(userId, lesson.id, lessonAttemptId);
         expect(queueAttemptStageTransition).toHaveBeenCalledWith(
@@ -991,9 +1040,7 @@ describe('assessment UX and bootstrap', () => {
       expect(
         await screen.findByRole('radio', { name: 'The quotient of two values' }),
       ).toHaveAttribute('aria-checked', 'true');
-      expect(
-        await screen.findByText('Saved on this device.'),
-      ).toBeInTheDocument();
+      expect(await screen.findByText('Saved on this device.')).toBeInTheDocument();
       expect(
         screen.queryByRole('heading', { name: 'We couldn’t load this test' }),
       ).not.toBeInTheDocument();

@@ -32,6 +32,7 @@ const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
 const securityHardeningMigration = '202611110001_secure_username_login_and_active_time.sql';
 const lessonOrderReconciliationMigration = '202611120001_reconcile_lesson_catalog_orders.sql';
 const publishedLessonLimitMigration = '202611120002_limit_published_admin_lessons.sql';
+const assessmentInstructionsMigration = '202611120004_lesson_assessment_instructions.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -162,6 +163,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', securityHardeningMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonOrderReconciliationMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', publishedLessonLimitMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', assessmentInstructionsMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -1421,6 +1423,33 @@ describe('Basic Lesson Management SQL and RLS', () => {
       [studentId, published.lesson_id],
     );
     expect(count.rows[0].count).toBe(2);
+  });
+
+  it('persists per-lesson assessment instructions in the published student presentation', async () => {
+    const authored = draft({
+      prerequisiteLessonId: undefined,
+      assessmentInstructions: {
+        'pre-test': {
+          heading: 'Before you begin',
+          body: 'This test has {{questionCount}} questions. Read carefully.',
+          dialogue: 'You can do this.',
+        },
+        'post-test': {
+          heading: 'Show your learning',
+          body: 'This test has {{questionCount}} questions. Reflect on your answers.',
+          dialogue: 'Take a moment and show what you know.',
+        },
+      },
+    });
+    const published = await publish(await save(authored));
+    await pg.exec('reset role');
+    const result = await pg.query<{ presentation: Record<string, unknown> }>(
+      'select presentation from public.lesson_definitions where lesson_id=$1 and content_version=$2',
+      [published.lesson_id, published.published_version],
+    );
+    expect(result.rows[0].presentation).toMatchObject({
+      assessmentInstructions: authored.assessmentInstructions,
+    });
   });
 
   it('serializes rapid starts so duplicate requests cannot exceed a one-attempt limit', async () => {

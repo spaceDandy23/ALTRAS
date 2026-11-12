@@ -2,8 +2,10 @@ import { z } from 'zod';
 import {
   lessonSchema,
   lessonAttemptLimitSchema,
+  lessonAssessmentInstructionsSchema,
   unlimitedLessonAttempts,
   type LessonAttemptLimit,
+  type LessonAssessmentInstructions,
   type InstructionalContentBlock,
   type LessonChapter,
 } from '@/features/lessons/domain/content.schemas';
@@ -28,8 +30,21 @@ export type AuthoredLesson = LegacyAuthoredLesson & {
   attemptLimit: LessonAttemptLimit;
   chapters: LessonChapter[];
   assessmentQuestions: LessonAssessmentQuestions;
+  assessmentInstructions: LessonAssessmentInstructions;
 };
 export type AuthoredChapter = LessonChapter;
+export const DEFAULT_ASSESSMENT_INSTRUCTIONS: LessonAssessmentInstructions = {
+  'pre-test': {
+    heading: 'Check what you know',
+    body: 'This test has {{questionCount}} questions. Progress is saved on this device and synced securely when online. The test can only be submitted once.',
+    dialogue: 'Take your time and choose the answer that best matches what you know.',
+  },
+  'post-test': {
+    heading: 'Show what you learned',
+    body: 'This test has {{questionCount}} questions. Progress is saved on this device and synced securely when online. The test can only be submitted once.',
+    dialogue: 'Take your time and choose the answer that best matches what you know.',
+  },
+};
 export const MAX_ACTIVITIES = 10;
 export const MAX_LESSONS = 8;
 export const publishableLessonSchema = lessonSchema.superRefine((lesson, ctx) => {
@@ -47,34 +62,65 @@ export const publishableLessonSchema = lessonSchema.superRefine((lesson, ctx) =>
   }
 });
 
-function normalizedValidationPath(path: ValidationPathPart[], draft: AuthoredLesson): ValidationPathPart[] {
+function normalizedValidationPath(
+  path: ValidationPathPart[],
+  draft: AuthoredLesson,
+): ValidationPathPart[] {
   if (path[0] === 'activities' && typeof path[1] === 'number') {
     const flattened = draft.chapters.flatMap((chapter, chapterIndex) =>
-      chapter.activities.map((activity, activityIndex) => ({ activity, chapterIndex, activityIndex })),
+      chapter.activities.map((activity, activityIndex) => ({
+        activity,
+        chapterIndex,
+        activityIndex,
+      })),
     );
     const location = flattened[path[1]];
     if (location)
-      return ['chapters', location.chapterIndex, 'activities', location.activityIndex, ...path.slice(2)];
+      return [
+        'chapters',
+        location.chapterIndex,
+        'activities',
+        location.activityIndex,
+        ...path.slice(2),
+      ];
   }
   if (path[0] === 'instructionalContent' && typeof path[1] === 'number') {
     const flattened = draft.chapters.flatMap((chapter, chapterIndex) =>
-      chapter.instructionalContent.map((block, blockIndex) => ({ block, chapterIndex, blockIndex })),
+      chapter.instructionalContent.map((block, blockIndex) => ({
+        block,
+        chapterIndex,
+        blockIndex,
+      })),
     );
     const location = flattened[path[1]];
     if (location)
-      return ['chapters', location.chapterIndex, 'instructionalContent', location.blockIndex, ...path.slice(2)];
+      return [
+        'chapters',
+        location.chapterIndex,
+        'instructionalContent',
+        location.blockIndex,
+        ...path.slice(2),
+      ];
   }
   return path;
 }
 
 function validationLabel(path: ValidationPathPart[], draft: AuthoredLesson): string {
   const [root, index] = path;
+  if (root === 'assessmentInstructions' && (index === 'pre-test' || index === 'post-test')) {
+    const kindLabel = index === 'pre-test' ? 'Pre-test' : 'Post-test';
+    const field = path.at(-1);
+    return `${kindLabel} instruction â†’ ${field === 'heading' ? 'Heading' : field === 'body' ? 'Instructions' : 'Character guidance'}`;
+  }
   if (root === 'assessmentQuestions' && (index === 'pre-test' || index === 'post-test')) {
     const kindLabel = index === 'pre-test' ? 'Pre-test' : 'Post-test';
     const questionsIndex = path.indexOf('questions');
-    const questionIndex = questionsIndex >= 0 && typeof path[questionsIndex + 1] === 'number'
-      ? path[questionsIndex + 1] as number
-      : typeof path[2] === 'number' ? path[2] as number : undefined;
+    const questionIndex =
+      questionsIndex >= 0 && typeof path[questionsIndex + 1] === 'number'
+        ? (path[questionsIndex + 1] as number)
+        : typeof path[2] === 'number'
+          ? (path[2] as number)
+          : undefined;
     const questionLabel = `${kindLabel}${questionIndex === undefined ? '' : ` → Question ${questionIndex + 1}`}`;
     const choicesIndex = path.indexOf('choices');
     if (choicesIndex >= 0 && typeof path[choicesIndex + 1] === 'number')
@@ -92,41 +138,83 @@ function validationLabel(path: ValidationPathPart[], draft: AuthoredLesson): str
     const leaf = path.at(-1);
     const prefix = `Chapter ${index + 1}`;
     if (collection === 'activities' && typeof childIndex === 'number') {
-      if (field === 'choices' && typeof nestedIndex === 'number') return `${prefix} → Activity ${childIndex + 1} → Answer choice ${nestedIndex + 1}`;
-      if (field === 'tokens' && typeof nestedIndex === 'number') return `${prefix} → Activity ${childIndex + 1} → Token ${nestedIndex + 1}`;
-      if (field === 'acceptedTokenSequences' && typeof nestedIndex === 'number') return `${prefix} → Activity ${childIndex + 1} → Accepted answer ${nestedIndex + 1}`;
-      if (field === 'explanation' && leaf === 'title') return `${prefix} → Activity ${childIndex + 1} → Feedback title`;
-      if (field === 'explanation' && leaf === 'body') return `${prefix} → Activity ${childIndex + 1} → Feedback explanation`;
-      const activityField = field === 'title' ? 'Activity title' : field === 'prompt' ? 'Instructions' : field === 'mathStatement' ? 'Mathematical expression' : field === 'correctChoiceId' ? 'Correct answer' : field === 'choices' ? 'Answer choices' : field === 'tokens' ? 'Phrase tokens' : String(field ?? 'Activity');
+      if (field === 'choices' && typeof nestedIndex === 'number')
+        return `${prefix} → Activity ${childIndex + 1} → Answer choice ${nestedIndex + 1}`;
+      if (field === 'tokens' && typeof nestedIndex === 'number')
+        return `${prefix} → Activity ${childIndex + 1} → Token ${nestedIndex + 1}`;
+      if (field === 'acceptedTokenSequences' && typeof nestedIndex === 'number')
+        return `${prefix} → Activity ${childIndex + 1} → Accepted answer ${nestedIndex + 1}`;
+      if (field === 'explanation' && leaf === 'title')
+        return `${prefix} → Activity ${childIndex + 1} → Feedback title`;
+      if (field === 'explanation' && leaf === 'body')
+        return `${prefix} → Activity ${childIndex + 1} → Feedback explanation`;
+      const activityField =
+        field === 'title'
+          ? 'Activity title'
+          : field === 'prompt'
+            ? 'Instructions'
+            : field === 'mathStatement'
+              ? 'Mathematical expression'
+              : field === 'correctChoiceId'
+                ? 'Correct answer'
+                : field === 'choices'
+                  ? 'Answer choices'
+                  : field === 'tokens'
+                    ? 'Phrase tokens'
+                    : String(field ?? 'Activity');
       return `${prefix} → Activity ${childIndex + 1} → ${activityField}`;
     }
     if (collection === 'instructionalContent' && typeof childIndex === 'number') {
       const block = draft.chapters[index]?.instructionalContent[childIndex];
-      const blockName = block?.type === 'content-table' ? 'Teaching Content → Dynamic Tables' : block?.type === 'example' ? 'Teaching Content → Example' : block?.type === 'warning' ? 'Teaching Content → Important Note' : block?.type === 'vocabulary-table' ? 'Teaching Content → Vocabulary' : 'Teaching Content';
+      const blockName =
+        block?.type === 'content-table'
+          ? 'Teaching Content → Dynamic Tables'
+          : block?.type === 'example'
+            ? 'Teaching Content → Example'
+            : block?.type === 'warning'
+              ? 'Teaching Content → Important Note'
+              : block?.type === 'vocabulary-table'
+                ? 'Teaching Content → Vocabulary'
+                : 'Teaching Content';
       if (field === 'tables' && typeof nestedIndex === 'number') {
         const tablePath = `${prefix} → ${blockName} → Table ${nestedIndex + 1}`;
         const columnsIndex = path.indexOf('columns');
-        if (columnsIndex >= 0 && typeof path[columnsIndex + 1] === 'number') return `${tablePath} → Column ${(path[columnsIndex + 1] as number) + 1}`;
+        if (columnsIndex >= 0 && typeof path[columnsIndex + 1] === 'number')
+          return `${tablePath} → Column ${(path[columnsIndex + 1] as number) + 1}`;
         const rowsIndex = path.indexOf('rows');
         if (rowsIndex >= 0 && typeof path[rowsIndex + 1] === 'number') {
           const cellsIndex = path.indexOf('cells');
           const columnId = cellsIndex >= 0 ? path[cellsIndex + 1] : undefined;
-          const column = block?.type === 'content-table'
-            ? block.tables[nestedIndex]?.columns.find((item) => item.id === columnId)
-            : undefined;
+          const column =
+            block?.type === 'content-table'
+              ? block.tables[nestedIndex]?.columns.find((item) => item.id === columnId)
+              : undefined;
           return `${tablePath} → Row ${(path[rowsIndex + 1] as number) + 1}${column ? ` → ${column.label}` : ''}`;
         }
         return tablePath;
       }
       return `${prefix} → ${blockName}${field ? ` → ${String(field)}` : ''}`;
     }
-    const chapterField = collection === 'title' ? 'Chapter title' : collection === 'description' ? 'Chapter description' : collection === 'displayOrder' ? 'Chapter order' : 'Chapter content';
+    const chapterField =
+      collection === 'title'
+        ? 'Chapter title'
+        : collection === 'description'
+          ? 'Chapter description'
+          : collection === 'displayOrder'
+            ? 'Chapter order'
+            : 'Chapter content';
     return `${prefix} → ${chapterField}`;
   }
   const labels: Record<string, string> = {
-    title: 'Lesson title', shortDescription: 'Short description', displayOrder: 'Lesson order',
-    passingThreshold: 'Passing score', prerequisiteLessonId: 'Prerequisite', concepts: 'Lesson concepts',
-    sectionId: 'Lesson section', unitId: 'Lesson unit', contentStatus: 'Lesson availability',
+    title: 'Lesson title',
+    shortDescription: 'Short description',
+    displayOrder: 'Lesson order',
+    passingThreshold: 'Passing score',
+    prerequisiteLessonId: 'Prerequisite',
+    concepts: 'Lesson concepts',
+    sectionId: 'Lesson section',
+    unitId: 'Lesson unit',
+    contentStatus: 'Lesson availability',
     contentVersion: 'Lesson content version',
     attemptLimit: 'Lesson attempt limit',
   };
@@ -134,7 +222,14 @@ function validationLabel(path: ValidationPathPart[], draft: AuthoredLesson): str
     if (path.includes('maxAttempts')) return 'Maximum lesson attempts';
     return 'Lesson attempt limit';
   }
-  if (root === 'title' || root === 'shortDescription' || root === 'displayOrder' || root === 'passingThreshold' || root === 'prerequisiteLessonId') return labels[String(root)];
+  if (
+    root === 'title' ||
+    root === 'shortDescription' ||
+    root === 'displayOrder' ||
+    root === 'passingThreshold' ||
+    root === 'prerequisiteLessonId'
+  )
+    return labels[String(root)];
   if (root === 'activities' || root === 'instructionalContent') return 'Lesson content';
   return 'Lesson settings';
 }
@@ -153,7 +248,8 @@ function friendlyValidationMessage(path: ValidationPathPart[], message: string):
     if (path.includes('explanation') && leaf === 'title') return 'Feedback title is required.';
     if (path.includes('explanation') && leaf === 'body') return 'Feedback explanation is required.';
     if (leaf === 'shortDescription') return 'Short description is required.';
-    if (leaf === 'mathStatement' || leaf === 'expression') return 'Mathematical expression is required.';
+    if (leaf === 'mathStatement' || leaf === 'expression')
+      return 'Mathematical expression is required.';
     if (leaf === 'phrase') return 'Example phrase is required.';
     if (leaf === 'body') return 'Teaching content is required.';
     if (leaf === 'note') return 'Explanation is required.';
@@ -164,12 +260,16 @@ function friendlyValidationMessage(path: ValidationPathPart[], message: string):
   if (leaf === 'maxAttempts' || path.includes('attemptLimit')) {
     return 'Enter a positive whole number of attempts, or choose Unlimited.';
   }
-  if (message === 'Each accepted answer must use every token exactly once.') return 'Use every available token exactly once.';
-  if (message === 'Accepted answers must use different token orders.') return 'This answer duplicates another accepted order.';
-  if (message.includes('needs a correct answer') || message.includes('correct choice must exist')) return 'Select the correct answer.';
+  if (message === 'Each accepted answer must use every token exactly once.')
+    return 'Use every available token exactly once.';
+  if (message === 'Accepted answers must use different token orders.')
+    return 'This answer duplicates another accepted order.';
+  if (message.includes('needs a correct answer') || message.includes('correct choice must exist'))
+    return 'Select the correct answer.';
   if (message.includes('needs two choices')) return 'Add at least two answer options.';
   if (message.includes('needs text')) return 'Question text is required.';
-  if (message.includes('Add at least one question')) return 'Add at least one question before publishing.';
+  if (message.includes('Add at least one question'))
+    return 'Add at least one question before publishing.';
   return message;
 }
 
@@ -181,36 +281,65 @@ export function lessonValidationIssues(
   const unique = new Map<string, LessonValidationIssue>();
   for (const issue of error.issues) {
     if (issue.path.length === 0 && issue.message === 'Title and description are required.') {
-      if (!draft.title.trim()) unique.set(JSON.stringify(['title']), { path: ['title'], label: 'Lesson title', message: 'Title is required.' });
-      if (!draft.shortDescription.trim()) unique.set(JSON.stringify(['shortDescription']), { path: ['shortDescription'], label: 'Short description', message: 'Description is required.' });
+      if (!draft.title.trim())
+        unique.set(JSON.stringify(['title']), {
+          path: ['title'],
+          label: 'Lesson title',
+          message: 'Title is required.',
+        });
+      if (!draft.shortDescription.trim())
+        unique.set(JSON.stringify(['shortDescription']), {
+          path: ['shortDescription'],
+          label: 'Short description',
+          message: 'Description is required.',
+        });
       continue;
     }
     const combined = [...pathPrefix, ...issue.path] as ValidationPathPart[];
     if (combined[0] === 'assessmentQuestions' && combined[2] === 'questions') combined.splice(2, 1);
     if (combined[0] === 'assessmentQuestions') {
       const kind = combined[1];
-      const questionIndex = typeof combined[2] === 'number' ? combined[2] as number : undefined;
-      const question = kind === 'pre-test' || kind === 'post-test'
-        ? draft.assessmentQuestions[kind][questionIndex ?? -1]
-        : undefined;
+      const questionIndex = typeof combined[2] === 'number' ? (combined[2] as number) : undefined;
+      const question =
+        kind === 'pre-test' || kind === 'post-test'
+          ? draft.assessmentQuestions[kind][questionIndex ?? -1]
+          : undefined;
       if (issue.message.includes('needs a correct answer')) combined.push('correctChoiceId');
       else if (issue.message.includes('needs two choices')) combined.push('choices');
       else if (issue.message.includes('has an empty choice') && question) {
-        combined.push('choices', question.choices.findIndex((choice) => !choice.label.trim()), 'label');
+        combined.push(
+          'choices',
+          question.choices.findIndex((choice) => !choice.label.trim()),
+          'label',
+        );
       } else if (issue.message.includes('has duplicate choices') && question) {
-        const duplicateIndex = question.choices.findIndex((choice, index) => question.choices.some((other, otherIndex) => otherIndex < index && other.id === choice.id));
+        const duplicateIndex = question.choices.findIndex((choice, index) =>
+          question.choices.some(
+            (other, otherIndex) => otherIndex < index && other.id === choice.id,
+          ),
+        );
         combined.push('choices', Math.max(0, duplicateIndex), 'label');
-      } else if (issue.message.includes('correct choice must exist')) combined.push('correctChoiceId');
+      } else if (issue.message.includes('correct choice must exist'))
+        combined.push('correctChoiceId');
     }
     if (issue.message === 'The correct choice must exist.') combined.push('correctChoiceId');
     if (issue.message === 'Choice IDs must be unique.') combined.push('choices');
     if (issue.message === 'Token IDs must be unique.') combined.push('tokens');
     if (issue.message === 'Each row must contain exactly the configured columns.') {
       const tablePath = combined.slice(0, -1);
-      const chapter = tablePath[0] === 'chapters' && typeof tablePath[1] === 'number' ? draft.chapters[tablePath[1]] : undefined;
-      const blockIndex = tablePath[0] === 'chapters' && typeof tablePath[1] === 'number' && typeof tablePath[3] === 'number' ? tablePath[3] : undefined;
-      const block = blockIndex === undefined || !chapter ? undefined : chapter.instructionalContent[blockIndex];
-      const tableIndex = typeof tablePath.at(-1) === 'number' ? tablePath.at(-1) as number : 0;
+      const chapter =
+        tablePath[0] === 'chapters' && typeof tablePath[1] === 'number'
+          ? draft.chapters[tablePath[1]]
+          : undefined;
+      const blockIndex =
+        tablePath[0] === 'chapters' &&
+        typeof tablePath[1] === 'number' &&
+        typeof tablePath[3] === 'number'
+          ? tablePath[3]
+          : undefined;
+      const block =
+        blockIndex === undefined || !chapter ? undefined : chapter.instructionalContent[blockIndex];
+      const tableIndex = typeof tablePath.at(-1) === 'number' ? (tablePath.at(-1) as number) : 0;
       const table = block?.type === 'content-table' ? block.tables[tableIndex] : undefined;
       if (table) combined.push('rows', 0, 'cells', table.columns[0]?.id ?? '');
     }
@@ -230,9 +359,17 @@ export function getLessonValidationIssues(
   if (!draft.title.trim())
     issues.push({ path: ['title'], label: 'Lesson title', message: 'Title is required.' });
   if (!Number.isInteger(draft.displayOrder) || draft.displayOrder < 1 || draft.displayOrder > 99999)
-    issues.push({ path: ['displayOrder'], label: 'Lesson order', message: 'Lesson order must be a positive integer.' });
+    issues.push({
+      path: ['displayOrder'],
+      label: 'Lesson order',
+      message: 'Lesson order must be a positive integer.',
+    });
   if (draft.activities.length > MAX_ACTIVITIES)
-    issues.push({ path: ['chapters'], label: 'Lesson activities', message: `A lesson supports at most ${MAX_ACTIVITIES} activities.` });
+    issues.push({
+      path: ['chapters'],
+      label: 'Lesson activities',
+      message: `A lesson supports at most ${MAX_ACTIVITIES} activities.`,
+    });
   try {
     lessonAttemptLimitSchema.parse(draft.attemptLimit);
   } catch (error) {
@@ -242,7 +379,14 @@ export function getLessonValidationIssues(
   try {
     lessonAssessmentQuestionsSchema.parse(draft.assessmentQuestions);
   } catch (error) {
-    if (error instanceof z.ZodError) issues.push(...lessonValidationIssues(error, draft, ['assessmentQuestions']));
+    if (error instanceof z.ZodError)
+      issues.push(...lessonValidationIssues(error, draft, ['assessmentQuestions']));
+  }
+  try {
+    lessonAssessmentInstructionsSchema.parse(draft.assessmentInstructions);
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      issues.push(...lessonValidationIssues(error, draft, ['assessmentInstructions']));
   }
   if (operation === 'publish') {
     try {
@@ -251,12 +395,16 @@ export function getLessonValidationIssues(
       if (error instanceof z.ZodError) issues.push(...lessonValidationIssues(error, draft));
     }
     for (const assessment of ['pre-test', 'post-test'] as const) {
-      const enabled = assessment === 'pre-test'
-        ? draft.assessments?.preTest === 'pre-test'
-        : draft.assessments?.postTest === 'post-test';
+      const enabled =
+        assessment === 'pre-test'
+          ? draft.assessments?.preTest === 'pre-test'
+          : draft.assessments?.postTest === 'post-test';
       if (!enabled) continue;
       try {
-        publishableAssessmentSchema.parse({ assessment, questions: draft.assessmentQuestions[assessment] });
+        publishableAssessmentSchema.parse({
+          assessment,
+          questions: draft.assessmentQuestions[assessment],
+        });
       } catch (error) {
         if (error instanceof z.ZodError)
           issues.push(...lessonValidationIssues(error, draft, ['assessmentQuestions', assessment]));
@@ -267,7 +415,10 @@ export function getLessonValidationIssues(
 }
 
 export class LessonManagementValidationError extends Error {
-  constructor(public readonly issues: LessonValidationIssue[], message = issues[0]?.message ?? 'Lesson fields need attention.') {
+  constructor(
+    public readonly issues: LessonValidationIssue[],
+    message = issues[0]?.message ?? 'Lesson fields need attention.',
+  ) {
     super(message);
     this.name = 'LessonManagementValidationError';
   }
@@ -275,27 +426,41 @@ export class LessonManagementValidationError extends Error {
 
 function legacyLessonValidationMessage(error: z.ZodError): string {
   const activityFields = new Map<number, Set<string>>();
-  const labels: Record<string, string> = { title: 'title', prompt: 'instructions', mathStatement: 'mathematical expression', body: 'feedback explanation' };
+  const labels: Record<string, string> = {
+    title: 'title',
+    prompt: 'instructions',
+    mathStatement: 'mathematical expression',
+    body: 'feedback explanation',
+  };
   for (const issue of error.issues) {
     const path = issue.path;
-    const activityIndex = path[0] === 'activities' && typeof path[1] === 'number'
-      ? path[1]
-      : path[0] === 'chapters' && path[2] === 'activities' && typeof path[3] === 'number' ? path[3] : null;
+    const activityIndex =
+      path[0] === 'activities' && typeof path[1] === 'number'
+        ? path[1]
+        : path[0] === 'chapters' && path[2] === 'activities' && typeof path[3] === 'number'
+          ? path[3]
+          : null;
     if (activityIndex === null) continue;
     const leaf = [...path].reverse().find((part): part is string => typeof part === 'string');
     const optionCollectionIndex = path.findIndex((part) => part === 'choices' || part === 'tokens');
     const optionIndex = optionCollectionIndex >= 0 ? path[optionCollectionIndex + 1] : undefined;
-    const field = typeof optionIndex === 'number'
-      ? `${path[optionCollectionIndex] === 'tokens' ? 'token' : 'choice'} ${optionIndex + 1} text`
-      : leaf === 'title' && path.includes('explanation') ? 'feedback title'
-        : leaf && labels[leaf] ? labels[leaf]
-          : leaf === 'label' ? 'choice or token text' : issue.message;
+    const field =
+      typeof optionIndex === 'number'
+        ? `${path[optionCollectionIndex] === 'tokens' ? 'token' : 'choice'} ${optionIndex + 1} text`
+        : leaf === 'title' && path.includes('explanation')
+          ? 'feedback title'
+          : leaf && labels[leaf]
+            ? labels[leaf]
+            : leaf === 'label'
+              ? 'choice or token text'
+              : issue.message;
     const fields = activityFields.get(activityIndex) ?? new Set<string>();
     fields.add(field);
     activityFields.set(activityIndex, fields);
   }
   if (activityFields.size > 0) {
-    const details = [...activityFields.entries()].sort(([a], [b]) => a - b)
+    const details = [...activityFields.entries()]
+      .sort(([a], [b]) => a - b)
       .map(([index, fields]) => `Activity ${index + 1}: ${[...fields].join(', ')}`);
     return `Complete the required fields before publishing. ${details.join('; ')}.`;
   }
@@ -319,9 +484,11 @@ interface LessonOrderConflict {
 function isLessonOrderConflict(value: unknown): value is LessonOrderConflict {
   if (!value || typeof value !== 'object') return false;
   const conflict = value as Record<string, unknown>;
-  return typeof conflict.lessonId === 'string'
-    && typeof conflict.title === 'string'
-    && typeof conflict.displayOrder === 'number';
+  return (
+    typeof conflict.lessonId === 'string' &&
+    typeof conflict.title === 'string' &&
+    typeof conflict.displayOrder === 'number'
+  );
 }
 
 async function call(name: string, args?: Record<string, unknown>) {
@@ -361,12 +528,22 @@ export async function saveManagedLesson(
       p_revision: revision,
     })) as ManagedLesson;
   } catch (cause) {
-    if (cause instanceof Error && cause.message === 'Lesson ID and title are required.' && !normalized.title.trim())
-      throw new LessonManagementValidationError([{ path: ['title'], label: 'Lesson title', message: 'Title is required.' }]);
+    if (
+      cause instanceof Error &&
+      cause.message === 'Lesson ID and title are required.' &&
+      !normalized.title.trim()
+    )
+      throw new LessonManagementValidationError([
+        { path: ['title'], label: 'Lesson title', message: 'Title is required.' },
+      ]);
     if (cause instanceof Error && cause.message === 'Lesson order must be a positive integer.')
-      throw new LessonManagementValidationError([{ path: ['displayOrder'], label: 'Lesson order', message: cause.message }]);
+      throw new LessonManagementValidationError([
+        { path: ['displayOrder'], label: 'Lesson order', message: cause.message },
+      ]);
     if (cause instanceof Error && cause.message.includes('Prerequisite'))
-      throw new LessonManagementValidationError([{ path: ['prerequisiteLessonId'], label: 'Prerequisite', message: cause.message }]);
+      throw new LessonManagementValidationError([
+        { path: ['prerequisiteLessonId'], label: 'Prerequisite', message: cause.message },
+      ]);
     throw cause;
   }
 }
@@ -397,11 +574,9 @@ export async function publishManagedLesson(
           });
         } catch (cause) {
           if (cause instanceof z.ZodError)
-            throw new LessonManagementValidationError(lessonValidationIssues(
-              cause,
-              item.draft,
-              ['assessmentQuestions', assessment],
-            ));
+            throw new LessonManagementValidationError(
+              lessonValidationIssues(cause, item.draft, ['assessmentQuestions', assessment]),
+            );
           throw cause;
         }
       }
@@ -411,11 +586,13 @@ export async function publishManagedLesson(
       item.draft.displayOrder,
     );
     if (conflict) {
-      throw new LessonManagementValidationError([{
-        path: ['displayOrder'],
-        label: 'Lesson order',
-        message: `Lesson order ${item.draft.displayOrder} is already used by "${conflict.title}".`,
-      }]);
+      throw new LessonManagementValidationError([
+        {
+          path: ['displayOrder'],
+          label: 'Lesson order',
+          message: `Lesson order ${item.draft.displayOrder} is already used by "${conflict.title}".`,
+        },
+      ]);
     }
   }
   try {
@@ -426,11 +603,13 @@ export async function publishManagedLesson(
     })) as ManagedLesson;
   } catch (cause) {
     if (cause instanceof Error && /^Lesson order \d+ is already used by /.test(cause.message)) {
-      throw new LessonManagementValidationError([{
-        path: ['displayOrder'],
-        label: 'Lesson order',
-        message: cause.message,
-      }]);
+      throw new LessonManagementValidationError([
+        {
+          path: ['displayOrder'],
+          label: 'Lesson order',
+          message: cause.message,
+        },
+      ]);
     }
     throw cause;
   }
@@ -508,6 +687,16 @@ export function normalizeAuthoredLesson(
     instructionalContent: chapters.flatMap((chapter) => chapter.instructionalContent),
     activities: chapters.flatMap((chapter) => chapter.activities),
     assessmentQuestions: lesson.assessmentQuestions ?? { 'pre-test': [], 'post-test': [] },
+    assessmentInstructions: {
+      'pre-test': {
+        ...DEFAULT_ASSESSMENT_INSTRUCTIONS['pre-test'],
+        ...(lesson.assessmentInstructions?.['pre-test'] ?? {}),
+      },
+      'post-test': {
+        ...DEFAULT_ASSESSMENT_INSTRUCTIONS['post-test'],
+        ...(lesson.assessmentInstructions?.['post-test'] ?? {}),
+      },
+    },
   };
 }
 

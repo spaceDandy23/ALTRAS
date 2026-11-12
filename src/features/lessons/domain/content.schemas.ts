@@ -83,7 +83,10 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     mathStatement: z.string().min(1),
     tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string().min(1)).min(2),
-    acceptedTokenSequences: z.array(z.array(z.string().min(1)).min(2)).min(1).optional(),
+    acceptedTokenSequences: z
+      .array(z.array(z.string().min(1)).min(2))
+      .min(1)
+      .optional(),
   })
   .superRefine((activity, context) => {
     const tokenIds = activity.tokens.map((token) => token.id);
@@ -116,7 +119,8 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     });
     if (
       activity.acceptedTokenSequences &&
-      JSON.stringify(activity.correctTokenSequence) !== JSON.stringify(activity.acceptedTokenSequences[0])
+      JSON.stringify(activity.correctTokenSequence) !==
+        JSON.stringify(activity.acceptedTokenSequences[0])
     ) {
       context.addIssue({
         code: 'custom',
@@ -255,6 +259,17 @@ export const lessonAssessmentFlowSchema = z.object({
   postTest: z.literal('post-test').optional(),
 });
 
+export const lessonAssessmentInstructionSchema = z.object({
+  heading: z.string().trim().min(1).max(160).optional(),
+  body: z.string().trim().min(1).max(1000).optional(),
+  dialogue: z.string().trim().min(1).max(500).optional(),
+});
+
+export const lessonAssessmentInstructionsSchema = z.object({
+  'pre-test': lessonAssessmentInstructionSchema.optional(),
+  'post-test': lessonAssessmentInstructionSchema.optional(),
+});
+
 export const sectionSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -287,6 +302,7 @@ export const lessonMetadataSchema = z.object({
   contentVersion: z.number().int().positive(),
   characterId: z.string().trim().min(1).optional(),
   characterDialogue: lessonCharacterDialogueSchema.optional(),
+  assessmentInstructions: lessonAssessmentInstructionsSchema.optional(),
 });
 
 export const lessonSchema = lessonMetadataSchema
@@ -408,5 +424,7 @@ export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
 export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
 export type LessonAttemptLimit = z.infer<typeof lessonAttemptLimitSchema>;
+export type LessonAssessmentInstruction = z.infer<typeof lessonAssessmentInstructionSchema>;
+export type LessonAssessmentInstructions = z.infer<typeof lessonAssessmentInstructionsSchema>;
 export type LearningLesson = z.infer<typeof publicLessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

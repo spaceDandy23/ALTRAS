@@ -28,8 +28,19 @@ import {
   type AuthoredLesson,
   type ManagedLesson,
 } from './lesson-management.service';
-import { LessonValidationProvider, LessonValidationSummary, ValidationScope, ValidatedFormField, ValidatedSelectField, type LessonValidationIssue } from './lesson-validation';
-import type { ContentTable, InstructionalContentBlock } from '@/features/lessons/domain/content.schemas';
+import {
+  LessonValidationProvider,
+  LessonValidationSummary,
+  ValidationScope,
+  ValidatedFormField,
+  ValidatedSelectField,
+  ValidatedTextareaField,
+  type LessonValidationIssue,
+} from './lesson-validation';
+import type {
+  ContentTable,
+  InstructionalContentBlock,
+} from '@/features/lessons/domain/content.schemas';
 import './lesson-management.css';
 
 function errorMessage(cause: unknown, fallback: string) {
@@ -48,9 +59,16 @@ function FeedbackToast({
   const Icon = kind === 'success' ? Check : AlertCircle;
   return (
     <div className={`admin-feedback-toast admin-feedback-toast--${kind}`}>
-      <span className="admin-feedback-toast__icon" aria-hidden="true"><Icon size={18} /></span>
+      <span className="admin-feedback-toast__icon" aria-hidden="true">
+        <Icon size={18} />
+      </span>
       <p role={kind === 'error' ? 'alert' : 'status'}>{message}</p>
-      <button className="admin-feedback-toast__dismiss" type="button" aria-label="Dismiss message" onClick={onDismiss}>
+      <button
+        className="admin-feedback-toast__dismiss"
+        type="button"
+        aria-label="Dismiss message"
+        onClick={onDismiss}
+      >
         <X size={18} aria-hidden="true" />
       </button>
     </div>
@@ -62,13 +80,18 @@ function keepOverviewPosition(
   teaching: InstructionalContentBlock[],
 ) {
   let index = 0;
-  return blocks.map((block) => block.type === 'vocabulary-table' ? block : teaching[index++] ?? block);
+  return blocks.map((block) =>
+    block.type === 'vocabulary-table' ? block : (teaching[index++] ?? block),
+  );
 }
 
 function firstVocabularyPath(lesson: AuthoredLesson) {
   for (const [chapterIndex, chapter] of lesson.chapters.entries()) {
-    const contentIndex = chapter.instructionalContent.findIndex((block) => block.type === 'vocabulary-table');
-    if (contentIndex >= 0) return ['chapters', chapterIndex, 'instructionalContent', contentIndex, 'tables'];
+    const contentIndex = chapter.instructionalContent.findIndex(
+      (block) => block.type === 'vocabulary-table',
+    );
+    if (contentIndex >= 0)
+      return ['chapters', chapterIndex, 'instructionalContent', contentIndex, 'tables'];
   }
   return [];
 }
@@ -122,8 +145,9 @@ export function LessonManagementPage() {
     if (validationIssues.length === 0 || preview || !focusValidationFieldRef.current) return;
     focusValidationFieldRef.current = false;
     const key = JSON.stringify(validationIssues[0].path);
-    const target = [...document.querySelectorAll<HTMLElement>('[data-validation-path]')]
-      .find((element) => element.dataset.validationPath === key);
+    const target = [...document.querySelectorAll<HTMLElement>('[data-validation-path]')].find(
+      (element) => element.dataset.validationPath === key,
+    );
     if (!target) return;
     for (let parent = target.parentElement; parent; parent = parent.parentElement) {
       if (parent instanceof HTMLDetailsElement) parent.open = true;
@@ -136,11 +160,12 @@ export function LessonManagementPage() {
   }, [validationIssues, preview]);
   const current = items.find((item) => item.lesson_id === draft?.id);
   const publishedLessonCount = items.filter((item) => item.published).length;
-  const vocabularyTables = draft?.chapters.flatMap((chapter) =>
-    chapter.instructionalContent.flatMap((block) =>
-      block.type === 'vocabulary-table' ? [{ chapterId: chapter.id, block }] : [],
-    ),
-  ) ?? [];
+  const vocabularyTables =
+    draft?.chapters.flatMap((chapter) =>
+      chapter.instructionalContent.flatMap((block) =>
+        block.type === 'vocabulary-table' ? [{ chapterId: chapter.id, block }] : [],
+      ),
+    ) ?? [];
   const referenceTables = vocabularyTables.flatMap(({ block }) => getVocabularyTables(block));
   const change = (next: AuthoredLesson) => {
     const normalized = normalizeAuthoredLesson(next);
@@ -167,9 +192,13 @@ export function LessonManagementPage() {
     if (!draft) return;
     const block = newInstructionalBlock();
     setNewTeachingBlockId(block.id);
-    changeChapters(draft.chapters.map((chapter) => chapter.id === chapterId
-      ? { ...chapter, instructionalContent: [...chapter.instructionalContent, block] }
-      : chapter));
+    changeChapters(
+      draft.chapters.map((chapter) =>
+        chapter.id === chapterId
+          ? { ...chapter, instructionalContent: [...chapter.instructionalContent, block] }
+          : chapter,
+      ),
+    );
   };
   const updateVocabularyTables = (tables: ContentTable[]) => {
     if (!draft) return;
@@ -179,13 +208,25 @@ export function LessonManagementPage() {
       draft.chapters.map((chapter, index) => ({
         ...chapter,
         instructionalContent: first
-          ? chapter.instructionalContent.flatMap<InstructionalContentBlock>((block) => block.type !== 'vocabulary-table' ? [block]
-            : chapter.id === first.chapterId && block.id === first.block.id
-              ? [{ ...block, rows: [], tables }] : [])
-          : index === 0 ? [...chapter.instructionalContent, {
-              id: `content-${crypto.randomUUID()}`, type: 'vocabulary-table' as const,
-              title: 'Vocabulary', rows: [], tables,
-            }] : chapter.instructionalContent,
+          ? chapter.instructionalContent.flatMap<InstructionalContentBlock>((block) =>
+              block.type !== 'vocabulary-table'
+                ? [block]
+                : chapter.id === first.chapterId && block.id === first.block.id
+                  ? [{ ...block, rows: [], tables }]
+                  : [],
+            )
+          : index === 0
+            ? [
+                ...chapter.instructionalContent,
+                {
+                  id: `content-${crypto.randomUUID()}`,
+                  type: 'vocabulary-table' as const,
+                  title: 'Vocabulary',
+                  rows: [],
+                  tables,
+                },
+              ]
+            : chapter.instructionalContent,
       })),
     );
   };
@@ -287,17 +328,23 @@ export function LessonManagementPage() {
       <p className="researcher-kicker">Administrator workspace</p>
       <h1 className="admin-lesson-management-title">Basic Lesson Management</h1>
       <p>
-        Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} published lessons and 10
-        activities per lesson.
+        Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} published lessons and
+        10 activities per lesson.
       </p>
       {error && !draft && (
         <p className="form-alert" role="alert">
           {error}
         </p>
       )}
-      {notice && !draft && <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />}
+      {notice && !draft && (
+        <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />
+      )}
       {feedbackError && !draft && (
-        <FeedbackToast kind="error" message={feedbackError} onDismiss={() => setFeedbackError('')} />
+        <FeedbackToast
+          kind="error"
+          message={feedbackError}
+          onDismiss={() => setFeedbackError('')}
+        />
       )}
       {!draft ? (
         <>
@@ -396,9 +443,15 @@ export function LessonManagementPage() {
                 : 'Not visible to students'}
             </span>
           </div>
-          {notice && <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />}
+          {notice && (
+            <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />
+          )}
           {feedbackError && (
-            <FeedbackToast kind="error" message={feedbackError} onDismiss={() => setFeedbackError('')} />
+            <FeedbackToast
+              kind="error"
+              message={feedbackError}
+              onDismiss={() => setFeedbackError('')}
+            />
           )}
           {preview ? (
             <LessonContentPreview key={draft.id} lesson={draft} />
@@ -411,77 +464,85 @@ export function LessonManagementPage() {
               }}
             >
               <LessonValidationProvider issues={validationIssues}>
-              <LessonValidationSummary issues={validationIssues} />
-              <fieldset disabled={busy} className="admin-editor">
-                <legend>Lesson details</legend>
-                <div className="admin-fields">
-                  <ValidatedFormField
-                    label="Lesson title"
-                    validationPath={['title']}
-                    value={draft.title}
-                    maxLength={2000}
-                    required
-                    onChange={(e) => change({ ...draft, title: e.target.value })}
-                  />
-                  <ValidatedFormField
-                    label="Short description"
-                    validationPath={['shortDescription']}
-                    value={draft.shortDescription}
-                    maxLength={2000}
-                    onChange={(e) => change({ ...draft, shortDescription: e.target.value })}
-                  />
-                  <ValidatedFormField
-                    label="Lesson order"
-                    validationPath={['displayOrder']}
-                    type="number"
-                    min={1}
-                    max={99999}
-                    value={draft.displayOrder}
-                    onChange={(e) => change({ ...draft, displayOrder: Number(e.target.value) })}
-                  />
-                  <ValidatedFormField
-                    label="Passing score (%)"
-                    validationPath={['passingThreshold']}
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={draft.passingThreshold}
-                    onChange={(e) => change({ ...draft, passingThreshold: Number(e.target.value) })}
-                  />
-                  <ValidatedSelectField
-                    label="Lesson attempt limit"
-                    validationPath={['attemptLimit', 'mode']}
-                    value={draft.attemptLimit.mode}
-                    onChange={(event) => change({
-                      ...draft,
-                      attemptLimit: event.target.value === 'limited'
-                        ? { mode: 'limited', maxAttempts: draft.attemptLimit.maxAttempts }
-                        : { mode: 'unlimited', maxAttempts: null },
-                    })}
-                  >
-                    <option value="unlimited">Unlimited</option>
-                    <option value="limited">Limited</option>
-                  </ValidatedSelectField>
-                  {draft.attemptLimit.mode === 'limited' && (
+                <LessonValidationSummary issues={validationIssues} />
+                <fieldset disabled={busy} className="admin-editor">
+                  <legend>Lesson details</legend>
+                  <div className="admin-fields">
                     <ValidatedFormField
-                      label="Maximum attempts"
-                      validationPath={['attemptLimit', 'maxAttempts']}
+                      label="Lesson title"
+                      validationPath={['title']}
+                      value={draft.title}
+                      maxLength={2000}
+                      required
+                      onChange={(e) => change({ ...draft, title: e.target.value })}
+                    />
+                    <ValidatedFormField
+                      label="Short description"
+                      validationPath={['shortDescription']}
+                      value={draft.shortDescription}
+                      maxLength={2000}
+                      onChange={(e) => change({ ...draft, shortDescription: e.target.value })}
+                    />
+                    <ValidatedFormField
+                      label="Lesson order"
+                      validationPath={['displayOrder']}
                       type="number"
                       min={1}
-                      step={1}
-                      value={draft.attemptLimit.maxAttempts ?? ''}
-                      onChange={(event) => change({
-                        ...draft,
-                        attemptLimit: {
-                          mode: 'limited',
-                          maxAttempts: event.target.value === '' ? null : Number(event.target.value),
-                        },
-                      })}
+                      max={99999}
+                      value={draft.displayOrder}
+                      onChange={(e) => change({ ...draft, displayOrder: Number(e.target.value) })}
                     />
-                  )}
-                  <ValidatedSelectField
-                    label="Prerequisite"
-                    validationPath={['prerequisiteLessonId']}
+                    <ValidatedFormField
+                      label="Passing score (%)"
+                      validationPath={['passingThreshold']}
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={draft.passingThreshold}
+                      onChange={(e) =>
+                        change({ ...draft, passingThreshold: Number(e.target.value) })
+                      }
+                    />
+                    <ValidatedSelectField
+                      label="Lesson attempt limit"
+                      validationPath={['attemptLimit', 'mode']}
+                      value={draft.attemptLimit.mode}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          attemptLimit:
+                            event.target.value === 'limited'
+                              ? { mode: 'limited', maxAttempts: draft.attemptLimit.maxAttempts }
+                              : { mode: 'unlimited', maxAttempts: null },
+                        })
+                      }
+                    >
+                      <option value="unlimited">Unlimited</option>
+                      <option value="limited">Limited</option>
+                    </ValidatedSelectField>
+                    {draft.attemptLimit.mode === 'limited' && (
+                      <ValidatedFormField
+                        label="Maximum attempts"
+                        validationPath={['attemptLimit', 'maxAttempts']}
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={draft.attemptLimit.maxAttempts ?? ''}
+                        onChange={(event) =>
+                          change({
+                            ...draft,
+                            attemptLimit: {
+                              mode: 'limited',
+                              maxAttempts:
+                                event.target.value === '' ? null : Number(event.target.value),
+                            },
+                          })
+                        }
+                      />
+                    )}
+                    <ValidatedSelectField
+                      label="Prerequisite"
+                      validationPath={['prerequisiteLessonId']}
                       value={draft.prerequisiteLessonId ?? ''}
                       onChange={(e) =>
                         change({ ...draft, prerequisiteLessonId: e.target.value || undefined })
@@ -495,374 +556,676 @@ export function LessonManagementPage() {
                             {item.draft.title}
                           </option>
                         ))}
-                  </ValidatedSelectField>
-                </div>
-                <details className="admin-vocabulary-details" open={vocabularyOpen}
-                  onToggle={(event) => setVocabularyOpen(event.currentTarget.open)}>
-                  <summary>
-                    Vocabulary ({referenceTables.length ? `${referenceTables.length} tables` : 'not added'})
-                  </summary>
-                  <div className="admin-vocabulary-content">
-                    {vocabularyOpen && <ValidationScope path={firstVocabularyPath(draft)}><ContentTablesEditor validationPath={[]} tables={referenceTables} onChange={updateVocabularyTables} /></ValidationScope>}
+                    </ValidatedSelectField>
                   </div>
-                </details>
-                <h2>Assessments</h2>
+                  <details
+                    className="admin-vocabulary-details"
+                    open={vocabularyOpen}
+                    onToggle={(event) => setVocabularyOpen(event.currentTarget.open)}
+                  >
+                    <summary>
+                      Vocabulary (
+                      {referenceTables.length ? `${referenceTables.length} tables` : 'not added'})
+                    </summary>
+                    <div className="admin-vocabulary-content">
+                      {vocabularyOpen && (
+                        <ValidationScope path={firstVocabularyPath(draft)}>
+                          <ContentTablesEditor
+                            validationPath={[]}
+                            tables={referenceTables}
+                            onChange={updateVocabularyTables}
+                          />
+                        </ValidationScope>
+                      )}
+                    </div>
+                  </details>
+                  <h2>Assessments</h2>
+                  <div className="admin-assessment-instructions">
+                    {(['pre-test', 'post-test'] as const).map((assessment) => {
+                      const label = assessment === 'pre-test' ? 'Pre-test' : 'Post-test';
+                      const instruction = draft.assessmentInstructions[assessment];
+                      return (
+                        <section key={assessment} aria-label={`${label} instruction editor`}>
+                          <h3>{label} instructions</h3>
+                          <div className="admin-fields">
+                            <ValidatedFormField
+                              label={`${label} heading`}
+                              validationPath={['assessmentInstructions', assessment, 'heading']}
+                              value={instruction?.heading ?? ''}
+                              maxLength={160}
+                              onChange={(event) =>
+                                change({
+                                  ...draft,
+                                  assessmentInstructions: {
+                                    ...draft.assessmentInstructions,
+                                    [assessment]: { ...instruction, heading: event.target.value },
+                                  },
+                                })
+                              }
+                            />
+                            <ValidatedTextareaField
+                              label={`${label} instructions`}
+                              validationPath={['assessmentInstructions', assessment, 'body']}
+                              value={instruction?.body ?? ''}
+                              maxLength={1000}
+                              rows={3}
+                              onChange={(event) =>
+                                change({
+                                  ...draft,
+                                  assessmentInstructions: {
+                                    ...draft.assessmentInstructions,
+                                    [assessment]: { ...instruction, body: event.target.value },
+                                  },
+                                })
+                              }
+                            />
+                            <ValidatedTextareaField
+                              label={`${label} character guidance`}
+                              validationPath={['assessmentInstructions', assessment, 'dialogue']}
+                              value={instruction?.dialogue ?? ''}
+                              maxLength={500}
+                              rows={2}
+                              onChange={(event) =>
+                                change({
+                                  ...draft,
+                                  assessmentInstructions: {
+                                    ...draft.assessmentInstructions,
+                                    [assessment]: { ...instruction, dialogue: event.target.value },
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
                   <LessonAssessmentQuestionsEditor
                     assessment="pre-test"
                     required={draft.assessments?.preTest === 'pre-test'}
-                    onRequiredChange={(required) => change({ ...draft, assessments: {
-                      ...draft.assessments, preTest: required ? 'pre-test' : undefined,
-                    } })}
+                    onRequiredChange={(required) =>
+                      change({
+                        ...draft,
+                        assessments: {
+                          ...draft.assessments,
+                          preTest: required ? 'pre-test' : undefined,
+                        },
+                      })
+                    }
                     questions={draft.assessmentQuestions['pre-test']}
                     onChange={(questions) =>
                       change({
                         ...draft,
-                        assessmentQuestions: { ...draft.assessmentQuestions, 'pre-test': questions },
+                        assessmentQuestions: {
+                          ...draft.assessmentQuestions,
+                          'pre-test': questions,
+                        },
                       })
                     }
                   />
                   <LessonAssessmentQuestionsEditor
                     assessment="post-test"
                     required={draft.assessments?.postTest === 'post-test'}
-                    onRequiredChange={(required) => change({ ...draft, assessments: {
-                      ...draft.assessments, postTest: required ? 'post-test' : undefined,
-                    } })}
+                    onRequiredChange={(required) =>
+                      change({
+                        ...draft,
+                        assessments: {
+                          ...draft.assessments,
+                          postTest: required ? 'post-test' : undefined,
+                        },
+                      })
+                    }
                     questions={draft.assessmentQuestions['post-test']}
                     onChange={(questions) =>
                       change({
                         ...draft,
-                        assessmentQuestions: { ...draft.assessmentQuestions, 'post-test': questions },
+                        assessmentQuestions: {
+                          ...draft.assessmentQuestions,
+                          'post-test': questions,
+                        },
                       })
                     }
                   />
-                <div className="admin-section-heading">
-                  <div>
-                    <h2>Chapters ({draft.chapters.length})</h2>
-                    <p>{totalLessonActivities(draft)}/10 activities across this lesson.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeChapters([...draft.chapters, newChapter(draft.chapters.length + 1)])
-                    }
-                  >
-                    Add chapter
-                  </button>
-                </div>
-                {draft.chapters.map((chapter, chapterIndex) => (
-                  <ValidationScope key={`validation-${chapter.id}`} path={['chapters', chapterIndex]}>
-                  <ReorderableItem key={chapter.id} group={`lesson-${draft.id}-chapters`} id={chapter.id}
-                    label={`chapter ${chapterIndex + 1}`}
-                    onReorder={(source, target, side) => changeChapters(reorderById(draft.chapters, source, target, side, (item) => item.id))}>
-                  {(chapterHandle) => <div className="admin-chapter">
-                    <details className="admin-chapter-details">
-                      <summary>
-                        {chapterHandle}
-                        <span className="admin-summary-title">Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'}</span>
-                        <span className="admin-summary-meta">{chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table').length} teaching · {chapter.activities.length} {chapter.activities.length === 1 ? 'activity' : 'activities'}</span>
-                        <AdminIconButton inSummary icon="delete" label={`Delete chapter ${chapterIndex + 1}`} onClick={() => setDeletingChapterId(chapter.id)} />
-                        <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
-                      </summary>
-                      <div className="admin-chapter-content">
-                    <div className="admin-actions lesson-actions">
-                      <AdminIconButton icon="up" label={`Move chapter ${chapterIndex + 1} up`}
-                        disabled={chapterIndex === 0}
-                        onClick={() => changeChapters(moveItem(draft.chapters, chapterIndex, -1))}
-                      />
-                      <AdminIconButton icon="down" label={`Move chapter ${chapterIndex + 1} down`}
-                        disabled={chapterIndex === draft.chapters.length - 1}
-                        onClick={() => changeChapters(moveItem(draft.chapters, chapterIndex, 1))}
-                      />
+                  <div className="admin-section-heading">
+                    <div>
+                      <h2>Chapters ({draft.chapters.length})</h2>
+                      <p>{totalLessonActivities(draft)}/10 activities across this lesson.</p>
                     </div>
-                    <div className="admin-fields">
-                      <ValidatedFormField
-                        label="Chapter title"
-                        validationPath={['title']}
-                        required
-                        value={chapter.title}
-                        onChange={(event) =>
-                          changeChapters(
-                            draft.chapters.map((item) =>
-                              item.id === chapter.id
-                                ? { ...item, title: event.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                      />
-                      <ValidatedFormField
-                        label="Chapter description"
-                        validationPath={['description']}
-                        value={chapter.description ?? ''}
-                        onChange={(event) =>
-                          changeChapters(
-                            draft.chapters.map((item) =>
-                              item.id === chapter.id
-                                ? { ...item, description: event.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                      />
-                    </div>
-                    {chapter.instructionalContent.some((block) => block.type !== 'vocabulary-table') && (
-                      <div className="admin-teaching-section">
-                      <div className="admin-section-heading admin-section-heading--teaching">
-                        <h3>Teaching Content</h3>
-                        <button type="button" className="button button--quiet" onClick={() => setRemovingTeachingChapterId(chapter.id)}>
-                          Remove Teaching Content
-                        </button>
-                      </div>
-                    {chapter.instructionalContent.filter((block) => block.type !== 'vocabulary-table').map((block, contentIndex) => (
-                      <ReorderableItem key={block.id} group={`chapter-${chapter.id}-content`} id={block.id}
-                        label={`teaching content ${contentIndex + 1}`}
-                        onReorder={(source, target, side) => changeChapters(draft.chapters.map((item) =>
-                          item.id === chapter.id ? { ...item, instructionalContent: keepOverviewPosition(item.instructionalContent,
-                            reorderById(item.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table'), source, target, side, (entry) => entry.id)) } : item,
-                        ))}>
-                      {(contentHandle) => <details id={`teaching-${block.id}`} className="admin-instruction">
-                        <summary>
-                          {contentHandle}
-                          <span className="admin-summary-title">Content {contentIndex + 1} · {block.type === 'content-table' ? 'Dynamic tables' : block.type === 'example' ? 'Example' : block.type === 'warning' ? 'Important note' : 'Explanation'} ·{' '}
-                          {block.type === 'content-table' ? `${block.tables.length} ${block.tables.length === 1 ? 'table' : 'tables'}` : block.type === 'example' ? block.phrase : block.title || 'Untitled content'}</span>
-                          <AdminIconButton inSummary icon="delete" label={`Delete content ${contentIndex + 1}`}
-                            onClick={() => changeChapters(draft.chapters.map((item) => item.id === chapter.id
-                              ? { ...item, instructionalContent: item.instructionalContent.filter((entry) => entry.id !== block.id) } : item))} />
-                          <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
-                        </summary>
-                        <div className="admin-instruction-content">
-                        <div className="admin-actions lesson-actions">
-                          <AdminIconButton icon="up" label={`Move content ${contentIndex + 1} up`}
-                            disabled={contentIndex === 0}
-                            onClick={() =>
-                              changeChapters(
-                                draft.chapters.map((item) =>
-                                  item.id === chapter.id
-                                    ? {
-                                        ...item,
-                                        instructionalContent: keepOverviewPosition(item.instructionalContent, moveItem(
-                                          item.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table'),
-                                          contentIndex,
-                                          -1,
-                                        )),
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                          <AdminIconButton icon="down" label={`Move content ${contentIndex + 1} down`}
-                            disabled={contentIndex === chapter.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table').length - 1}
-                            onClick={() =>
-                              changeChapters(
-                                draft.chapters.map((item) =>
-                                  item.id === chapter.id
-                                    ? {
-                                        ...item,
-                                        instructionalContent: keepOverviewPosition(item.instructionalContent, moveItem(
-                                          item.instructionalContent.filter((entry) => entry.type !== 'vocabulary-table'),
-                                          contentIndex,
-                                          1,
-                                        )),
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                        </div>
-                        <InstructionalContentEditor
-                          block={block}
-                          validationPath={['instructionalContent', contentIndex]}
-                          onChange={(next) =>
-                            changeChapters(
-                              draft.chapters.map((item) =>
-                                item.id === chapter.id
-                                  ? {
-                                      ...item,
-                                      instructionalContent: item.instructionalContent.map(
-                                        (entry) => (entry.id === block.id ? next : entry),
-                                      ),
-                                    }
-                                  : item,
-                              ),
-                            )
-                          }
-                        />
-                        </div>
-                      </details>}
-                      </ReorderableItem>
-                    ))}
-                      </div>
-                    )}
-                    <div className="admin-actions">
-                      <button type="button" className="admin-add-action"
-                        aria-label={`Add teaching content to ${chapter.title}`}
-                        onClick={() => addTeachingBlock(chapter.id)}>
-                        + Add teaching content
-                      </button>
-                    </div>
-                    <h3>Activities ({chapter.activities.length})</h3>
-                    {chapter.activities.map((activity, activityIndex) => (
-                      <ReorderableItem key={activity.id} group={`chapter-${chapter.id}-activities`} id={activity.id}
-                        label={`activity ${activityIndex + 1}`}
-                        onReorder={(source, target, side) => changeChapters(draft.chapters.map((item) =>
-                          item.id === chapter.id ? { ...item, activities: reorderById(item.activities, source, target, side, (entry) => entry.id) } : item,
-                        ))}>
-                      {(activityHandle) => <details className="admin-activity">
-                        <summary>
-                          {activityHandle}
-                          <span className="admin-summary-title">Activity {activityIndex + 1} ·{' '}
-                          {activity.type === 'find-word'
-                            ? 'Find the word'
-                            : activity.type === 'organize-translate'
-                              ? 'Organize & translate'
-                              : 'Choose the correct translation'} ·{' '}
-                          <span className="admin-activity-summary__preview">
-                            {activity.title || activity.prompt || 'Untitled activity'}
-                          </span></span>
-                          <AdminIconButton inSummary icon="delete" label={`Delete activity ${activityIndex + 1}`}
-                            onClick={() => changeChapters(draft.chapters.map((item) => item.id === chapter.id
-                              ? { ...item, activities: item.activities.filter((entry) => entry.id !== activity.id) } : item))} />
-                          <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
-                        </summary>
-                        <div className="admin-activity-content">
-                        <div className="admin-actions lesson-actions">
-                          <AdminIconButton icon="up" label={`Move activity ${activityIndex + 1} up`}
-                            disabled={activityIndex === 0}
-                            onClick={() =>
-                              changeChapters(
-                                draft.chapters.map((item) =>
-                                  item.id === chapter.id
-                                    ? {
-                                        ...item,
-                                        activities: moveItem(item.activities, activityIndex, -1),
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                          <AdminIconButton icon="down" label={`Move activity ${activityIndex + 1} down`}
-                            disabled={activityIndex === chapter.activities.length - 1}
-                            onClick={() =>
-                              changeChapters(
-                                draft.chapters.map((item) =>
-                                  item.id === chapter.id
-                                    ? {
-                                        ...item,
-                                        activities: moveItem(item.activities, activityIndex, 1),
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                          {draft.chapters.length > 1 && (
-                            <label>
-                              Activity chapter
-                              <select
-                                value={chapter.id}
-                                onChange={(event) => {
-                                  const destination = event.target.value;
-                                  changeChapters(
-                                    draft.chapters.map((item) =>
-                                      item.id === chapter.id
-                                        ? {
-                                            ...item,
-                                            activities: item.activities.filter(
-                                              (entry) => entry.id !== activity.id,
-                                            ),
-                                          }
-                                        : item.id === destination
-                                          ? { ...item, activities: [...item.activities, activity] }
-                                          : item,
-                                    ),
-                                  );
-                                }}
-                              >
-                                {draft.chapters.map((item) => (
-                                  <option key={item.id} value={item.id}>
-                                    {item.title}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          )}
-                        </div>
-                        <ActivityEditor
-                          activity={activity}
-                          validationPath={['activities', activityIndex]}
-                          onChange={(next) =>
-                            changeChapters(
-                              draft.chapters.map((item) =>
-                                item.id === chapter.id
-                                  ? {
-                                      ...item,
-                                      activities: item.activities.map((entry) =>
-                                        entry.id === activity.id ? next : entry,
-                                      ),
-                                    }
-                                  : item,
-                              ),
-                            )
-                          }
-                        />
-                        </div>
-                      </details>}
-                      </ReorderableItem>
-                    ))}
                     <button
                       type="button"
-                      className="admin-add-action"
-                      aria-label={`Add activity to ${chapter.title}`}
-                      disabled={totalLessonActivities(draft) >= MAX_ACTIVITIES}
                       onClick={() =>
-                        changeChapters(
-                          draft.chapters.map((item) =>
-                            item.id === chapter.id
-                              ? {
-                                  ...item,
-                                  activities: [...item.activities, newActivity('find-word')],
-                                }
-                              : item,
-                          ),
-                        )
+                        changeChapters([...draft.chapters, newChapter(draft.chapters.length + 1)])
                       }
                     >
-                      + Add activity
+                      Add chapter
                     </button>
-                      </div>
-                    </details>
-                  </div>}
-                  </ReorderableItem>
-                  </ValidationScope>
-                ))}
-                <div className="admin-actions">
-                  {totalLessonActivities(draft) >= MAX_ACTIVITIES && (
-                    <span role="status">Maximum 10 activities reached.</span>
-                  )}
-                </div>
-                <div className="admin-actions">
-                  <div className="lesson-actions">
-                    <button className="button" type="submit">
-                      {busy ? 'Saving…' : 'Save draft'}
-                    </button>
-                    <button className="button" type="button" onClick={() => void save(true)}>
-                      Publish lesson
-                    </button>
-                    {current?.published && (
-                      <button
-                        className="button button--quiet"
-                        type="button"
-                        onClick={() => void save(false)}
+                  </div>
+                  {draft.chapters.map((chapter, chapterIndex) => (
+                    <ValidationScope
+                      key={`validation-${chapter.id}`}
+                      path={['chapters', chapterIndex]}
+                    >
+                      <ReorderableItem
+                        key={chapter.id}
+                        group={`lesson-${draft.id}-chapters`}
+                        id={chapter.id}
+                        label={`chapter ${chapterIndex + 1}`}
+                        onReorder={(source, target, side) =>
+                          changeChapters(
+                            reorderById(draft.chapters, source, target, side, (item) => item.id),
+                          )
+                        }
                       >
-                        Unpublish lesson
-                      </button>
+                        {(chapterHandle) => (
+                          <div className="admin-chapter">
+                            <details className="admin-chapter-details">
+                              <summary>
+                                {chapterHandle}
+                                <span className="admin-summary-title">
+                                  Chapter {chapterIndex + 1}: {chapter.title || 'Untitled chapter'}
+                                </span>
+                                <span className="admin-summary-meta">
+                                  {
+                                    chapter.instructionalContent.filter(
+                                      (block) => block.type !== 'vocabulary-table',
+                                    ).length
+                                  }{' '}
+                                  teaching · {chapter.activities.length}{' '}
+                                  {chapter.activities.length === 1 ? 'activity' : 'activities'}
+                                </span>
+                                <AdminIconButton
+                                  inSummary
+                                  icon="delete"
+                                  label={`Delete chapter ${chapterIndex + 1}`}
+                                  onClick={() => setDeletingChapterId(chapter.id)}
+                                />
+                                <ChevronDown className="admin-summary-chevron" aria-hidden="true" />
+                              </summary>
+                              <div className="admin-chapter-content">
+                                <div className="admin-actions lesson-actions">
+                                  <AdminIconButton
+                                    icon="up"
+                                    label={`Move chapter ${chapterIndex + 1} up`}
+                                    disabled={chapterIndex === 0}
+                                    onClick={() =>
+                                      changeChapters(moveItem(draft.chapters, chapterIndex, -1))
+                                    }
+                                  />
+                                  <AdminIconButton
+                                    icon="down"
+                                    label={`Move chapter ${chapterIndex + 1} down`}
+                                    disabled={chapterIndex === draft.chapters.length - 1}
+                                    onClick={() =>
+                                      changeChapters(moveItem(draft.chapters, chapterIndex, 1))
+                                    }
+                                  />
+                                </div>
+                                <div className="admin-fields">
+                                  <ValidatedFormField
+                                    label="Chapter title"
+                                    validationPath={['title']}
+                                    required
+                                    value={chapter.title}
+                                    onChange={(event) =>
+                                      changeChapters(
+                                        draft.chapters.map((item) =>
+                                          item.id === chapter.id
+                                            ? { ...item, title: event.target.value }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <ValidatedFormField
+                                    label="Chapter description"
+                                    validationPath={['description']}
+                                    value={chapter.description ?? ''}
+                                    onChange={(event) =>
+                                      changeChapters(
+                                        draft.chapters.map((item) =>
+                                          item.id === chapter.id
+                                            ? { ...item, description: event.target.value }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </div>
+                                {chapter.instructionalContent.some(
+                                  (block) => block.type !== 'vocabulary-table',
+                                ) && (
+                                  <div className="admin-teaching-section">
+                                    <div className="admin-section-heading admin-section-heading--teaching">
+                                      <h3>Teaching Content</h3>
+                                      <button
+                                        type="button"
+                                        className="button button--quiet"
+                                        onClick={() => setRemovingTeachingChapterId(chapter.id)}
+                                      >
+                                        Remove Teaching Content
+                                      </button>
+                                    </div>
+                                    {chapter.instructionalContent
+                                      .filter((block) => block.type !== 'vocabulary-table')
+                                      .map((block, contentIndex) => (
+                                        <ReorderableItem
+                                          key={block.id}
+                                          group={`chapter-${chapter.id}-content`}
+                                          id={block.id}
+                                          label={`teaching content ${contentIndex + 1}`}
+                                          onReorder={(source, target, side) =>
+                                            changeChapters(
+                                              draft.chapters.map((item) =>
+                                                item.id === chapter.id
+                                                  ? {
+                                                      ...item,
+                                                      instructionalContent: keepOverviewPosition(
+                                                        item.instructionalContent,
+                                                        reorderById(
+                                                          item.instructionalContent.filter(
+                                                            (entry) =>
+                                                              entry.type !== 'vocabulary-table',
+                                                          ),
+                                                          source,
+                                                          target,
+                                                          side,
+                                                          (entry) => entry.id,
+                                                        ),
+                                                      ),
+                                                    }
+                                                  : item,
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          {(contentHandle) => (
+                                            <details
+                                              id={`teaching-${block.id}`}
+                                              className="admin-instruction"
+                                            >
+                                              <summary>
+                                                {contentHandle}
+                                                <span className="admin-summary-title">
+                                                  Content {contentIndex + 1} ·{' '}
+                                                  {block.type === 'content-table'
+                                                    ? 'Dynamic tables'
+                                                    : block.type === 'example'
+                                                      ? 'Example'
+                                                      : block.type === 'warning'
+                                                        ? 'Important note'
+                                                        : 'Explanation'}{' '}
+                                                  ·{' '}
+                                                  {block.type === 'content-table'
+                                                    ? `${block.tables.length} ${block.tables.length === 1 ? 'table' : 'tables'}`
+                                                    : block.type === 'example'
+                                                      ? block.phrase
+                                                      : block.title || 'Untitled content'}
+                                                </span>
+                                                <AdminIconButton
+                                                  inSummary
+                                                  icon="delete"
+                                                  label={`Delete content ${contentIndex + 1}`}
+                                                  onClick={() =>
+                                                    changeChapters(
+                                                      draft.chapters.map((item) =>
+                                                        item.id === chapter.id
+                                                          ? {
+                                                              ...item,
+                                                              instructionalContent:
+                                                                item.instructionalContent.filter(
+                                                                  (entry) => entry.id !== block.id,
+                                                                ),
+                                                            }
+                                                          : item,
+                                                      ),
+                                                    )
+                                                  }
+                                                />
+                                                <ChevronDown
+                                                  className="admin-summary-chevron"
+                                                  aria-hidden="true"
+                                                />
+                                              </summary>
+                                              <div className="admin-instruction-content">
+                                                <div className="admin-actions lesson-actions">
+                                                  <AdminIconButton
+                                                    icon="up"
+                                                    label={`Move content ${contentIndex + 1} up`}
+                                                    disabled={contentIndex === 0}
+                                                    onClick={() =>
+                                                      changeChapters(
+                                                        draft.chapters.map((item) =>
+                                                          item.id === chapter.id
+                                                            ? {
+                                                                ...item,
+                                                                instructionalContent:
+                                                                  keepOverviewPosition(
+                                                                    item.instructionalContent,
+                                                                    moveItem(
+                                                                      item.instructionalContent.filter(
+                                                                        (entry) =>
+                                                                          entry.type !==
+                                                                          'vocabulary-table',
+                                                                      ),
+                                                                      contentIndex,
+                                                                      -1,
+                                                                    ),
+                                                                  ),
+                                                              }
+                                                            : item,
+                                                        ),
+                                                      )
+                                                    }
+                                                  />
+                                                  <AdminIconButton
+                                                    icon="down"
+                                                    label={`Move content ${contentIndex + 1} down`}
+                                                    disabled={
+                                                      contentIndex ===
+                                                      chapter.instructionalContent.filter(
+                                                        (entry) =>
+                                                          entry.type !== 'vocabulary-table',
+                                                      ).length -
+                                                        1
+                                                    }
+                                                    onClick={() =>
+                                                      changeChapters(
+                                                        draft.chapters.map((item) =>
+                                                          item.id === chapter.id
+                                                            ? {
+                                                                ...item,
+                                                                instructionalContent:
+                                                                  keepOverviewPosition(
+                                                                    item.instructionalContent,
+                                                                    moveItem(
+                                                                      item.instructionalContent.filter(
+                                                                        (entry) =>
+                                                                          entry.type !==
+                                                                          'vocabulary-table',
+                                                                      ),
+                                                                      contentIndex,
+                                                                      1,
+                                                                    ),
+                                                                  ),
+                                                              }
+                                                            : item,
+                                                        ),
+                                                      )
+                                                    }
+                                                  />
+                                                </div>
+                                                <InstructionalContentEditor
+                                                  block={block}
+                                                  validationPath={[
+                                                    'instructionalContent',
+                                                    contentIndex,
+                                                  ]}
+                                                  onChange={(next) =>
+                                                    changeChapters(
+                                                      draft.chapters.map((item) =>
+                                                        item.id === chapter.id
+                                                          ? {
+                                                              ...item,
+                                                              instructionalContent:
+                                                                item.instructionalContent.map(
+                                                                  (entry) =>
+                                                                    entry.id === block.id
+                                                                      ? next
+                                                                      : entry,
+                                                                ),
+                                                            }
+                                                          : item,
+                                                      ),
+                                                    )
+                                                  }
+                                                />
+                                              </div>
+                                            </details>
+                                          )}
+                                        </ReorderableItem>
+                                      ))}
+                                  </div>
+                                )}
+                                <div className="admin-actions">
+                                  <button
+                                    type="button"
+                                    className="admin-add-action"
+                                    aria-label={`Add teaching content to ${chapter.title}`}
+                                    onClick={() => addTeachingBlock(chapter.id)}
+                                  >
+                                    + Add teaching content
+                                  </button>
+                                </div>
+                                <h3>Activities ({chapter.activities.length})</h3>
+                                {chapter.activities.map((activity, activityIndex) => (
+                                  <ReorderableItem
+                                    key={activity.id}
+                                    group={`chapter-${chapter.id}-activities`}
+                                    id={activity.id}
+                                    label={`activity ${activityIndex + 1}`}
+                                    onReorder={(source, target, side) =>
+                                      changeChapters(
+                                        draft.chapters.map((item) =>
+                                          item.id === chapter.id
+                                            ? {
+                                                ...item,
+                                                activities: reorderById(
+                                                  item.activities,
+                                                  source,
+                                                  target,
+                                                  side,
+                                                  (entry) => entry.id,
+                                                ),
+                                              }
+                                            : item,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    {(activityHandle) => (
+                                      <details className="admin-activity">
+                                        <summary>
+                                          {activityHandle}
+                                          <span className="admin-summary-title">
+                                            Activity {activityIndex + 1} ·{' '}
+                                            {activity.type === 'find-word'
+                                              ? 'Find the word'
+                                              : activity.type === 'organize-translate'
+                                                ? 'Organize & translate'
+                                                : 'Choose the correct translation'}{' '}
+                                            ·{' '}
+                                            <span className="admin-activity-summary__preview">
+                                              {activity.title ||
+                                                activity.prompt ||
+                                                'Untitled activity'}
+                                            </span>
+                                          </span>
+                                          <AdminIconButton
+                                            inSummary
+                                            icon="delete"
+                                            label={`Delete activity ${activityIndex + 1}`}
+                                            onClick={() =>
+                                              changeChapters(
+                                                draft.chapters.map((item) =>
+                                                  item.id === chapter.id
+                                                    ? {
+                                                        ...item,
+                                                        activities: item.activities.filter(
+                                                          (entry) => entry.id !== activity.id,
+                                                        ),
+                                                      }
+                                                    : item,
+                                                ),
+                                              )
+                                            }
+                                          />
+                                          <ChevronDown
+                                            className="admin-summary-chevron"
+                                            aria-hidden="true"
+                                          />
+                                        </summary>
+                                        <div className="admin-activity-content">
+                                          <div className="admin-actions lesson-actions">
+                                            <AdminIconButton
+                                              icon="up"
+                                              label={`Move activity ${activityIndex + 1} up`}
+                                              disabled={activityIndex === 0}
+                                              onClick={() =>
+                                                changeChapters(
+                                                  draft.chapters.map((item) =>
+                                                    item.id === chapter.id
+                                                      ? {
+                                                          ...item,
+                                                          activities: moveItem(
+                                                            item.activities,
+                                                            activityIndex,
+                                                            -1,
+                                                          ),
+                                                        }
+                                                      : item,
+                                                  ),
+                                                )
+                                              }
+                                            />
+                                            <AdminIconButton
+                                              icon="down"
+                                              label={`Move activity ${activityIndex + 1} down`}
+                                              disabled={
+                                                activityIndex === chapter.activities.length - 1
+                                              }
+                                              onClick={() =>
+                                                changeChapters(
+                                                  draft.chapters.map((item) =>
+                                                    item.id === chapter.id
+                                                      ? {
+                                                          ...item,
+                                                          activities: moveItem(
+                                                            item.activities,
+                                                            activityIndex,
+                                                            1,
+                                                          ),
+                                                        }
+                                                      : item,
+                                                  ),
+                                                )
+                                              }
+                                            />
+                                            {draft.chapters.length > 1 && (
+                                              <label>
+                                                Activity chapter
+                                                <select
+                                                  value={chapter.id}
+                                                  onChange={(event) => {
+                                                    const destination = event.target.value;
+                                                    changeChapters(
+                                                      draft.chapters.map((item) =>
+                                                        item.id === chapter.id
+                                                          ? {
+                                                              ...item,
+                                                              activities: item.activities.filter(
+                                                                (entry) => entry.id !== activity.id,
+                                                              ),
+                                                            }
+                                                          : item.id === destination
+                                                            ? {
+                                                                ...item,
+                                                                activities: [
+                                                                  ...item.activities,
+                                                                  activity,
+                                                                ],
+                                                              }
+                                                            : item,
+                                                      ),
+                                                    );
+                                                  }}
+                                                >
+                                                  {draft.chapters.map((item) => (
+                                                    <option key={item.id} value={item.id}>
+                                                      {item.title}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                            )}
+                                          </div>
+                                          <ActivityEditor
+                                            activity={activity}
+                                            validationPath={['activities', activityIndex]}
+                                            onChange={(next) =>
+                                              changeChapters(
+                                                draft.chapters.map((item) =>
+                                                  item.id === chapter.id
+                                                    ? {
+                                                        ...item,
+                                                        activities: item.activities.map((entry) =>
+                                                          entry.id === activity.id ? next : entry,
+                                                        ),
+                                                      }
+                                                    : item,
+                                                ),
+                                              )
+                                            }
+                                          />
+                                        </div>
+                                      </details>
+                                    )}
+                                  </ReorderableItem>
+                                ))}
+                                <button
+                                  type="button"
+                                  className="admin-add-action"
+                                  aria-label={`Add activity to ${chapter.title}`}
+                                  disabled={totalLessonActivities(draft) >= MAX_ACTIVITIES}
+                                  onClick={() =>
+                                    changeChapters(
+                                      draft.chapters.map((item) =>
+                                        item.id === chapter.id
+                                          ? {
+                                              ...item,
+                                              activities: [
+                                                ...item.activities,
+                                                newActivity('find-word'),
+                                              ],
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  + Add activity
+                                </button>
+                              </div>
+                            </details>
+                          </div>
+                        )}
+                      </ReorderableItem>
+                    </ValidationScope>
+                  ))}
+                  <div className="admin-actions">
+                    {totalLessonActivities(draft) >= MAX_ACTIVITIES && (
+                      <span role="status">Maximum 10 activities reached.</span>
                     )}
                   </div>
-                </div>
-              </fieldset>
+                  <div className="admin-actions">
+                    <div className="lesson-actions">
+                      <button className="button" type="submit">
+                        {busy ? 'Saving…' : 'Save draft'}
+                      </button>
+                      <button className="button" type="button" onClick={() => void save(true)}>
+                        Publish lesson
+                      </button>
+                      {current?.published && (
+                        <button
+                          className="button button--quiet"
+                          type="button"
+                          onClick={() => void save(false)}
+                        >
+                          Unpublish lesson
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </fieldset>
               </LessonValidationProvider>
             </form>
           )}
@@ -899,14 +1262,24 @@ export function LessonManagementPage() {
         onCancel={() => setRemovingTeachingChapterId(null)}
         onConfirm={() => {
           if (draft && removingTeachingChapterId) {
-            changeChapters(draft.chapters.map((chapter) => chapter.id === removingTeachingChapterId
-              ? { ...chapter, instructionalContent: chapter.instructionalContent.filter((block) => block.type === 'vocabulary-table') }
-              : chapter));
+            changeChapters(
+              draft.chapters.map((chapter) =>
+                chapter.id === removingTeachingChapterId
+                  ? {
+                      ...chapter,
+                      instructionalContent: chapter.instructionalContent.filter(
+                        (block) => block.type === 'vocabulary-table',
+                      ),
+                    }
+                  : chapter,
+              ),
+            );
           }
           setRemovingTeachingChapterId(null);
         }}
       >
-        This removes this chapter's teaching blocks from the draft. Its activities and the lesson Overview stay in place.
+        This removes this chapter's teaching blocks from the draft. Its activities and the lesson
+        Overview stay in place.
       </ConfirmDialog>
     </>
   );
