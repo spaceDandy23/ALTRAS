@@ -173,8 +173,21 @@ describe('Basic Lesson Management editor and preview', () => {
     }));
     client.rpc.mockResolvedValue({ data: rows, error: null });
     page();
-    expect(await screen.findByText(`Maximum ${MAX_LESSONS} lessons reached.`)).toBeInTheDocument();
+    expect(await screen.findByText(`Maximum ${MAX_LESSONS} published lessons reached.`)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create lesson' })).toBeDisabled();
+  });
+  it('counts only published lessons toward the creation limit', async () => {
+    const rows = Array.from({ length: MAX_LESSONS }, (_, index) => ({
+      ...item(),
+      lesson_id: `lesson-${index}`,
+      draft: { ...item().draft, id: `lesson-${index}`, title: `Lesson ${index + 1}` },
+      published: index < MAX_LESSONS - 1,
+      published_version: index < MAX_LESSONS - 1 ? 1 : null,
+    }));
+    client.rpc.mockResolvedValue({ data: rows, error: null });
+    page();
+    expect(await screen.findByRole('button', { name: 'Create lesson' })).toBeEnabled();
+    expect(screen.queryByText(`Maximum ${MAX_LESSONS} published lessons reached.`)).not.toBeInTheDocument();
   });
   it('shows only the centered admin loader until lesson data is ready', async () => {
     let resolve!: (value: unknown) => void;

@@ -31,6 +31,7 @@ const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_an
 const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
 const securityHardeningMigration = '202611110001_secure_username_login_and_active_time.sql';
 const lessonOrderReconciliationMigration = '202611120001_reconcile_lesson_catalog_orders.sql';
+const publishedLessonLimitMigration = '202611120002_limit_published_admin_lessons.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -160,6 +161,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonAttemptLimitsMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', securityHardeningMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonOrderReconciliationMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', publishedLessonLimitMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -647,14 +649,52 @@ describe('Basic Lesson Management SQL and RLS', () => {
   });
 
   it('enforces the eight-lesson limit at the database boundary', async () => {
-    for (let index = 0; index < 6; index += 1) await save(draft({ displayOrder: index + 3 }));
+    const created: ManagedLesson[] = [];
+    for (let index = 0; index < 6; index += 1) created.push(await save(draft({ displayOrder: index + 3 })));
+    await pg.exec('reset role');
+    await pg.query(
+      'update public.lesson_catalog set published=true where lesson_id = any($1::text[])',
+      [created.map((item) => item.lesson_id)],
+    );
+    await asUser(adminId);
     await pg.exec('savepoint lesson_limit');
-    await expect(save(draft({ displayOrder: 9 }))).rejects.toThrow('maximum of 8 lessons');
+    await expect(save(draft({ displayOrder: 9 }))).rejects.toThrow('maximum of 8 published lessons');
     await pg.exec('rollback to savepoint lesson_limit');
     const lessonCount = await pg.query<{ count: number }>(
-      'select count(*)::int as count from public.get_admin_lessons()',
+      'select count(*)::int as count from public.get_admin_lessons() where published',
     );
     expect(lessonCount.rows[0].count).toBe(8);
+  });
+  it('allows a new lesson when the catalog has unpublished drafts below the published cap', async () => {
+    const created: ManagedLesson[] = [];
+    for (let index = 0; index < 6; index += 1) created.push(await save(draft({ displayOrder: index + 3 })));
+    await pg.exec('reset role');
+    await pg.query(
+      'update public.lesson_catalog set published=true where lesson_id = any($1::text[])',
+      [created.slice(0, 5).map((item) => item.lesson_id)],
+    );
+    await asUser(adminId);
+
+    const next = await save(draft({ displayOrder: 9 }));
+
+    expect(next.lesson_id).toBeTruthy();
+    await pg.exec('reset role');
+    expect(
+      (await pg.query<{ count: number }>('select count(*)::int as count from public.lesson_catalog where published')).rows[0].count,
+    ).toBe(7);
+  });
+  it('prevents publishing a draft once eight lessons are already published', async () => {
+    const created: ManagedLesson[] = [];
+    for (let index = 0; index < 7; index += 1) created.push(await save(draft({ displayOrder: index + 3 })));
+    await pg.exec('reset role');
+    await pg.query(
+      'update public.lesson_catalog set published=true where lesson_id = any($1::text[])',
+      [created.slice(0, 6).map((item) => item.lesson_id)],
+    );
+
+    await expect(
+      pg.query('update public.lesson_catalog set published=true where lesson_id=$1', [created[6].lesson_id]),
+    ).rejects.toThrow('maximum of 8 published lessons');
   });
   it('seeds exact original authoring content and scoring versions without remapping IDs', async () => {
     const rows = (await pg.query<ManagedLesson>('select * from public.get_admin_lessons()')).rows;

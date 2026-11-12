@@ -8,6 +8,13 @@ import { defineConfig } from 'vitest/config';
 const rootDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+
+  server:{
+    host: '0.0.0.0',
+    allowedHosts: [
+      'ground-landfill-denatured.ngrok-free.dev',
+    ],
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family:
     Inter,
     ui-sans-serif,
@@ -10,10 +10,47 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #f7f3e3;
-  background: #0d0f11;
+  color: #24272b;
+  background: #e9ecef;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --board: #f8f5eb;
+  --board-deep: #e9ecef;
+  --surface: #ffffff;
+  --surface-soft: #ece8dc;
+  --paper: #24272b;
+  --muted: #5c6268;
+  --quiet: #737a80;
+  --line: rgba(36, 39, 43, 0.18);
+  --line-strong: rgba(36, 39, 43, 0.36);
+  --yellow: #b87700;
+  --yellow-hover: #d28a00;
+  --red: #b84038;
+  --blue: #176eaa;
+  --green: #287c36;
+  --content-wide: 1360px;
+  --content-focus: 980px;
+  --radius: 8px;
+  --space-1: 0.35rem;
+  --space-2: 0.65rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2rem;
+  --space-6: 3rem;
+  --shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
+  --readability-scale: 1;
+  --heading: #17191c;
+  --header-bg: rgba(255, 255, 255, 0.96);
+  --panel-bg: rgba(255, 255, 255, 0.96);
+  --control-bg: #ffffff;
+  --popover-bg: #ffffff;
+  --stage-bg: rgba(255, 255, 255, 0.8);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  color: #f7f3e3;
+  background: #0d0f11;
   --board: #181a1d;
   --board-deep: #0d0f11;
   --surface: #202328;
@@ -28,17 +65,6 @@
   --red: #ef6258;
   --blue: #65b6ee;
   --green: #83d58a;
-  --content-wide: 1360px;
-  --content-focus: 980px;
-  --radius: 8px;
-  --space-1: 0.35rem;
-  --space-2: 0.65rem;
-  --space-3: 1rem;
-  --space-4: 1.5rem;
-  --space-5: 2rem;
-  --space-6: 3rem;
-  --shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
-  --readability-scale: 1;
   --heading: #ffffff;
   --header-bg: rgba(11, 12, 14, 0.96);
   --panel-bg: rgba(18, 20, 22, 0.96);

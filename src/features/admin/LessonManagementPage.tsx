@@ -135,6 +135,7 @@ export function LessonManagementPage() {
     return () => cancelAnimationFrame(frame);
   }, [validationIssues, preview]);
   const current = items.find((item) => item.lesson_id === draft?.id);
+  const publishedLessonCount = items.filter((item) => item.published).length;
   const vocabularyTables = draft?.chapters.flatMap((chapter) =>
     chapter.instructionalContent.flatMap((block) =>
       block.type === 'vocabulary-table' ? [{ chapterId: chapter.id, block }] : [],
@@ -286,7 +287,7 @@ export function LessonManagementPage() {
       <p className="researcher-kicker">Administrator workspace</p>
       <h1 className="admin-lesson-management-title">Basic Lesson Management</h1>
       <p>
-        Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} lessons and 10
+        Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} published lessons and 10
         activities per lesson.
       </p>
       {error && !draft && (
@@ -304,7 +305,7 @@ export function LessonManagementPage() {
             <div className="lesson-actions">
               <button
                 className="button"
-                disabled={items.length >= MAX_LESSONS}
+                disabled={publishedLessonCount >= MAX_LESSONS}
                 onClick={() => {
                   setDraft(newLesson(Math.max(0, ...items.map((i) => i.draft.displayOrder)) + 1));
                   setRevision(0);
@@ -315,8 +316,8 @@ export function LessonManagementPage() {
               >
                 Create lesson
               </button>
-              {items.length >= MAX_LESSONS && (
-                <span role="status">Maximum {MAX_LESSONS} lessons reached.</span>
+              {publishedLessonCount >= MAX_LESSONS && (
+                <span role="status">Maximum {MAX_LESSONS} published lessons reached.</span>
               )}
               <button className="button button--quiet" onClick={() => setReload(reload + 1)}>
                 Refresh list
