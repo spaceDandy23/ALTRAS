@@ -32,6 +32,7 @@ export const assessmentAttemptSchema = z.object({
   submittedAt: z.number().int().nonnegative().nullable(),
   score: z.number().int().min(0).max(100).nullable(),
   completionSeconds: z.number().int().nonnegative().nullable(),
+  answeringSeconds: z.number().int().nonnegative().nullable().optional(),
   contentVersion: z.number().int().positive(),
   expectedQuestionCount: z.number().int().positive(),
   answers: z.array(assessmentAnswerSchema),
@@ -62,6 +63,7 @@ export interface AssessmentDraft {
   lessonAttemptId?: string;
   pendingStart?: boolean;
   startedAt: number;
+  answeringSeconds?: number;
   contentVersion: number;
   expectedQuestionCount: number;
   questions: AssessmentQuestion[];

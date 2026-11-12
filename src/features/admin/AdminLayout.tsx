@@ -11,6 +11,7 @@ export function AdminLayout() {
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const mobileMenuRef = useRef<HTMLDetailsElement>(null);
+  const closeMobileMenu = () => mobileMenuRef.current?.removeAttribute('open');
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
@@ -36,22 +37,30 @@ export function AdminLayout() {
       </aside>
       <details className="admin-mobile-nav" ref={mobileMenuRef}>
         <summary>Admin menu</summary>
-        <nav aria-label="Admin navigation mobile">
-          <NavLink to="/admin/users">Users</NavLink>
-          <NavLink to="/admin/lessons">Lesson Management</NavLink>
-          <NavLink to="/admin/math-word-list">Math Word List</NavLink>
-        </nav>
-        <div className="admin-mobile-nav__account">
-          <span>{user?.displayName ?? 'Administrator'}</span>
-          <button
-            type="button"
-            onClick={() => {
-              mobileMenuRef.current?.removeAttribute('open');
-              setConfirmingLogout(true);
-            }}
-          >
-            Log out
-          </button>
+        <div className="admin-mobile-nav__panel">
+          <nav aria-label="Admin navigation mobile">
+            <NavLink to="/admin/users" onClick={closeMobileMenu}>
+              Users
+            </NavLink>
+            <NavLink to="/admin/lessons" onClick={closeMobileMenu}>
+              Lesson Management
+            </NavLink>
+            <NavLink to="/admin/math-word-list" onClick={closeMobileMenu}>
+              Math Word List
+            </NavLink>
+          </nav>
+          <div className="admin-mobile-nav__account">
+            <span>{user?.displayName ?? 'Administrator'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                closeMobileMenu();
+                setConfirmingLogout(true);
+              }}
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </details>
       <main className="admin-content">

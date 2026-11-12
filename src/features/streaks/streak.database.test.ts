@@ -183,7 +183,7 @@ async function history(offsets: number[]) {
 beforeAll(async () => {
   pg = new PGlite();
   await pg.exec(`
-    create role anon; create role authenticated;
+    create role anon; create role authenticated; create role service_role;
     create schema auth;
     create table auth.users (id uuid primary key, email text, encrypted_password text,
       raw_user_meta_data jsonb default '{}'::jsonb, created_at timestamptz not null default now(),
@@ -204,6 +204,12 @@ beforeAll(async () => {
     );
     await pg.exec(sql);
   }
+  // This streak suite uses the historical chapter fixtures; production keeps demo-only lessons unpublished.
+  await pg.exec(`update public.lesson_catalog
+    set published=true,
+        published_version=(select max(content_version) from public.lesson_definitions where lesson_id=lesson_catalog.lesson_id)
+    where lesson_id in ('lesson-foundational-concepts','lesson-operation-signals','lesson-order-matters',
+      'lesson-writing-verbal-expressions','lesson-translating-mathematical-expressions');`);
 }, 30000);
 
 beforeEach(async () => {

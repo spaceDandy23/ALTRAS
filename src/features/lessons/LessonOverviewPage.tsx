@@ -13,15 +13,17 @@ import { useContentStore } from '@/stores/content.store';
 import type { LearningLesson } from './domain/content.schemas';
 import { TeachingContentRenderer } from './components/TeachingContentRenderer';
 import { vocabularyTables } from './domain/content-tables';
+import { formatLessonAttemptAvailability, getConfiguredLessonAttemptLimit } from './domain/lesson-attempt-limit';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { getLesson } from './content/content.service';
-import { getLessonProgress } from './progress/progress.service';
+import { getLessonHubData, getLessonProgress } from './progress/progress.service';
 import { getActiveAttempt, restartAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { ContentState } from './components/ContentState';
 import { resolveLessonDisplayStatus } from './components/lesson-display-status';
 import { useLessonTransition } from './navigation/useLessonTransition';
 import { useLessonDrafts } from './attempts/useLessonDrafts';
 import { StarRating } from './components/StarRating';
+import { AttemptLimitNotice } from './components/AttemptLimitNotice';
 import {
   playNeutralClickOnKeyDown,
   playNeutralClickOnPointerDown,
@@ -83,15 +85,23 @@ export function LessonOverviewPage() {
       getLesson(db, lessonId),
       getLessonProgress(db, user.id, lessonId),
       getActiveAttempt(db, user.id, lessonId),
+      navigator.onLine ? getLessonHubData(db, user.id) : Promise.resolve(null),
     ])
-      .then(async ([nextLesson, nextProgress, nextActive]) => {
+      .then(async ([nextLesson, nextProgress, nextActive, hub]) => {
         const prerequisite =
           nextProgress.status === 'locked' && nextLesson.prerequisiteLessonId
             ? await getLesson(db, nextLesson.prerequisiteLessonId)
             : null;
-        const visibleLesson = nextActive
+        const lessonContent = nextActive
           ? await getLesson(db, lessonId, nextActive.id)
           : nextLesson;
+        const currentLesson = hub?.entries.find(({ lesson: candidate }) => candidate.id === lessonId)?.lesson;
+        const visibleLesson = {
+          ...lessonContent,
+          attemptLimit: currentLesson?.attemptLimit ?? lessonContent.attemptLimit,
+          attemptsUsed: currentLesson?.attemptsUsed,
+          attemptLimitReached: currentLesson?.attemptLimitReached,
+        };
         if (!current) return;
         setLesson(visibleLesson);
         setPrerequisiteTitle(prerequisite?.title ?? 'the prerequisite lesson');
@@ -113,8 +123,18 @@ export function LessonOverviewPage() {
 
   if (!user) return null;
   const displayStatus = progress ? resolveLessonDisplayStatus(progress, active !== null) : null;
+  const attemptLimitReached = lesson?.attemptLimitReached === true;
+  const attemptLimit = lesson
+    ? getConfiguredLessonAttemptLimit(lesson.attemptLimit)
+    : null;
+  const attemptAvailability = attemptLimit === null
+    ? null
+    : formatLessonAttemptAvailability(
+        attemptLimit,
+        navigator.onLine && !pendingResult ? lesson?.attemptsUsed : undefined,
+      );
   const begin = () => {
-    if (pendingResult || progress?.status === 'locked' || transitionBusy) return;
+    if (pendingResult || progress?.status === 'locked' || transitionBusy || (attemptLimitReached && !active)) return;
     void startTransition({
       loadingMessage: active ? 'Restoring your attempt…' : 'Preparing your lesson…',
       run: async () => {
@@ -128,7 +148,7 @@ export function LessonOverviewPage() {
     });
   };
   const restart = () => {
-    if (pendingResult || transitionBusy) return;
+    if (pendingResult || transitionBusy || attemptLimitReached) return;
     setConfirmRestart(false);
     void startTransition({
       loadingMessage: 'Restarting your lesson…',
@@ -171,6 +191,9 @@ export function LessonOverviewPage() {
                 <div className="lesson-overview__meta" aria-label="Lesson details">
                   <span>{lesson.activities.length} activities</span>
                   <span>{lesson.passingThreshold}% to pass</span>
+                  {progress?.status !== 'locked' && attemptAvailability && (
+                    <span className="lesson-attempt-limit-count">{attemptAvailability}</span>
+                  )}
                   {!pendingResult && result ? (
                     <>
                       <span>Score {result.finalScore}%</span>
@@ -202,50 +225,63 @@ export function LessonOverviewPage() {
                     <Button disabled>Try again</Button>
                   </div>
                 ) : result ? (
-                  <div className="lesson-overview__actions lesson-summary">
-                    <Link
-                      className="button button--primary"
-                      to={`/lessons/${lessonId}/result/${result.id}`}
-                    >
-                      View Results
-                    </Link>
-                    <Button onClick={restart} disabled={transitionBusy}>
-                      Restart Lesson
-                    </Button>
-                  </div>
+                  <>
+                    <div className="lesson-overview__actions lesson-summary">
+                      <Link
+                        className="button button--primary"
+                        to={`/lessons/${lessonId}/result/${result.id}`}
+                      >
+                        View Results
+                      </Link>
+                      <Button onClick={restart} disabled={transitionBusy || attemptLimitReached}>
+                        Restart Lesson
+                      </Button>
+                    </div>
+                    {attemptLimitReached && <AttemptLimitNotice />}
+                  </>
                 ) : progress?.status === 'locked' ? (
                   <p className="lesson-overview__actions lesson-summary">
                     Clear {prerequisiteTitle} to unlock this lesson.
                   </p>
+                ) : attemptLimitReached ? (
+                  <>
+                    <div className="lesson-overview__actions lesson-summary">
+                      <Button disabled>Try again</Button>
+                    </div>
+                    <AttemptLimitNotice />
+                  </>
                 ) : (
-                  <div className="lesson-overview__actions lesson-summary">
-                    <Button
-                      onPointerDown={playNeutralClickOnPointerDown}
-                      onKeyDown={playNeutralClickOnKeyDown}
-                      onClick={begin}
-                      disabled={transitionBusy}
-                      aria-busy={transitionBusy}
-                    >
-                      {active || displayStatus === 'in-progress'
-                        ? 'Resume lesson'
-                        : displayStatus === 'needs-retry'
-                          ? 'Try again'
-                          : 'Start lesson'}
-                    </Button>
-                    {active && (
+                  <>
+                    <div className="lesson-overview__actions lesson-summary">
                       <Button
-                        variant="quiet"
-                        disabled={transitionBusy}
                         onPointerDown={playNeutralClickOnPointerDown}
                         onKeyDown={playNeutralClickOnKeyDown}
-                        onClick={() => {
-                          setConfirmRestart(true);
-                        }}
+                        onClick={begin}
+                        disabled={transitionBusy}
+                        aria-busy={transitionBusy}
                       >
-                        Restart lesson
+                        {active || displayStatus === 'in-progress'
+                          ? 'Resume lesson'
+                          : displayStatus === 'needs-retry'
+                            ? 'Try again'
+                            : 'Start lesson'}
                       </Button>
-                    )}
-                  </div>
+                      {active && (
+                        <Button
+                          variant="quiet"
+                          disabled={transitionBusy || attemptLimitReached}
+                          onPointerDown={playNeutralClickOnPointerDown}
+                          onKeyDown={playNeutralClickOnKeyDown}
+                          onClick={() => {
+                            setConfirmRestart(true);
+                          }}
+                        >
+                          Restart lesson
+                        </Button>
+                      )}
+                    </div>
+                    {attemptLimitReached && <AttemptLimitNotice />}
+                  </>
                 )}
                 {transitionError && (
                   <p className="form-error" role="alert">

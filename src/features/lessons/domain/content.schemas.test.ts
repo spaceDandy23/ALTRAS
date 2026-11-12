@@ -36,6 +36,12 @@ describe('learning content schema', () => {
     expect(publicActivitySchema.parse(publicFields)).not.toHaveProperty('correctChoiceId');
   });
 
+  it('accepts lesson activities with no authored explanation', () => {
+    const activity = structuredClone(packagedContent.lessons[0].activities[0]);
+    delete activity.explanation;
+    expect(activitySchema.parse(activity)).not.toHaveProperty('explanation');
+  });
+
   it('provides five stable, supported Order Matters activities and verified examples', () => {
     const lesson = packagedContent.lessons.find(
       (candidate) => candidate.id === 'lesson-order-matters',

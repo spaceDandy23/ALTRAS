@@ -1,12 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
 import { LessonResultPage } from './LessonResultPage';
-import { getAttempt } from './attempts/attempt.service';
+import { getAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { getLesson } from './content/content.service';
 import { packagedContent } from './content/packaged-content';
 import { getLessonHubData } from './progress/progress.service';
@@ -38,6 +38,10 @@ function deferred<T>() {
 }
 
 describe('final lesson result actions', () => {
+  beforeEach(() => {
+    document.documentElement.dataset.motion = 'on';
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ status: 'guest', user: null });
@@ -106,6 +110,7 @@ describe('final lesson result actions', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText('Loading your result…')).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     expect(audio.playCompletion).not.toHaveBeenCalled();
     expect(audio.playReward).not.toHaveBeenCalled();
 
@@ -115,6 +120,7 @@ describe('final lesson result actions', () => {
       entries: [{ lesson, progress }],
     });
     expect(await screen.findByRole('heading', { name: 'Lesson complete' })).toBeVisible();
+    expect(await screen.findByTestId('completion-celebration')).toBeInTheDocument();
     expect(audio.playReward).toHaveBeenCalledOnce();
     expect(audio.playCompletion).not.toHaveBeenCalled();
 
@@ -130,6 +136,52 @@ describe('final lesson result actions', () => {
     );
     expect(audio.playReward).toHaveBeenCalledOnce();
     expect(audio.playCompletion).not.toHaveBeenCalled();
+  });
+
+  it('disables the retry action when authoritative attempt history reaches the lesson limit', async () => {
+    const baseLesson = packagedContent.lessons[0];
+    const lesson = { ...baseLesson, attemptLimitReached: true, attemptsUsed: 3 };
+    const userId = '20000000-0000-4000-8000-000000000011';
+    const attemptId = '10000000-0000-4000-8000-000000000011';
+    const attempt: LessonAttempt = {
+      id: attemptId, userId, lessonId: lesson.id, contentVersion: lesson.contentVersion,
+      status: 'completed', startedAt: 1, lastUpdatedAt: 2, completedAt: 2, abandonedAt: null,
+      answers: [], finalScore: 30, starCount: 0, cleared: false, xpImprovement: 0,
+    };
+    const progress: LessonProgress = {
+      id: `${userId}:${lesson.id}`, userId, lessonId: lesson.id, status: 'available',
+      bestScore: 30, bestStarCount: 0, attemptCount: 3, xpAwarded: 0,
+      firstStartedAt: 1, lastAttemptedAt: 2, clearedAt: null,
+    };
+    vi.mocked(getLesson).mockResolvedValue(baseLesson);
+    vi.mocked(getAttempt).mockResolvedValue(attempt);
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [{ lesson, progress }],
+    });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId, normalizedUsername: 'limit_result', displayName: 'Limit Result',
+        createdAt: 1, lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}/result/${attemptId}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId/result/:attemptId" element={<LessonResultPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Retry lesson' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You’ve reached the maximum number of attempts for this lesson.',
+    );
+    expect(startOrResumeAttempt).not.toHaveBeenCalled();
   });
 
   it('shows the next lesson unlock from the same post-completion progress snapshot', async () => {
@@ -379,6 +431,7 @@ describe('final lesson result actions', () => {
     expect(audio.playReward).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     expect(audio.playCompletion).toHaveBeenCalledOnce();
     expect(audio.playReward).not.toHaveBeenCalled();
   });

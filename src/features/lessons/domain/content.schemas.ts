@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const explanationSchema = z.object({
-  title: z.string().min(1),
-  body: z.string().min(1),
+  title: z.string().optional(),
+  body: z.string().optional(),
 });
 
 export const hintSchema = z.object({
@@ -32,12 +32,29 @@ export const lessonCharacterDialogueSchema = z.object({
   completion: z.string().trim().min(1).optional(),
 });
 
+export const lessonAttemptLimitSchema = z
+  .object({
+    mode: z.enum(['unlimited', 'limited']),
+    maxAttempts: z.number().int().positive().nullable(),
+  })
+  .superRefine((limit, context) => {
+    if (limit.mode === 'limited' && limit.maxAttempts === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['maxAttempts'],
+        message: 'A limited lesson must have a positive whole-number attempt limit.',
+      });
+    }
+  });
+
+export const unlimitedLessonAttempts = { mode: 'unlimited', maxAttempts: null } as const;
+
 const activityBaseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   prompt: z.string().min(1),
   hint: hintSchema.optional(),
-  explanation: explanationSchema,
+  explanation: explanationSchema.optional(),
   characterDialogue: activityCharacterDialogueSchema.optional(),
 });
 
@@ -66,7 +83,10 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     mathStatement: z.string().min(1),
     tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string().min(1)).min(2),
-    acceptedTokenSequences: z.array(z.array(z.string().min(1)).min(2)).min(1).optional(),
+    acceptedTokenSequences: z
+      .array(z.array(z.string().min(1)).min(2))
+      .min(1)
+      .optional(),
   })
   .superRefine((activity, context) => {
     const tokenIds = activity.tokens.map((token) => token.id);
@@ -99,7 +119,8 @@ export const organizeTranslateActivitySchema = activityBaseSchema
     });
     if (
       activity.acceptedTokenSequences &&
-      JSON.stringify(activity.correctTokenSequence) !== JSON.stringify(activity.acceptedTokenSequences[0])
+      JSON.stringify(activity.correctTokenSequence) !==
+        JSON.stringify(activity.acceptedTokenSequences[0])
     ) {
       context.addIssue({
         code: 'custom',
@@ -238,6 +259,17 @@ export const lessonAssessmentFlowSchema = z.object({
   postTest: z.literal('post-test').optional(),
 });
 
+export const lessonAssessmentInstructionSchema = z.object({
+  heading: z.string().trim().min(1).max(160).optional(),
+  body: z.string().trim().min(1).max(1000).optional(),
+  dialogue: z.string().trim().min(1).max(500).optional(),
+});
+
+export const lessonAssessmentInstructionsSchema = z.object({
+  'pre-test': lessonAssessmentInstructionSchema.optional(),
+  'post-test': lessonAssessmentInstructionSchema.optional(),
+});
+
 export const sectionSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -266,9 +298,11 @@ export const lessonMetadataSchema = z.object({
   prerequisiteLessonId: z.string().min(1).optional(),
   contentStatus: z.enum(['playable', 'preview']),
   passingThreshold: z.number().int().min(0).max(100),
+  attemptLimit: lessonAttemptLimitSchema.optional(),
   contentVersion: z.number().int().positive(),
   characterId: z.string().trim().min(1).optional(),
   characterDialogue: lessonCharacterDialogueSchema.optional(),
+  assessmentInstructions: lessonAssessmentInstructionsSchema.optional(),
 });
 
 export const lessonSchema = lessonMetadataSchema
@@ -351,6 +385,7 @@ export const publicActivitySchema = z.discriminatedUnion('type', [
     mathStatement: z.string().min(1),
     tokens: z.array(activityTokenSchema).min(2),
     correctTokenSequence: z.array(z.string()).optional(),
+    explanation: explanationSchema.optional(),
   }),
   z.object({
     ...chooseCorrectTranslationActivitySchema.shape,
@@ -366,6 +401,8 @@ export const publicLessonChapterSchema = z.object({
   activities: z.array(publicActivitySchema),
 });
 export const publicLessonSchema = lessonMetadataSchema.extend({
+  attemptsUsed: z.number().int().nonnegative().optional(),
+  attemptLimitReached: z.boolean().optional(),
   instructionalContent: z.array(instructionalContentBlockSchema),
   activities: z.array(publicActivitySchema).min(1).max(10),
   chapters: z.array(publicLessonChapterSchema).optional(),
@@ -386,5 +423,8 @@ export type LessonChapter = z.infer<typeof lessonChapterSchema>;
 export type LearningSection = z.infer<typeof sectionSchema>;
 export type LearningUnit = z.infer<typeof unitSchema>;
 export type LearningLessonMetadata = z.infer<typeof lessonMetadataSchema>;
+export type LessonAttemptLimit = z.infer<typeof lessonAttemptLimitSchema>;
+export type LessonAssessmentInstruction = z.infer<typeof lessonAssessmentInstructionSchema>;
+export type LessonAssessmentInstructions = z.infer<typeof lessonAssessmentInstructionsSchema>;
 export type LearningLesson = z.infer<typeof publicLessonSchema>;
 export type PackagedContent = z.infer<typeof packagedContentSchema>;

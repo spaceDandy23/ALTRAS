@@ -23,7 +23,9 @@ function ContentTableView({ table, index }: { table: ContentTable; index: number
           {table.rows.map((row) => (
             <tr key={row.id}>
               {table.columns.map((column) => (
-                <td key={column.id}>{row.cells[column.id]}</td>
+                <td key={column.id} data-label={column.label}>
+                  {row.cells[column.id]}
+                </td>
               ))}
             </tr>
           ))}

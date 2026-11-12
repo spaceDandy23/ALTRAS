@@ -1,116 +1,97 @@
 # ALTRAS
 
-**Live demo:** https://altras.vercel.app/
 
-ALTRAS is an online-first educational web application that teaches students how to translate verbal phrases and word problems into mathematical expressions. Students authenticate with Supabase and access validated lessons, activities, assessments, and progress tracking. Phase 2 provides a complete learning loop with bundled lessons, two playable activity types, pre/post-tests, persisted attempts, scoring, stars, XP, and prerequisite unlocking.
+ALTRAS is a React/TypeScript mathematics learning app for translating verbal phrases into algebraic expressions. It includes a student lesson experience, researcher reporting, an administrator CMS, Supabase-backed authentication and progression, and local-first recovery for lesson work.
 
-> Assessments, authentication, and progress are stored online with Supabase. The app works best with a stable internet connection.
+## Requirements
 
-## Requirements and setup
-
-- Node.js 22.12 or newer (Node.js 24 is supported)
+- Node.js 22.12 or newer
 - npm 11 or newer
-- A current Chromium, Firefox, or Safari browser with IndexedDB and service-worker support
+- A current browser with IndexedDB and service-worker support
+- A Supabase project for authentication, content, attempts, and reporting
 
 ```bash
 npm install
 npm run dev
 ```
 
-The interface targets landscape laptop and desktop screens with a minimum width of 1024 px.
+The local app is available at `http://localhost:5173` by default.
+
+## Supabase setup
+
+Create `.env.local` from `.env.example`, link the project, and apply migrations:
+
+```bash
+npx supabase link --project-ref <project-ref>
+npx supabase db push --linked
+```
+
+Username login for manually provisioned accounts uses a rate-limited Edge Function. Configure its allowed web origins and a long random hashing salt, then deploy it:
+
+```bash
+npx supabase secrets set ALTRAS_ALLOWED_ORIGINS=http://localhost:5173,https://your-app.example
+npx supabase secrets set LOGIN_RATE_LIMIT_SALT=<long-random-secret>
+npx supabase functions deploy username-login --no-verify-jwt
+```
+
+The function is intentionally public because it is the login endpoint. It resolves identities with service-role-only database functions, applies per-address and per-username limits, and verifies passwords through the normal Supabase Auth sign-in endpoint. Never expose the service-role key in browser environment variables.
+
+## Application structure
+
+The student lesson flow is:
+
+```text
+Lesson overview
+â”œâ”€â”€ Pre-test
+â”œâ”€â”€ Chapters
+â”‚   â”œâ”€â”€ Teaching content
+â”‚   â””â”€â”€ Activities
+â”œâ”€â”€ Activity result
+â””â”€â”€ Post-test and official lesson result
+```
+
+Lessons and their published versions are server-authored through the administrator CMS. Supported content includes chapter teaching blocks, dynamic tables, lesson-scoped pre/post assessments, and the current activity types. Published versions are immutable for attempts already in progress.
+
+Supabase is authoritative for accounts, lesson content, answers, scores, stars, XP, unlocking, attempts, and researcher results. Dexie stores user/lesson/attempt-scoped drafts and cached published content so accepted local work is not lost during connectivity changes.
+
+## Offline behavior
+
+After an authenticated student starts a lesson online and its package is cached, lesson and assessment work is written locally first. Pending work is replayed idempotently after reconnect, including when the student navigates away. Official scores, stars, XP, clearing, and unlocks remain server-authoritative.
+
+Known boundary: a cold offline launch cannot establish or revalidate an unknown Supabase session/role. The PWA shell can load, but authentication bootstrap requires connectivity. Clearing browser/site data removes local cached work that has not synchronized; it does not remove server records.
+
+## Scoring and attempts
+
+- Lesson attempt limits are configurable per published lesson; the server enforces them.
+- `0â€“49%` gives 0 stars.
+- `50â€“75%` gives 1 star.
+- `76â€“99%` gives 2 stars.
+- `100%` gives 3 stars.
+- XP, rewards, best results, prerequisites, and retry history are calculated and preserved by Supabase.
+
+## Workspaces
+
+- **Students:** Home, Lessons, Almanac/Math Word List, Profile, and Settings.
+- **Researchers:** view-only participant, assessment, lesson, and report views.
+- **Administrators:** account provisioning and lesson/assessment/Math Word List authoring.
+
+Researcher and administrator authorization use their dedicated membership tables and secured RPCs. They do not receive student progression records or student audio behavior.
+
+## Temporary visual-test content
+
+Migration `202611050001_visual_test_lessons.sql` historically created and published demo curriculum. Migration `202611110002_unpublish_visual_test_lessons.sql` safely unpublishes any of those known lessons that still contain explicit temporary markers. It preserves drafts, immutable lesson definitions, attempts, and progress. Publish approved curriculum through the CMS before client testing.
 
 ## Quality checks
 
 ```bash
-npm run format:check
-npm run lint
 npm test
-npm run test:coverage
+npm run lint
 npm run build
+npm run format:check
 ```
 
-Preview the production build with `npm run preview`.
+Preview the production/PWA build with:
 
-## Installation
-
-1. Run `npm run build`, then `npm run preview`.
-2. Use the browser's **Install app** action to add ALTRAS as a PWA.
-3. The installed app caches static assets and lesson content for faster loading and offline browsing of cached pages.
-
-For full functionality including assessments, progress syncing, and authentication, an internet connection is required.
-
-## Learning content model
-
-Packaged content lives in [`src/features/lessons/content/packaged-content.ts`](src/features/lessons/content/packaged-content.ts) and is validated by discriminated Zod schemas in [`content.schemas.ts`](src/features/lessons/domain/content.schemas.ts).
-
-The hierarchy is:
-
-```text
-Section → Unit → Lesson → instructional blocks and activities
+```bash
+npm run preview
 ```
-
-Lessons use stable string IDs, a content version, prerequisite ID, passing threshold, concepts, safe text-only instructional blocks, and activities. The current packaged-content version is 2. Phase 2 supports:
-
-- `find-word`: choose a stable choice ID to complete a verbal statement.
-- `organize-translate`: arrange stable token IDs into an exact verbal sequence without requiring drag-and-drop.
-
-### Adding or editing a lesson
-
-1. Add or update the section, unit, and lesson objects in `packaged-content.ts`.
-2. Give every content entity, block, activity, choice, and token a stable ID.
-3. Never place HTML or executable code in lesson data.
-4. Increase the lesson's `contentVersion` whenever its activities or instructional blocks change.
-5. Increase `PACKAGED_CONTENT_VERSION` for every packaged release.
-6. Run the tests and production build. Invalid content fails before any content rows are written.
-
-Initialization uses `bulkPut`, so repeated runs are idempotent. Student progress and attempts live in Supabase and are unaffected by browser content-cache refreshes. Stable compatible IDs preserve progress. A future breaking change should introduce a new lesson/activity ID or an explicit Supabase migration rather than silently changing the meaning of an existing ID.
-
-## Browser storage
-
-Dexie remains non-authoritative browser storage for validated bundled content and assessment recovery:
-
-- `sections`, `units`, `lessons`, and `lessonItems`
-- `contentVersions`, which records the packaged educational release
-- `assessmentDrafts`, which keeps user-scoped, revisioned recovery snapshots while Supabase synchronization is pending
-
-Authentication, profiles, settings, progress, attempts, assessments, and researcher results are never stored authoritatively in Dexie. Supabase is the source of truth. A small user-ID-keyed `localStorage` cache applies theme, readability, and motion preferences before authenticated settings load, then reconciles with Supabase.
-
-Researcher authorization is not stored on profiles. Membership in `researcher_users`, queried through the secured `is_researcher()` function, is the single authorization source used by RLS, RPCs, route resolution, and the researcher workspace.
-
-## Attempts, scoring, and unlocking
-
-- Submitted answers are written to Supabase and the UI advances only after persistence succeeds.
-- At most one active attempt is maintained per user and lesson by the attempt service.
-- Returning students can resume or confirm a restart. Restarting marks the old attempt abandoned; it never deletes history.
-- An activity records only its first explicit submitted answer. Completed attempts are idempotent.
-- Score is the rounded percentage of activities answered correctly on the first submission.
-- Below 70% gives zero stars and does not clear the lesson.
-- 70–84% gives one star, 85–99% gives two stars, and 100% gives three stars.
-- A prerequisite unlocks only after it is cleared. Later lower results never replace best score or stars.
-
-XP is deliberately simple: `best score + (best stars × 10)`, for a maximum of 130 XP per lesson. Progress stores the derived best-performance XP; each attempt exposes only the positive improvement. Repeating the same or a lower result awards no additional XP.
-
-## Playable lessons
-
-- **Words That Signal Operations** contains six activities introducing common operation words and order-sensitive phrases.
-- **Order Matters** unlocks after the first lesson is cleared. Its five activities practice “less than,” “subtracted from,” “more than,” and subtraction written in named order using the existing Find-the-Word and Organize-and-Translate formats.
-
-Packaged-content version 2 changed Lesson 2 from a preview to a playable lesson while retaining its stable lesson ID and prerequisite. Existing Lesson 1 attempts and progress remain separate from content installation and are preserved.
-
-## Math word list
-
-Authenticated students open **Almanac** from the lesson hub, then choose the locally bundled **Word list** at `/lessons/almanac/word-list`. The Almanac keeps the intended `Lessons → Almanac → Review or Word list` hierarchy; Review is disabled and marked **Coming next**. The reference groups addition, subtraction, multiplication, and division vocabulary with examples and explicit guidance for order-sensitive phrases. Search is immediate, case-insensitive, and stored only in page memory.
-
-The reference is typed, Zod-validated application content. It does not use IndexedDB or change packaged lesson version 2, accounts, settings, attempts, progress, XP, stars, or unlocking.
-
-## Current limitations
-
-- Assessments, authentication, and progress sync require an active internet connection.
-- Data is stored on Supabase; different computers with the same account will synchronize online data.
-- Browser/site data clearing removes cached app assets, lesson content, and visual preferences, but not authoritative Supabase records.
-- Backup/import and research export are not available yet.
-- Only two lessons and two activity formats are currently available.
-- There is no Lesson 3. Additional lessons are deferred until finalized, reviewed content is provided.
-- XP values are provisional and there are no levels, streaks, achievements, or leaderboards.
-
-See [`docs/PHASE_PLAN.md`](docs/PHASE_PLAN.md) for the complete scope, deferred ideas, and future phases.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { captureSyncSession, requireSyncSession } from '@/services/sync-session';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { CharacterAssistant } from '@/features/characters/components/CharacterAssistant';
@@ -46,6 +47,12 @@ import {
   getCachedLessonAssessmentQuestions,
   getLessonDraft,
 } from '@/features/lessons/attempts/lesson-draft.service';
+import { getLesson } from '@/features/lessons/content/content.service';
+import type { LessonAssessmentInstruction } from '@/features/lessons/domain/content.schemas';
+import {
+  LessonElapsedTimer,
+  lessonTimerStorageKey,
+} from '@/features/lessons/components/LessonElapsedTimer';
 import {
   completeAssessment,
   getAssessmentAttempt,
@@ -64,10 +71,32 @@ export function AssessmentPage() {
   const parsedKind = assessmentKindSchema.safeParse(kindParam ?? '');
   const kind = parsedKind.success ? parsedKind.data : null;
   const user = useAuthStore((state) => state.user);
+  const location = useLocation();
+  const navigate = useNavigate();
   const scope = useMemo(
     () => (lessonId && attemptId ? { lessonId, lessonAttemptId: attemptId } : undefined),
     [attemptId, lessonId],
   );
+  const initialQuestions = useMemo(() => {
+    if (!kind || !lessonId || !attemptId || !location.state || typeof location.state !== 'object')
+      return undefined;
+    const state = location.state as Record<string, unknown>;
+    if (state.lessonId !== lessonId || state.attemptId !== attemptId || state.assessment !== kind)
+      return undefined;
+    const parsed = z.array(assessmentQuestionSchema).safeParse(state.questions);
+    return parsed.success &&
+      parsed.data.length > 0 &&
+      parsed.data.every((q) => q.assessment === kind)
+      ? parsed.data
+      : undefined;
+  }, [attemptId, kind, lessonId, location.state]);
+  useEffect(() => {
+    if (!initialQuestions) return;
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+  }, [initialQuestions, location.hash, location.pathname, location.search, navigate]);
   if (!kind)
     return (
       <section className="assessment-shell assessment-state panel">
@@ -82,6 +111,7 @@ export function AssessmentPage() {
       userId={user.id}
       kind={kind}
       scope={scope}
+      initialQuestions={initialQuestions}
     />
   );
 }
@@ -90,17 +120,25 @@ function AssessmentSession({
   userId,
   kind,
   scope,
+  initialQuestions,
 }: {
   userId: string;
   kind: AssessmentKind;
   scope?: AssessmentScope;
+  initialQuestions?: AssessmentQuestion[];
 }) {
   const navigate = useNavigate();
   const localLessonAssessment = Boolean(scope);
-  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  const lessonTimerKey = scope
+    ? lessonTimerStorageKey(userId, scope.lessonId, scope.lessonAttemptId)
+    : undefined;
+  const [questions, setQuestions] = useState<AssessmentQuestion[]>(initialQuestions ?? []);
+  const [assessmentInstruction, setAssessmentInstruction] = useState<
+    LessonAssessmentInstruction | undefined
+  >();
   const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
   const [draft, setDraft] = useState<AssessmentDraft | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialQuestions?.length);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncNotice, setSyncNotice] = useState<SyncNotice>('none');
@@ -111,6 +149,7 @@ function AssessmentSession({
   const [durability, setDurability] = useState<'saving' | 'saved' | 'failed'>('saved');
   const [connectionOnline, setConnectionOnline] = useState(() => navigator.onLine);
   const [completionWarning, setCompletionWarning] = useState('');
+  const [lessonStartedAt, setLessonStartedAt] = useState<number | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -177,6 +216,8 @@ function AssessmentSession({
           getLessonDraft(userId, scope.lessonId, scope.lessonAttemptId),
         ]);
         if (!active) return;
+        setLessonStartedAt(cached?.attempt.startedAt ?? null);
+        setAssessmentInstruction(cached?.lesson.assessmentInstructions?.[kind]);
         if (local) {
           if (local.syncStatus === 'pending_submission') {
             await submitLocalLessonAssessment(local);
@@ -202,89 +243,106 @@ function AssessmentSession({
         scope
           ? getCachedLessonAssessmentQuestions(userId, scope.lessonId, scope.lessonAttemptId, kind)
           : Promise.resolve([]),
-      ]).then(async ([questionsResult, attemptResult, localResult, cachedQuestionsResult]) => {
-        if (!active) return;
-        if (localResult.status === 'rejected')
-          throw new Error('Unable to read the local test draft. Please retry.');
-        const local = localResult.value;
-        const remoteQuestions =
-          questionsResult.status === 'fulfilled' ? questionsResult.value : [];
-        const cachedQuestions =
-          local?.questions.length
+        scope ? getLesson(db, scope.lessonId, scope.lessonAttemptId) : Promise.resolve(null),
+      ]).then(
+        async ([
+          questionsResult,
+          attemptResult,
+          localResult,
+          cachedQuestionsResult,
+          lessonResult,
+        ]) => {
+          if (!active) return;
+          if (localResult.status === 'rejected')
+            throw new Error('Unable to read the local test draft. Please retry.');
+          const local = localResult.value;
+          const remoteQuestions =
+            questionsResult.status === 'fulfilled' ? questionsResult.value : [];
+          const cachedQuestions = local?.questions.length
             ? local.questions
-            : cachedQuestionsResult.status === 'fulfilled' ? cachedQuestionsResult.value : [];
-        const loadedQuestions = remoteQuestions.length > 0 ? remoteQuestions : cachedQuestions;
-        const server = attemptResult.status === 'fulfilled' ? attemptResult.value : null;
-        if (
-          server &&
-          (server.userId !== userId ||
-            server.assessment !== kind ||
-            (server.lessonAttemptId ?? undefined) !== scope?.lessonAttemptId)
-        )
-          throw new Error('The test belongs to another session.');
-        // A validated local draft carries the immutable question snapshot for
-        // this attempt. Remote question loading may legitimately fail while
-        // offline, so only fail when neither source supplied usable content.
-        if (loadedQuestions.length === 0)
-          throw new Error('Unable to load the test questions. Please retry.');
-        if (server?.status === 'submitted') {
+            : cachedQuestionsResult.status === 'fulfilled'
+              ? cachedQuestionsResult.value
+              : [];
+          if (lessonResult.status === 'fulfilled')
+            setAssessmentInstruction(lessonResult.value?.assessmentInstructions?.[kind]);
+          const loadedQuestions = remoteQuestions.length > 0 ? remoteQuestions : cachedQuestions;
+          const server = attemptResult.status === 'fulfilled' ? attemptResult.value : null;
           if (
-            local &&
-            local.attemptId === server.id &&
-            local.revision === server.submittedRevision &&
-            local.mutationId === server.acceptedMutationId
-          ) {
-            try {
-              await deleteAssessmentDraft(local.id, local.revision, local.mutationId);
-            } catch {
-              if (active)
-                setCompletionWarning(
-                  'Your official result is saved, but the local draft could not be cleared.',
-                );
+            server &&
+            (server.userId !== userId ||
+              server.assessment !== kind ||
+              (server.lessonAttemptId ?? undefined) !== scope?.lessonAttemptId)
+          )
+            throw new Error('The test belongs to another session.');
+          // A validated local draft carries the immutable question snapshot for
+          // this attempt. Remote question loading may legitimately fail while
+          // offline, so only fail when neither source supplied usable content.
+          if (loadedQuestions.length === 0)
+            throw new Error('Unable to load the test questions. Please retry.');
+          if (server?.status === 'submitted') {
+            if (
+              local &&
+              local.attemptId === server.id &&
+              local.revision === server.submittedRevision &&
+              local.mutationId === server.acceptedMutationId
+            ) {
+              try {
+                await deleteAssessmentDraft(local.id, local.revision, local.mutationId);
+              } catch {
+                if (active)
+                  setCompletionWarning(
+                    'Your official result is saved, but the local draft could not be cleared.',
+                  );
+              }
+            } else if (local)
+              setCompletionWarning(
+                'Your official result is saved. A different local revision has been kept on this device.',
+              );
+            if (!active) return;
+            setQuestions(loadedQuestions);
+            setAttempt(server);
+            applyDraft(null);
+          } else if (server) {
+            const reconciled = reconcileAssessmentDraft(server, local, loadedQuestions);
+            setQuestions(reconciled.questions);
+            await persist(reconciled, false).catch(() => undefined);
+            if (!active) return;
+            setQuestionIndex(
+              Math.min(
+                reconciled.currentQuestionIndex,
+                Math.max(reconciled.questions.length - 1, 0),
+              ),
+            );
+          } else if (local) {
+            if (attemptResult.status === 'fulfilled')
+              throw new Error(
+                'The saved local attempt could not be confirmed. Please retry online.',
+              );
+            validateLocalDraft(local, userId, kind);
+            setQuestions(local.questions);
+            applyDraft({ ...local, mutationId: local.mutationId ?? crypto.randomUUID() });
+            setQuestionIndex(
+              Math.max(0, Math.min(local.currentQuestionIndex, local.questions.length - 1)),
+            );
+            setSyncNotice(navigator.onLine ? 'pending' : 'offline');
+          } else {
+            if (attemptResult.status === 'rejected') throw attemptResult.reason;
+            if (loadedQuestions.length === 0) {
+              if (questionsResult.status === 'rejected') throw questionsResult.reason;
+              throw new Error(
+                `No questions are available for this ${kind} in the lesson's pinned assessment version.`,
+              );
             }
-          } else if (local)
-            setCompletionWarning(
-              'Your official result is saved. A different local revision has been kept on this device.',
-            );
-          if (!active) return;
-          setQuestions(loadedQuestions);
-          setAttempt(server);
-          applyDraft(null);
-        } else if (server) {
-          const reconciled = reconcileAssessmentDraft(server, local, loadedQuestions);
-          setQuestions(reconciled.questions);
-          await persist(reconciled, false).catch(() => undefined);
-          if (!active) return;
-          setQuestionIndex(
-            Math.min(reconciled.currentQuestionIndex, Math.max(reconciled.questions.length - 1, 0)),
-          );
-        } else if (local) {
-          if (attemptResult.status === 'fulfilled')
-            throw new Error('The saved local attempt could not be confirmed. Please retry online.');
-          validateLocalDraft(local, userId, kind);
-          setQuestions(local.questions);
-          applyDraft({ ...local, mutationId: local.mutationId ?? crypto.randomUUID() });
-          setQuestionIndex(
-            Math.max(0, Math.min(local.currentQuestionIndex, local.questions.length - 1)),
-          );
-          setSyncNotice(navigator.onLine ? 'pending' : 'offline');
-        } else {
-          if (attemptResult.status === 'rejected') throw attemptResult.reason;
-          if (loadedQuestions.length === 0) {
-            if (questionsResult.status === 'rejected') throw questionsResult.reason;
-            throw new Error(
-              `No questions are available for this ${kind} in the lesson's pinned assessment version.`,
-            );
+            for (const question of loadedQuestions) {
+              assessmentQuestionSchema.parse(question);
+              if (question.assessment !== kind)
+                throw new Error('The test questions do not match this assessment.');
+            }
+            setQuestions(loadedQuestions);
+            setAttempt(null);
           }
-          for (const question of loadedQuestions) {
-            assessmentQuestionSchema.parse(question);
-            if (question.assessment !== kind)
-              throw new Error('The test questions do not match this assessment.');
-          }
-          setQuestions(loadedQuestions);
-          setAttempt(null);
-        }
-      });
+        },
+      );
     };
     void load()
       .catch((cause: unknown) => {
@@ -337,7 +395,15 @@ function AssessmentSession({
         ).catch(() => undefined);
       },
       complete: (current) =>
-        completeAssessment(userId, kind, current.attemptId, current.revision, scope, check),
+        completeAssessment(
+          userId,
+          kind,
+          current.attemptId,
+          current.revision,
+          scope,
+          check,
+          current.answeringSeconds ?? 0,
+        ),
       acknowledge: async (snapshot) => {
         const current = draftRef.current;
         if (!active || !current || current.id !== snapshot.id) return;
@@ -438,11 +504,17 @@ function AssessmentSession({
     [questions],
   );
   if (loading)
-    return <LoadingState variant="page" message={`Preparing the ${title.toLowerCase()}…`} />;
+    return (
+      <div className="assessment-loading-with-timer lesson-timer-host">
+        <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
+        <LoadingState variant="page" message={`Preparing the ${title.toLowerCase()}…`} />
+      </div>
+    );
   if (bootstrapError)
     return (
-      <section className="assessment-shell assessment-state panel">
+      <section className="assessment-shell assessment-state panel lesson-timer-host">
         <p className="assessment-kicker">{title}</p>
+        <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
         <h1>We couldn&rsquo;t load this test</h1>
         <p role="alert">{bootstrapError}</p>
         <div className="result-actions">
@@ -455,7 +527,10 @@ function AssessmentSession({
           >
             Try again
           </Button>
-          <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
+          <Link
+            className="button button--secondary"
+            to={scope ? `/lessons/${scope.lessonId}` : '/'}
+          >
             {scope ? 'Return to lesson' : 'Return home'}
           </Link>
         </div>
@@ -468,6 +543,8 @@ function AssessmentSession({
           title={title}
           kind={kind}
           attempt={attempt}
+          lessonStartedAt={lessonStartedAt}
+          lessonTimerKey={lessonTimerKey}
           continueLesson={
             scope
               ? async () => {
@@ -477,9 +554,13 @@ function AssessmentSession({
                     scope.lessonAttemptId,
                     kind,
                   );
-                  navigate(`/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`, {
-                    replace: true,
-                  });
+                  if (kind === 'post-test')
+                    await flushPendingLessonAttempt(userId, scope.lessonId, scope.lessonAttemptId);
+                  const destination =
+                    kind === 'post-test'
+                      ? `/lessons/${scope.lessonId}/result/${scope.lessonAttemptId}`
+                      : `/lessons/${scope.lessonId}/play/${scope.lessonAttemptId}`;
+                  navigate(destination, { replace: true });
                 }
               : undefined
           }
@@ -489,12 +570,20 @@ function AssessmentSession({
     );
   if (draft?.syncStatus === 'pending_submission') {
     if (localLessonAssessment && navigator.onLine && submitting) {
-      return <LoadingState variant="page" message="Confirming your official result…" />;
+      return (
+        <LoadingState
+          variant="page"
+          message={
+            kind === 'post-test' ? 'Submitting your Post-test…' : 'Confirming your official result…'
+          }
+        />
+      );
     }
     if (localLessonAssessment && scope) {
       return (
-        <section className="assessment-shell assessment-state panel">
+        <section className="assessment-shell assessment-state panel lesson-timer-host">
           <p className="assessment-kicker">{title}</p>
+          <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
           <h1>{connectionOnline ? 'Submission saved' : 'Answers saved on this device'}</h1>
           {!connectionOnline && (
             <p role="status">
@@ -525,8 +614,9 @@ function AssessmentSession({
       );
     }
     return (
-      <section className="assessment-shell assessment-state panel">
+      <section className="assessment-shell assessment-state panel lesson-timer-host">
         <p className="assessment-kicker">{title}</p>
+        <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
         <h1>Submission saved</h1>
         <LoadingState
           variant="page"
@@ -537,7 +627,10 @@ function AssessmentSession({
           }
         />
         <div className="result-actions">
-          <Link className="button button--secondary" to={scope ? `/lessons/${scope.lessonId}` : '/'}>
+          <Link
+            className="button button--secondary"
+            to={scope ? `/lessons/${scope.lessonId}` : '/'}
+          >
             {scope ? 'Return to lesson' : 'Return home'}
           </Link>
         </div>
@@ -595,6 +688,9 @@ function AssessmentSession({
         title={title}
         kind={kind}
         questionCount={questions.length}
+        instruction={assessmentInstruction}
+        lessonStartedAt={lessonStartedAt}
+        lessonTimerKey={lessonTimerKey}
         placeholders={placeholders}
         error={error}
         starting={starting}
@@ -660,7 +756,12 @@ function AssessmentSession({
     try {
       if (localLessonAssessment) {
         await localSaveQueueRef.current;
-        const saved = await submitLocalLessonAssessment(current);
+        if (kind === 'post-test' && navigator.onLine && scope) {
+          // Supabase accepts the Post-test only after queued lesson progress
+          // advances the attempt to the Post-test stage.
+          await flushPendingLessonAttempt(userId, scope.lessonId, scope.lessonAttemptId);
+        }
+        const saved = await submitLocalLessonAssessment(pending);
         if (!mounted.current) return;
         applyDraft(saved);
         setDurability('saved');
@@ -676,11 +777,12 @@ function AssessmentSession({
         await flushPendingAssessmentDraft(saved);
         if (!mounted.current) return;
         if (kind === 'post-test') {
-          await flushPendingLessonAttempt(userId, scope!.lessonId, scope!.lessonAttemptId);
-          if (!mounted.current) return;
-          navigate(`/lessons/${scope!.lessonId}/result/${scope!.lessonAttemptId}`, {
-            replace: true,
-          });
+          const completed = await getAssessmentAttempt(userId, kind, scope);
+          if (!completed || completed.status !== 'submitted')
+            throw new Error('Unable to confirm this result. Please retry.');
+          applyDraft(null);
+          setAttempt(completed);
+          setSyncNotice('none');
           return;
         }
         const completed = await getAssessmentAttempt(userId, kind, scope);
@@ -751,7 +853,11 @@ function AssessmentSession({
           ? 'Saved on this device.'
           : '';
   return (
-    <section className="assessment-player page-enter" aria-labelledby="assessment-question">
+    <section
+      className="assessment-player lesson-timer-host page-enter"
+      aria-labelledby="assessment-question"
+    >
+      <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
       <header className="assessment-player__header">
         <Link to={scope ? `/lessons/${scope.lessonId}` : '/'}>← Save and exit</Link>
         <div>
@@ -847,6 +953,9 @@ function AssessmentIntroduction({
   title,
   kind,
   questionCount,
+  instruction,
+  lessonStartedAt,
+  lessonTimerKey,
   placeholders,
   error,
   starting,
@@ -856,23 +965,34 @@ function AssessmentIntroduction({
   title: string;
   kind: 'pre-test' | 'post-test';
   questionCount: number;
+  instruction?: LessonAssessmentInstruction;
+  lessonStartedAt: number | null;
+  lessonTimerKey?: string;
   placeholders: boolean;
   error: string;
   starting: boolean;
   begin: () => Promise<void>;
   exitPath: string;
 }) {
+  const fallbackHeading = kind === 'pre-test' ? 'Check what you know' : 'Show what you learned';
+  const fallbackBody =
+    'This test has {{questionCount}} questions. Progress is saved on this device and synced securely when online. The test can only be submitted once.';
+  const heading = instruction?.heading?.trim() || fallbackHeading;
+  const body = (instruction?.body?.trim() || fallbackBody).replaceAll(
+    '{{questionCount}}',
+    String(questionCount),
+  );
   return (
-    <section className="assessment-shell panel page-enter">
+    <section className="assessment-shell panel lesson-timer-host page-enter">
       <p className="assessment-kicker">{title}</p>
-      <h1>{kind === 'pre-test' ? 'Check what you know' : 'Show what you learned'}</h1>
-      <p>
-        This test has {questionCount} questions. Progress is saved on this device and synced
-        securely when online. The test can only be submitted once.
-      </p>
+      <LessonElapsedTimer startedAt={lessonStartedAt} storageKey={lessonTimerKey} />
+      <h1>{heading}</h1>
+      <p>{body}</p>
       <CharacterAssistant
         state="neutral"
-        dialogue={resolveCharacterDialogue('assessment-introduction')}
+        dialogue={resolveCharacterDialogue('assessment-introduction', {
+          override: instruction?.dialogue,
+        })}
         presentation="inline"
         reactionKey={`${kind}-introduction`}
         announcement="off"
@@ -905,11 +1025,15 @@ function AssessmentResult({
   title,
   kind,
   attempt,
+  lessonStartedAt,
+  lessonTimerKey,
   continueLesson,
 }: {
   title: string;
   kind: 'pre-test' | 'post-test';
   attempt: AssessmentAttempt;
+  lessonStartedAt: number | null;
+  lessonTimerKey?: string;
   continueLesson?: () => Promise<void>;
 }) {
   const completionPlayedRef = useRef<string | null>(null);
@@ -937,8 +1061,13 @@ function AssessmentResult({
   }, [attempt.id, attempt.score, attempt.status]);
 
   return (
-    <section className="assessment-shell assessment-state assessment-result panel page-enter">
+    <section className="assessment-shell assessment-state assessment-result panel lesson-timer-host page-enter">
       <p className="assessment-kicker">{title} complete</p>
+      <LessonElapsedTimer
+        startedAt={lessonStartedAt}
+        stoppedAt={attempt.submittedAt}
+        storageKey={lessonTimerKey}
+      />
       <h1>{attempt.score}%</h1>
       <p>Your official score has been saved to your account.</p>
       <CharacterAssistant
@@ -954,8 +1083,12 @@ function AssessmentResult({
           <dd>{attempt.expectedQuestionCount}</dd>
         </div>
         <div>
-          <dt>Completion time</dt>
-          <dd>{duration(attempt.completionSeconds ?? 0)}</dd>
+          <dt>Time spent answering</dt>
+          <dd>
+            {attempt.answeringSeconds === null || attempt.answeringSeconds === undefined
+              ? 'Not recorded'
+              : duration(attempt.answeringSeconds)}
+          </dd>
         </div>
       </dl>
       <div className="result-actions assessment-result__actions">

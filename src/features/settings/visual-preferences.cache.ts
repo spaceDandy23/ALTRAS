@@ -17,7 +17,7 @@ const cachedVisualPreferencesSchema = z.object({
 });
 
 const defaultVisualPreferences: VisualPreferences = {
-  theme: 'dark',
+  theme: 'light',
   readabilityScale: 1,
   animationsEnabled: true,
 };

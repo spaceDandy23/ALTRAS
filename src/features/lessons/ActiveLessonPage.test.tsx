@@ -123,10 +123,89 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByText(activity.prompt)).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'n + 5' }));
     await user.click(screen.getByRole('button', { name: 'Submit answer' }));
     expect(await screen.findByText('Correct')).toBeVisible();
+    expect(await screen.findByTestId('completion-celebration')).toBeInTheDocument();
     expect(submitActivityAnswer).toHaveBeenCalledWith(db, attemptId, activity.id, 'sum', expect.anything());
+  });
+
+  it('shows the server-released correct answer and authored multiline explanation after a wrong answer', async () => {
+    const parsed = activitySchema.parse({
+      id: 'wrong-answer-translation',
+      type: 'choose-correct-translation',
+      title: 'Choose the correct expression',
+      prompt: 'The sum of a number and five',
+      choices: [
+        { id: 'sum', label: 'n + 5' },
+        { id: 'difference', label: 'n - 5' },
+      ],
+      correctChoiceId: 'sum',
+      explanation: { title: 'Check the operation', body: 'Step 1:\nAdd both sides' },
+    });
+    if (parsed.type !== 'choose-correct-translation') throw new Error('Invalid test activity.');
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const lesson = {
+      ...structuredClone(packagedContent.lessons[0]),
+      activities: [{ ...parsed, correctChoiceId: undefined, explanation: undefined }],
+    };
+    const releasedLesson = { ...lesson, activities: [parsed] };
+    const activeAttempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: [],
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+    };
+    vi.mocked(getLesson)
+      .mockResolvedValueOnce(lesson)
+      .mockResolvedValueOnce(releasedLesson);
+    vi.mocked(getAttempt).mockResolvedValue(activeAttempt);
+    vi.mocked(submitActivityAnswer).mockResolvedValue({
+      ...activeAttempt,
+      answers: [{
+        activityId: parsed.id,
+        activityType: parsed.type,
+        answer: 'difference',
+        isCorrect: false,
+        submittedAt: 2,
+      }],
+    });
+    useAuthStore.setState({ status: 'authenticated', user: {
+      id: userId, normalizedUsername: 'student', displayName: 'Student', createdAt: 1, lastLoginAt: 1,
+    } });
+    useContentStore.setState({ status: 'ready', error: null });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={[`/lessons/${lesson.id}/play/${attemptId}`]}><Routes>
+      <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+    </Routes></MemoryRouter>);
+
+    await user.click(await screen.findByRole('radio', { name: 'n - 5' }));
+    await user.click(screen.getByRole('button', { name: 'Submit answer' }));
+
+    expect(await screen.findByText('Not quite')).toBeVisible();
+    expect(screen.queryByTestId('completion-celebration')).not.toBeInTheDocument();
+    expect(document.querySelector('.answer-feedback__correct-answer')?.textContent).toBe(
+      'Correct answer: n + 5',
+    );
+    expect(screen.getByRole('heading', { name: 'Check the operation' })).toBeVisible();
+    const explanation = screen.getByText((_content, element) =>
+      element?.classList.contains('answer-feedback__explanation') ?? false,
+    );
+    expect(explanation.textContent).toBe('Step 1:\nAdd both sides');
+    expect(getLesson).toHaveBeenLastCalledWith(db, lesson.id, attemptId);
+    expect(playSfx).toHaveBeenCalledWith('incorrect');
   });
 
   it.each([
@@ -434,6 +513,7 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByRole('heading', { name: lesson.activities[0].title })).toBeVisible();
+    expect(screen.getByText(`1 / ${lesson.activities.length}`)).toBeVisible();
     expect(
       screen.queryByRole('heading', { name: 'Lesson attempt unavailable' }),
     ).not.toBeInTheDocument();
@@ -483,6 +563,7 @@ describe('active lesson loading failures', () => {
     );
 
     await user.click(await screen.findByRole('radio', { name: 'sum' }));
+    expect(screen.getByText(`1 / ${lesson.activities.length}`)).toBeVisible();
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
     await user.click(screen.getByRole('button', { name: 'Submit answer' }));
     expect(await screen.findByText(/Saved on this device · Waiting to sync/)).toBeVisible();
@@ -490,6 +571,7 @@ describe('active lesson loading failures', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
+    expect(screen.getByText(`2 / ${lesson.activities.length}`)).toBeVisible();
     await expect(getLessonDraft(userId, lesson.id, attemptId)).resolves.toMatchObject({
       currentActivityIndex: 1,
       pendingAnswers: [{ activityId: lesson.activities[0].id, answer: 'sum' }],
@@ -507,6 +589,7 @@ describe('active lesson loading failures', () => {
     );
 
     expect(await screen.findByRole('heading', { name: lesson.activities[1].title })).toBeVisible();
+    expect(screen.getByText(`2 / ${lesson.activities.length}`)).toBeVisible();
     expect(getLesson).not.toHaveBeenCalled();
     expect(getAttempt).not.toHaveBeenCalled();
   });
@@ -586,6 +669,104 @@ describe('active lesson loading failures', () => {
     expect(playSfx).toHaveBeenCalledWith('correct');
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
+
+  it.each([0, 1, packagedContent.lessons[0].activities.length])(
+    'renders the %i-correct activity result once and restores it without repeating progression',
+    async (correctCount) => {
+    const lesson = {
+      ...structuredClone(packagedContent.lessons[0]),
+      chapters: [{
+        id: 'chapter-practice',
+        title: 'Practice',
+        displayOrder: 1,
+        instructionalContent: [],
+        activities: structuredClone(packagedContent.lessons[0].activities),
+      }],
+    };
+    const userId = '20000000-0000-4000-8000-000000000002';
+    const attemptId = '10000000-0000-4000-8000-000000000001';
+    const activeAttempt: LessonAttempt = {
+      id: attemptId,
+      userId,
+      lessonId: lesson.id,
+      contentVersion: lesson.contentVersion,
+      status: 'active',
+      startedAt: 1,
+      lastUpdatedAt: 1,
+      completedAt: null,
+      abandonedAt: null,
+      answers: lesson.activities.map((activity, index) => ({
+        activityId: activity.id,
+        activityType: activity.type,
+        answer: activity.type === 'organize-translate'
+          ? activity.correctTokenSequence
+          : activity.correctChoiceId,
+        isCorrect: index < correctCount,
+        submittedAt: index + 2,
+      })),
+      finalScore: null,
+      starCount: null,
+      cleared: null,
+      xpImprovement: 0,
+      flowStage: 'chapter-activity',
+      currentChapterId: 'chapter-practice',
+    };
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    await saveLessonDraft(createLessonDraft(activeAttempt, lesson));
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    vi.mocked(getAttempt).mockResolvedValue(activeAttempt);
+    useAuthStore.setState({ status: 'authenticated', user: {
+      id: userId,
+      normalizedUsername: 'student',
+      displayName: 'Student',
+      createdAt: 1,
+      lastLoginAt: 1,
+    } });
+    useContentStore.setState({ status: 'ready', error: null });
+    const user = userEvent.setup();
+    const route = `/lessons/${lesson.id}/play/${attemptId}`;
+    const renderPage = () => render(<MemoryRouter initialEntries={[route]}><Routes>
+      <Route path="/lessons/:lessonId/play/:attemptId" element={<ActiveLessonPage />} />
+    </Routes></MemoryRouter>);
+    const view = renderPage();
+
+    expect(await screen.findByRole('heading', { name: lesson.activities.at(-1)?.title })).toBeVisible();
+    expect(screen.queryByText('Activities complete')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'See results' }));
+    expect(await screen.findByText('Activities complete')).toBeVisible();
+    expect(screen.getByRole('heading', {
+      name: `${Math.round((correctCount / lesson.activities.length) * 100)}%`,
+    })).toBeVisible();
+    expect(screen.getByText(`${correctCount} / ${lesson.activities.length}`)).toBeVisible();
+    await expect(getLessonDraft(userId, lesson.id, attemptId)).resolves.toMatchObject({
+      activityResultPending: true,
+    });
+    expect(completeAttempt).not.toHaveBeenCalled();
+    expect(advanceAttemptStage).not.toHaveBeenCalled();
+    expect(playSfx).toHaveBeenCalledWith('click');
+    expect(playSfx).not.toHaveBeenCalledWith('reward');
+    expect(playSfx).not.toHaveBeenCalledWith('complete');
+
+    view.unmount();
+    vi.mocked(playSfx).mockClear();
+    renderPage();
+    expect(await screen.findByText('Activities complete')).toBeVisible();
+    expect(screen.getByText(`${correctCount} / ${lesson.activities.length}`)).toBeVisible();
+    expect(completeAttempt).not.toHaveBeenCalled();
+    expect(advanceAttemptStage).not.toHaveBeenCalled();
+    expect(playSfx).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await expect(getLessonDraft(userId, lesson.id, attemptId)).resolves.toMatchObject({
+      activityResultPending: false,
+      pendingCompletion: true,
+      pendingStageTransitions: [{
+        fromStage: 'chapter-activity',
+        toStage: 'ready-to-complete',
+      }],
+    });
+    },
+  );
 
   it('leaves no pending work for global sync after completing a lesson online', async () => {
     const lesson = packagedContent.lessons[0];

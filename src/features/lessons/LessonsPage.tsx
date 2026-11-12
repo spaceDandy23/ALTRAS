@@ -16,6 +16,7 @@ import { getLessonHubData, getTotalXp, type LessonHubData } from './progress/pro
 import { useLessonDrafts } from './attempts/useLessonDrafts';
 import { catalogShell } from './content/catalog-shell';
 import { lessonChapters } from './domain/lesson-flow';
+import { formatLessonAttemptAvailability, getConfiguredLessonAttemptLimit } from './domain/lesson-attempt-limit';
 
 export function LessonsPage() {
   const user = useAuthStore((state) => state.user);
@@ -90,7 +91,8 @@ export function LessonsPage() {
             </section>
           )}
           <ol className="lesson-path" aria-label="Lesson sequence">
-            {entries.map(({ lesson, progress }, index) => {
+            {entries.map(({ lesson, progress }) => {
+              const lessonNumber = lesson.displayOrder;
               const local = drafts?.get(lesson.id);
               const pending = local?.pendingCompletion;
               const result = local?.attempt.status === 'completed' ? local.attempt : null;
@@ -103,6 +105,13 @@ export function LessonsPage() {
               const showChapters = lesson.contentStatus !== 'preview' && chapters.length > 0;
               const chaptersExpanded = !collapsedChapterLessons.has(lesson.id);
               const lessonStatus = pending ? 'pending' : result ? (result.cleared ? 'cleared' : 'needs-retry') : displayStatus;
+              const attemptLimit = getConfiguredLessonAttemptLimit(lesson.attemptLimit);
+              const attemptAvailability = attemptLimit === null
+                ? null
+                : formatLessonAttemptAvailability(
+                    attemptLimit,
+                    navigator.onLine && !pending ? lesson.attemptsUsed : undefined,
+                  );
               const node = (
                 <article className={`lesson-node lesson-node--${displayStatus}`}>
                   <Link
@@ -113,11 +122,11 @@ export function LessonsPage() {
                     onClick={progress?.status === 'locked' ? (event) => event.preventDefault() : undefined}
                   >
                     <div className="lesson-node__marker" aria-hidden="true">
-                      {progress?.status === 'locked' ? '⌁' : !pending && (result?.cleared || progress?.status === 'cleared') ? '✓' : index + 1}
+                      {progress?.status === 'locked' ? '⌁' : !pending && (result?.cleared || progress?.status === 'cleared') ? '✓' : lessonNumber}
                     </div>
                     <div className="lesson-node__content">
                       <div className="lesson-node__title-line">
-                        <span>Lesson {index + 1}</span>
+                        <span>Lesson {lessonNumber}</span>
                         <span className={`lesson-node__status-label lesson-node__status-label--${lessonStatus}`} role={pending ? 'status' : undefined}>
                           {pending ? 'Results pending sync' : result ? (result.cleared ? 'Cleared' : 'Needs retry') : progress ? <LessonStatusBadge progress={progress} /> : 'In progress'}
                         </span>
@@ -131,6 +140,9 @@ export function LessonsPage() {
                       ) : progress?.status === 'locked' || lesson.contentStatus === 'preview' ? (
                         <span className="lesson-node__not-started">{progress?.status === 'locked' ? 'Clear Lesson 1 to unlock' : 'Lesson preview'}</span>
                       ) : null}
+                      {attemptAvailability && progress?.status !== 'locked' && lesson.contentStatus !== 'preview' && (
+                        <p className="lesson-attempt-limit-count">{attemptAvailability}</p>
+                      )}
                       {progress?.status !== 'locked' && (
                         <span className="lesson-node__action">
                           {pending ? 'View saved attempt' : result ? 'Lesson overview' : lesson.contentStatus === 'preview' ? 'View lesson' : displayStatus === 'in-progress' ? 'Resume lesson' : displayStatus === 'cleared' ? 'Review lesson' : displayStatus === 'needs-retry' ? 'Try lesson again' : 'Start lesson'}

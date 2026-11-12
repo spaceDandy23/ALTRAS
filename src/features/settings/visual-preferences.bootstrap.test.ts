@@ -62,7 +62,7 @@ describe('visual preference bootstrap', () => {
     activateVisualPreferencesForUser(userB);
     expect(getActiveVisualPreferencesUserId()).toBe(userB);
     expect(document.documentElement.style.getPropertyValue('--readability-scale')).toBe('1');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('deactivates the visible preference without deleting the saved user preference', () => {

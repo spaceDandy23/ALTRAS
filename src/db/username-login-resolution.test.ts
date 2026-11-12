@@ -3,38 +3,35 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(
-  resolve('supabase/migrations/202609080004_resolve_username_login_identity.sql'),
+  resolve('supabase/migrations/202611110001_secure_username_login_and_active_time.sql'),
   'utf8',
 );
+const edgeFunction = readFileSync(resolve('supabase/functions/username-login/index.ts'), 'utf8');
 
-describe('username login identity resolution migration', () => {
-  it('uses a narrowly scoped secure resolver with explicit grants only', () => {
-    expect(migration).toContain('create or replace function public.resolve_login_email');
-    expect(migration).toContain('returns text');
-    expect(migration).toContain('security definer');
-    expect(migration).toContain("set search_path = ''");
-    expect(migration).toContain(
-      'revoke all on function public.resolve_login_email(text, text) from public;',
-    );
-    expect(migration).toContain(
-      'grant execute on function public.resolve_login_email(text, text) to anon, authenticated;',
-    );
+describe('rate-limited username login resolution', () => {
+  it('removes the browser-callable password resolver', () => {
+    expect(migration).toContain('drop function if exists public.resolve_login_email(text, text)');
+    expect(migration).not.toContain('grant execute on function public.resolve_login_email');
   });
 
-  it('returns an Auth email only after valid username and password verification', () => {
-    expect(migration).toContain("normalized_username !~ '^[a-z0-9_-]{3,24}$'");
-    expect(migration).toContain('join auth.users auth_user on auth_user.id = profile.user_id');
-    expect(migration).toContain('auth_user.encrypted_password');
-    expect(migration).toContain("execute 'select extensions.crypt($1, $2)'");
-    expect(migration).toContain('if verified_hash is distinct from password_hash then');
-    expect(migration).toContain('return resolved_email;');
+  it('keeps identity resolution and rate-limit state service-role only', () => {
+    expect(migration).toContain('public.resolve_login_identity_for_edge');
+    expect(migration).toContain('public.consume_username_login_rate_limit');
+    expect(migration).toContain(
+      'grant execute on function public.resolve_login_identity_for_edge(text) to service_role',
+    );
+    expect(migration).toContain(
+      'grant execute on function public.consume_username_login_rate_limit(text, integer, integer) to service_role',
+    );
+    expect(migration).not.toContain('resolve_login_identity_for_edge(text) to anon');
   });
 
-  it('does not expose profile records, arbitrary Auth data, or a username-existence result', () => {
-    expect(migration).toContain('if resolved_email is null or password_hash is null then\n    return null;');
-    expect(migration).toContain('if verified_hash is distinct from password_hash then\n    return null;');
-    expect(migration).not.toContain('returns table');
-    expect(migration).not.toContain('select profile.*');
-    expect(migration).not.toContain('select auth_user.*');
+  it('rate limits before using the normal Supabase Auth sign-in endpoint', () => {
+    expect(edgeFunction).toContain("rpc('consume_username_login_rate_limit'");
+    expect(edgeFunction).toContain('auth.signInWithPassword');
+    expect(edgeFunction.indexOf("rpc('consume_username_login_rate_limit'")).toBeLessThan(
+      edgeFunction.indexOf('auth.signInWithPassword'),
+    );
+    expect(edgeFunction).not.toContain('encrypted_password');
   });
 });

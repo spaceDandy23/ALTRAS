@@ -210,6 +210,38 @@ describe('configurable teaching tables', () => {
         .getAllByRole('cell')
         .map((cell) => cell.textContent),
     ).toEqual(['Addition', '+', 'Subtraction', '−']);
+    expect(within(rendered[0]).getByRole('cell', { name: 'Addition' })).toHaveAttribute(
+      'data-label',
+      'Operation',
+    );
+    expect(within(rendered[0]).getByRole('cell', { name: '+' })).toHaveAttribute(
+      'data-label',
+      'Symbol',
+    );
     expect(screen.queryByText('operations', { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('preserves authored line breaks in teaching text and dynamic-table cells', () => {
+    render(
+      <TeachingContentRenderer
+        blocks={[
+          { id: 'lesson-text', type: 'paragraph', title: 'Steps', body: 'Line 1\nLine 2' },
+          {
+            id: 'table',
+            type: 'content-table',
+            tables: [{
+              id: 'steps',
+              columns: [{ id: 'step', label: 'Step' }],
+              rows: [{ id: 'one', cells: { step: 'First line\nSecond line' } }],
+            }],
+          },
+        ]}
+      />,
+    );
+    expect(document.querySelector('.chapter-teaching__block--paragraph p')?.textContent).toBe(
+      'Line 1\nLine 2',
+    );
+    expect(screen.getByRole('cell').textContent).toBe('First line\nSecond line');
+    expect(screen.getByRole('cell')).toHaveAttribute('data-label', 'Step');
   });
 });

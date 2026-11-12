@@ -163,6 +163,38 @@ describe('lesson hub authoritative progress', () => {
     expect(getLessonHubData).toHaveBeenCalledTimes(2);
   });
 
+  it('uses the authoritative display order for lesson numbers', async () => {
+    const lesson = { ...packagedContent.lessons[0], displayOrder: 13 };
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [{
+        lesson,
+        progress: {
+          id: `${userId}:${lesson.id}`,
+          userId,
+          lessonId: lesson.id,
+          status: 'available',
+          bestScore: 0,
+          bestStarCount: 0,
+          attemptCount: 0,
+          xpAwarded: 0,
+          firstStartedAt: null,
+          lastAttemptedAt: null,
+          clearedAt: null,
+        },
+      }],
+    });
+    vi.mocked(getTotalXp).mockResolvedValue(0);
+    authenticate();
+
+    render(<MemoryRouter><LessonsPage /></MemoryRouter>);
+
+    expect(await screen.findByText('Lesson 13')).toBeVisible();
+    expect(document.querySelector('.lesson-node__marker')).toHaveTextContent('13');
+    expect(screen.queryByText('Lesson 1')).not.toBeInTheDocument();
+  });
+
   it('labels an uncleared completed attempt as needing retry with a matching action', async () => {
     const [first, second] = packagedContent.lessons;
     vi.mocked(getLessonHubData).mockResolvedValue({

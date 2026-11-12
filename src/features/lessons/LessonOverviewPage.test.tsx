@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
 import { useContentStore } from '@/stores/content.store';
 import type { LessonAttempt, LessonProgress } from '@/types/learning';
@@ -10,7 +10,7 @@ import { LessonOverviewPage } from './LessonOverviewPage';
 import { getActiveAttempt, startOrResumeAttempt } from './attempts/attempt.service';
 import { getLesson } from './content/content.service';
 import { packagedContent } from './content/packaged-content';
-import { getLessonProgress } from './progress/progress.service';
+import { getLessonHubData, getLessonProgress } from './progress/progress.service';
 import { db } from '@/db/database';
 import { createLessonDraft, saveLessonDraft } from './attempts/lesson-draft.service';
 
@@ -20,7 +20,10 @@ vi.mock('./attempts/attempt.service', () => ({
   startOrResumeAttempt: vi.fn(),
 }));
 vi.mock('./content/content.service', () => ({ getLesson: vi.fn() }));
-vi.mock('./progress/progress.service', () => ({ getLessonProgress: vi.fn() }));
+vi.mock('./progress/progress.service', () => ({
+  getLessonHubData: vi.fn(),
+  getLessonProgress: vi.fn(),
+}));
 vi.mock('@/services/audio/audio.manager', () => ({ playSfx: vi.fn() }));
 
 function RouteDriver({ destination }: { destination: string }) {
@@ -32,6 +35,14 @@ function RouteDriver({ destination }: { destination: string }) {
 }
 
 describe('lesson overview transitions', () => {
+  beforeEach(() => {
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [],
+    });
+  });
+
   afterEach(async () => {
     vi.clearAllMocks();
     await db.lessonDrafts.clear();
@@ -406,5 +417,56 @@ describe('lesson overview transitions', () => {
     await act(async () => resolveFirst(firstLesson));
     expect(screen.getByRole('heading', { name: secondLesson.title })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: firstLesson.title })).not.toBeInTheDocument();
+  });
+
+  it('blocks retry and explains the server-reported attempt limit', async () => {
+    const lesson = { ...packagedContent.lessons[0], attemptLimitReached: true };
+    const userId = '20000000-0000-4000-8000-000000000010';
+    vi.mocked(getLesson).mockResolvedValue(lesson);
+    const progress: LessonProgress = {
+      id: `${userId}:${lesson.id}`,
+      userId,
+      lessonId: lesson.id,
+      status: 'available',
+      bestScore: 40,
+      bestStarCount: 0,
+      attemptCount: 1,
+      xpAwarded: 0,
+      firstStartedAt: 1,
+      lastAttemptedAt: 2,
+      clearedAt: null,
+    };
+    vi.mocked(getLessonProgress).mockResolvedValue(progress);
+    vi.mocked(getLessonHubData).mockResolvedValue({
+      section: packagedContent.sections[0],
+      unit: packagedContent.units[0],
+      entries: [{ lesson, progress }],
+    });
+    vi.mocked(getActiveAttempt).mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: {
+        id: userId,
+        normalizedUsername: 'attempt_limit',
+        displayName: 'Attempt Limit',
+        createdAt: 1,
+        lastLoginAt: 1,
+      },
+    });
+    useContentStore.setState({ status: 'ready', error: null });
+
+    render(
+      <MemoryRouter initialEntries={[`/lessons/${lesson.id}`]}>
+        <Routes>
+          <Route path="/lessons/:lessonId" element={<LessonOverviewPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You’ve reached the maximum number of attempts for this lesson.',
+    );
+    expect(startOrResumeAttempt).not.toHaveBeenCalled();
   });
 });

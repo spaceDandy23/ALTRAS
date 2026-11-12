@@ -139,6 +139,9 @@ async function createOnlineAttempt(
   if (error) {
     const existing = await getOnlineActiveAttempt(userId, lessonId);
     if (existing) return { attempt: existing, created: false };
+    if (error.message.includes('Lesson attempt limit reached.')) {
+      throw new AttemptError('You’ve reached the maximum number of attempts for this lesson.');
+    }
     throw new AttemptError('Unable to start this online attempt.');
   }
   const id = z.object({ id: z.string().uuid() }).parse(data).id;
@@ -202,7 +205,7 @@ export async function restartOnlineAttempt(
 }
 
 export async function submitOnlineActivityAnswer(
-  database: AltrasDatabase,
+  _database: AltrasDatabase,
   attemptId: string,
   activityId: string,
   answer: ActivityAnswer,
@@ -218,11 +221,6 @@ export async function submitOnlineActivityAnswer(
   checkSync();
   if (attempt.status !== 'active') throw new AttemptError('This attempt is already closed.');
   if (attempt.answers.some((item) => item.activityId === activityId)) return attempt;
-  const lesson = await getLesson(database, attempt.lessonId, attempt.id);
-  checkSync();
-  const activity = lesson.activities.find((item) => item.id === activityId);
-  if (!activity) throw new AttemptError('This activity is not part of the lesson.');
-
   const { data, error } = await getSupabaseClient().rpc('submit_lesson_activity_answer', {
     p_attempt_id: attemptId,
     p_activity_id: activityId,

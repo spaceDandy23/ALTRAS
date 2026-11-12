@@ -81,17 +81,28 @@ function isInvalidCredentials(message: string): boolean {
   return message.toLocaleLowerCase('en-US').includes('invalid login credentials');
 }
 
-async function resolveManualLoginEmail(username: string, password: string): Promise<string> {
-  const { data, error } = await getSupabaseClient().rpc('resolve_login_email', {
-    p_username: username,
-    p_password: password,
-  });
+const resolvedLoginSchema = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+});
 
-  if (error || typeof data !== 'string' || !data) {
+async function resolveManualLogin(username: string, password: string): Promise<User> {
+  const supabase = getSupabaseClient();
+  const invoked = await supabase.functions.invoke('username-login', {
+    body: { username, password },
+  });
+  const resolved = invoked.error ? null : resolvedLoginSchema.safeParse(invoked.data);
+  if (!resolved || !resolved.success) {
     throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
   }
-
-  return data;
+  const { data, error } = await supabase.auth.setSession({
+    access_token: resolved.data.accessToken,
+    refresh_token: resolved.data.refreshToken,
+  });
+  if (error || !data.user) {
+    throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
+  }
+  return data.user;
 }
 
 export async function registerOnlineUser(input: RegistrationInput): Promise<PublicUser> {
@@ -147,15 +158,7 @@ export async function loginOnlineUser(input: LoginInput): Promise<PublicUser> {
     throw mapAuthFailure(error.message, 'Unable to sign in to the online account.');
   }
 
-  const email = await resolveManualLoginEmail(result.data.username, result.data.password);
-  const fallback = await supabase.auth.signInWithPassword({
-    email,
-    password: result.data.password,
-  });
-  if (fallback.error || !fallback.data.user) {
-    throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
-  }
-  return toPublicUser(fallback.data.user);
+  return toPublicUser(await resolveManualLogin(result.data.username, result.data.password));
 }
 
 export async function restoreOnlineSession(): Promise<PublicUser | null> {

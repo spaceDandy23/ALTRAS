@@ -21,6 +21,9 @@ import {
 import { hasPendingLessonUnlock } from './progress/progress-transitions';
 import { StarRating } from './components/StarRating';
 import { ContentState } from './components/ContentState';
+import { CompletionCelebration } from '@/components/ui/CompletionCelebration';
+import { AttemptLimitNotice } from './components/AttemptLimitNotice';
+import { formatLessonAttemptAvailability, getConfiguredLessonAttemptLimit } from './domain/lesson-attempt-limit';
 import { useLessonTransition } from './navigation/useLessonTransition';
 import {
   playNeutralClickOnKeyDown,
@@ -32,6 +35,7 @@ import {
   playReward,
 } from '@/services/audio/audio.manager';
 import { StudentStreak } from '@/features/streaks/StudentStreak';
+import { LessonElapsedTimer, lessonTimerStorageKey } from './components/LessonElapsedTimer';
 
 function LessonResultAudio({ attempt }: { attempt: LessonAttempt }) {
   const playedAttemptRef = useRef<string | null>(null);
@@ -80,7 +84,13 @@ export function LessonResultPage() {
           (await getLessonProgress(db, user.id, lessonId));
         if (!current) return;
         if (!loadedProgress) throw new Error('Lesson progress is unavailable.');
-        setLesson(loadedLesson);
+        const currentLesson = hub.entries.find(({ lesson: candidate }) => candidate.id === loadedLesson.id)?.lesson;
+        setLesson({
+          ...loadedLesson,
+          attemptLimit: currentLesson?.attemptLimit ?? loadedLesson.attemptLimit,
+          attemptsUsed: currentLesson?.attemptsUsed,
+          attemptLimitReached: currentLesson?.attemptLimitReached,
+        });
         setAttempt(loadedAttempt);
         setProgress(loadedProgress);
         setNewlyUnlocked(hasPendingLessonUnlock(user.id, loadedLesson.id));
@@ -139,6 +149,7 @@ export function LessonResultPage() {
     );
   }
   const retry = () => {
+    if (lesson.attemptLimitReached || transitionBusy) return;
     void startTransition({
       loadingMessage: 'Preparing your lesson…',
       run: async () => {
@@ -148,6 +159,10 @@ export function LessonResultPage() {
       fallbackError: 'Unable to open this lesson.',
     });
   };
+  const attemptLimit = getConfiguredLessonAttemptLimit(lesson.attemptLimit);
+  const attemptAvailability = attemptLimit === null
+    ? null
+    : formatLessonAttemptAvailability(attemptLimit, navigator.onLine ? lesson.attemptsUsed : undefined);
   const correct = attempt.answers.filter((answer) => answer.isCorrect).length;
   const characterReaction = resolveLessonResultReaction(attempt.cleared === true);
   const nextDestination = nextEntry
@@ -162,7 +177,13 @@ export function LessonResultPage() {
         className={`result-page result-page--${attempt.cleared ? 'cleared' : 'failed'} page-enter`}
       >
         <LessonResultAudio attempt={attempt} />
-        <main className="result-board" aria-live="polite">
+        <main className="result-board lesson-timer-host" aria-live="polite">
+          <LessonElapsedTimer
+            startedAt={attempt.startedAt}
+            stoppedAt={attempt.completedAt}
+            storageKey={lessonTimerStorageKey(user.id, lesson.id, attempt.id)}
+          />
+          {attempt.cleared && <CompletionCelebration eventKey={`lesson:${attempt.id}`} />}
           <div className="result-board__mark" aria-hidden="true">
             {attempt.cleared ? '✓' : '↻'}
           </div>
@@ -188,6 +209,9 @@ export function LessonResultPage() {
             <span>
               {progress.attemptCount} {progress.attemptCount === 1 ? 'attempt' : 'attempts'}
             </span>
+            {attemptAvailability && (
+              <span className="lesson-attempt-limit-count">{attemptAvailability}</span>
+            )}
           </div>
           <CharacterAssistant
             characterId={lesson.characterId}
@@ -215,7 +239,7 @@ export function LessonResultPage() {
                 onClick={() => {
                   retry();
                 }}
-                disabled={transitionBusy}
+                disabled={transitionBusy || lesson.attemptLimitReached === true}
                 aria-busy={transitionBusy}
               >
                 {attempt.cleared ? 'Review lesson' : 'Retry lesson'}
@@ -230,6 +254,9 @@ export function LessonResultPage() {
               Lessons
             </Link>
           </div>
+          {lesson.attemptLimitReached && (
+            <AttemptLimitNotice />
+          )}
           {transitionError && (
             <p className="form-error" role="alert">
               {transitionError}
