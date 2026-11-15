@@ -46,11 +46,14 @@ export function ChooseCorrectTranslationActivityView({
   return (
     <div className="activity-card activity-card--choose-translation">
       <div className="activity-heading">
-        <span className="activity-kind">Choose the correct translation</span>
-        <h1>{activity.title}</h1>
+        <p className="activity-instruction--translation">{activity.prompt}</p>
+        <h1 className="activity-question--translation">{activity.title}</h1>
       </div>
-      <fieldset className="find-word-fieldset" disabled={Boolean(submitted || pendingAnswer)}>
-        <legend className="activity-instruction--translation">{activity.prompt}</legend>
+      <fieldset
+        className="find-word-fieldset"
+        aria-label="Translation answer choices"
+        disabled={Boolean(submitted || pendingAnswer)}
+      >
         <div className="choice-grid">
           {activity.choices.map((choice) => {
             const selectedChoice = visibleAnswer === choice.id;

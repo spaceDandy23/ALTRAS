@@ -3207,12 +3207,22 @@ h3 {
   font-size: 1rem;
 }
 
-.find-word-fieldset .activity-instruction--translation {
-  display: block;
-  color: var(--paper);
+.activity-heading .activity-instruction--translation {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
   font-family: inherit;
-  font-size: clamp(1.1rem, 2.5vw, 1.25rem);
-  line-height: 1.5;
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.activity-heading h1.activity-question--translation {
+  margin: 0 0 1.25rem;
+  color: var(--heading);
+  font-family: inherit;
+  font-size: clamp(1.85rem, 3.6vw, 2.8rem);
+  line-height: 1.15;
   overflow-wrap: anywhere;
   text-align: center;
 }

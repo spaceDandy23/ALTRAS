@@ -39,9 +39,11 @@ describe('accessible lesson activity interactions', () => {
       />,
     );
 
-    expect(screen.getByText('The sum of a number and five')).toHaveClass(
-      'activity-instruction--translation',
-    );
+    const instruction = screen.getByText('The sum of a number and five');
+    const question = screen.getByRole('heading', { name: 'Choose the matching expression' });
+    expect(instruction).toHaveClass('activity-instruction--translation');
+    expect(instruction.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText('Choose the correct translation')).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'n + 5' })).toBeInTheDocument();
     expect(screen.queryByText('private-choice-id')).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'n + 5' }));
