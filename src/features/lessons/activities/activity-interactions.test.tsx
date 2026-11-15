@@ -39,7 +39,9 @@ describe('accessible lesson activity interactions', () => {
       />,
     );
 
-    expect(screen.getByText('The sum of a number and five')).toBeInTheDocument();
+    expect(screen.getByText('The sum of a number and five')).toHaveClass(
+      'activity-instruction--translation',
+    );
     expect(screen.getByRole('radio', { name: 'n + 5' })).toBeInTheDocument();
     expect(screen.queryByText('private-choice-id')).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'n + 5' }));

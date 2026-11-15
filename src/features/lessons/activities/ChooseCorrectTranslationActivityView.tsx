@@ -50,7 +50,7 @@ export function ChooseCorrectTranslationActivityView({
         <h1>{activity.title}</h1>
       </div>
       <fieldset className="find-word-fieldset" disabled={Boolean(submitted || pendingAnswer)}>
-        <legend>{activity.prompt}</legend>
+        <legend className="activity-instruction--translation">{activity.prompt}</legend>
         <div className="choice-grid">
           {activity.choices.map((choice) => {
             const selectedChoice = visibleAnswer === choice.id;

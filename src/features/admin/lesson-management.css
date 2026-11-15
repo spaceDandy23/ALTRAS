@@ -550,6 +550,11 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
   background: var(--control-bg);
   font-weight: 700;
 }
+.admin-content .button,
+.admin-content .button:hover:not(:disabled),
+.admin-content .button:active:not(:disabled) {
+  box-shadow: none;
+}
 .admin-content button.admin-icon-button,
 .admin-content button.admin-drag-handle {
   display: inline-flex;
