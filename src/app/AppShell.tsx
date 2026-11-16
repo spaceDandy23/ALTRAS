@@ -72,7 +72,7 @@ export function AppShell() {
     <div className="app-shell">
       <AlgebraicBackdrop />
       <aside className="student-sidebar" aria-label="Student navigation">
-        <AltrasLogo linked={!activeLesson} />
+        <AltrasLogo linked={!activeLesson} to="/home" />
         <StudentNavigation user={user} audioMuted={audioMuted} onToggleAudio={toggleAudioMute} onHome={requestHome} onLogout={requestLogout} />
       </aside>
       {mobileNavigationOpen && (
@@ -80,7 +80,7 @@ export function AppShell() {
           <button className="student-mobile-drawer__close" type="button" aria-label="Close navigation" onClick={() => setMobileNavigationOpen(false)}>
             <X aria-hidden="true" />
           </button>
-          <AltrasLogo linked={!activeLesson} />
+          <AltrasLogo linked={!activeLesson} to="/home" />
           <StudentNavigation
             user={user}
             audioMuted={audioMuted}
@@ -96,7 +96,7 @@ export function AppShell() {
           <button className="student-mobile-nav-toggle" type="button" aria-label="Open navigation" aria-expanded={mobileNavigationOpen} onClick={() => setMobileNavigationOpen(true)}>
             <Menu aria-hidden="true" />
           </button>
-          <div className="app-header__mobile-logo"><AltrasLogo linked={!activeLesson} /></div>
+          <div className="app-header__mobile-logo"><AltrasLogo linked={!activeLesson} to="/home" /></div>
         </header>
         <div className="student-status-region">
           <OfflineStatus />
@@ -104,7 +104,7 @@ export function AppShell() {
         </div>
         <main className="app-content"><Outlet /></main>
       </div>
-      <ConfirmDialog open={confirmingHome} title="Leave active lesson?" confirmLabel="Go home" onCancel={() => setConfirmingHome(false)} onConfirm={() => { setConfirmingHome(false); navigate('/'); }}>
+      <ConfirmDialog open={confirmingHome} title="Leave active lesson?" confirmLabel="Go home" onCancel={() => setConfirmingHome(false)} onConfirm={() => { setConfirmingHome(false); navigate('/home'); }}>
         Your submitted answers are saved. You can resume this lesson from Home or Lessons.
       </ConfirmDialog>
       <ConfirmDialog open={confirmingLogout} title="Leave this session?" confirmLabel="Log out" onCancel={() => setConfirmingLogout(false)} onConfirm={() => void handleLogout()}>
@@ -135,7 +135,7 @@ function StudentNavigation({
   return (
     <>
       <nav className="student-sidebar__nav" aria-label="Student pages">
-        <NavLink end to="/" {...navProps} onClick={(event) => { onHome(event); onNavigate?.(); }}><Home aria-hidden="true" /> Home</NavLink>
+        <NavLink end to="/home" {...navProps} onClick={(event) => { onHome(event); onNavigate?.(); }}><Home aria-hidden="true" /> Home</NavLink>
         <NavLink end to="/lessons" {...navProps} aria-current={lessonsActive ? 'page' : undefined} onClick={onNavigate}><BookOpen aria-hidden="true" /> Lessons</NavLink>
         <NavLink to="/lessons/almanac" {...navProps} onClick={onNavigate}><LibraryBig aria-hidden="true" /> Almanac</NavLink>
       </nav>

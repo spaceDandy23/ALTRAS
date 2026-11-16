@@ -31,6 +31,7 @@ import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
 import { UserManagementPage } from '@/features/admin/UserManagementPage';
 import { MathWordListManagementPage } from '@/features/admin/MathWordListManagementPage';
 import { NotFoundPage } from './NotFoundPage';
+import { LandingPage, PrivacyPage } from './PublicPages';
 import {
   GuestOnlyRoute,
   ProtectedRoute,
@@ -55,6 +56,8 @@ export function App() {
       <PwaUpdatePrompt />
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route
             path="/admin"
             element={
@@ -103,7 +106,7 @@ export function App() {
                 </StudentRoute>
               }
             >
-              <Route index element={<MainMenuPage />} />
+              <Route path="home" element={<MainMenuPage />} />
               <Route path="assessments/:kind" element={<Navigate to="/lessons" replace />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="settings" element={<SettingsPage />} />

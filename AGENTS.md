@@ -262,3 +262,29 @@ After implementation, report only what is useful:
 5. anything blocking the next phase
 
 Keep reports concise.
+
+## Design System
+
+ALTRAS uses the approved Green & Cream palette:
+
+- Background: #F8FAEC
+- Primary: #2A7F4B
+- Sunflower: #F5C23A
+- Blossom: #F092AE
+- Sky: #8CCFE8
+- Text: #2A3B2D
+
+Use existing semantic CSS tokens in src/styles/index.css.
+
+Preserve dark mode unless explicitly requested otherwise.
+
+Avoid hardcoded component colors and maintain accessible contrast.
+
+## Public Pages
+
+- `/` and `/privacy` are public routes and must remain accessible before session restoration completes.
+- Public pages use the shared Green & Cream semantic tokens from `src/styles/index.css`.
+- Public navigation may link to authentication, but must not render student, researcher, or admin shell controls.
+- Keep public informational content separate from authenticated lesson and CMS experiences.
+- Public pages share the application theme in both light and dark mode. Use semantic HTML, visible keyboard focus, readable contrast, and layouts that wrap at narrow widths.
+- Use typography, authentic algebra examples, and spacing for public-page identity; avoid decorative blobs, glow, looping animation, hardcoded component colors, or simulated student data.

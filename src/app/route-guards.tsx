@@ -26,7 +26,7 @@ export function GuestOnlyRoute({ children }: { children: ReactNode }) {
   if (status === 'idle' || status === 'loading') {
     return <AppLoading />;
   }
-  if (status === 'authenticated') return <Navigate to="/" replace />;
+  if (status === 'authenticated') return <Navigate to="/home" replace />;
   return children;
 }
 

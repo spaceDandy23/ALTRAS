@@ -47,7 +47,7 @@ describe('post-login routing', () => {
   });
 
   it('does not send a student back to a researcher-only route', () => {
-    expect(resolvePostLoginDestination('denied', '/researcher/results')).toBe('/');
+    expect(resolvePostLoginDestination('denied', '/researcher/results')).toBe('/home');
   });
 
   it('shows stable loading feedback, disables duplicate submission, and restores after failure', async () => {

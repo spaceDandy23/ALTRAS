@@ -23,7 +23,7 @@ function renderShell(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<AppShell />}>
-          <Route index element={<p>Student home</p>} />
+          <Route path="home" element={<p>Student home</p>} />
           <Route path="lessons" element={<p>Lesson hub</p>} />
           <Route path="lessons/almanac" element={<p>Almanac</p>} />
           <Route path="profile" element={<p>Profile</p>} />

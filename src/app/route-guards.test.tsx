@@ -245,7 +245,7 @@ describe('route guards', () => {
     render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
-          <Route path="/" element={<p>Main menu destination</p>} />
+          <Route path="/home" element={<p>Main menu destination</p>} />
           <Route
             path="/login"
             element={
