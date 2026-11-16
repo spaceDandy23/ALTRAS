@@ -53,6 +53,22 @@ describe('accessible lesson activity interactions', () => {
     expect(evaluateActivity(translationActivity, 'wrong-choice-id')).toBe(false);
   });
 
+  it('renders authored instructions above the question while preserving multiline text', () => {
+    const authored = { ...translationActivity, instructions: 'Choose the matching expression.\nRead carefully.' };
+    render(
+      <ChooseCorrectTranslationActivityView
+        activity={authored}
+        onSubmit={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getByText(/Choose the matching expression\./)).toHaveClass('activity-instruction--translation');
+    expect(screen.getByRole('heading', { name: 'The sum of a number and five' })).toHaveClass(
+      'activity-question--translation',
+    );
+    expect(screen.queryByRole('heading', { name: 'Choose the matching expression' })).not.toBeInTheDocument();
+  });
+
   it.each([
     ['correct', true, 'choice-option--correct'],
     ['incorrect', false, 'choice-option--incorrect'],

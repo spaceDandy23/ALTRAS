@@ -24,6 +24,7 @@ export function ChooseCorrectTranslationActivityView({
   const [hintVisible, setHintVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const visibleAnswer = submitted?.answer ?? pendingAnswer ?? selected;
+  const hasCustomInstructions = Boolean(activity.instructions?.trim());
 
   const submit = async () => {
     if (!selected || submitted || pendingAnswer) return;
@@ -46,8 +47,12 @@ export function ChooseCorrectTranslationActivityView({
   return (
     <div className="activity-card activity-card--choose-translation">
       <div className="activity-heading">
-        <p className="activity-instruction--translation">{activity.prompt}</p>
-        <h1 className="activity-question--translation">{activity.title}</h1>
+        <p className="activity-instruction--translation">
+          {hasCustomInstructions ? activity.instructions : activity.prompt}
+        </p>
+        <h1 className="activity-question--translation">
+          {hasCustomInstructions ? activity.prompt : activity.title}
+        </h1>
       </div>
       <fieldset
         className="find-word-fieldset"

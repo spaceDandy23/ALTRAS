@@ -36,6 +36,33 @@ describe('learning content schema', () => {
     expect(publicActivitySchema.parse(publicFields)).not.toHaveProperty('correctChoiceId');
   });
 
+  it('accepts optional authored instructions for translation activities', () => {
+    const activity = activitySchema.parse({
+      id: 'translate-with-instructions',
+      type: 'choose-correct-translation',
+      title: 'Translation question',
+      prompt: 'The sum of a number and five',
+      instructions: 'Choose the matching expression.',
+      choices: [
+        { id: 'choice-a', label: 'n + 5' },
+        { id: 'choice-b', label: 'n - 5' },
+      ],
+      correctChoiceId: 'choice-a',
+    });
+
+    if (activity.type !== 'choose-correct-translation') throw new Error('Invalid test activity.');
+    expect(activity.instructions).toBe('Choose the matching expression.');
+    const publicFields = {
+      id: activity.id,
+      type: activity.type,
+      title: activity.title,
+      prompt: activity.prompt,
+      instructions: activity.instructions,
+      choices: activity.choices,
+    };
+    expect(publicActivitySchema.parse(publicFields)).toMatchObject({ instructions: 'Choose the matching expression.' });
+  });
+
   it('accepts lesson activities with no authored explanation', () => {
     const activity = structuredClone(packagedContent.lessons[0].activities[0]);
     delete activity.explanation;

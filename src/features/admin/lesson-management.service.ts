@@ -715,6 +715,7 @@ export function newActivity(
     return {
       ...base,
       type,
+      instructions: 'Choose the mathematical expression that matches the verbal phrase.',
       choices: [
         { id: 'choice-1', label: '' },
         { id: 'choice-2', label: '' },

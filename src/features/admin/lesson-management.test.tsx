@@ -404,6 +404,9 @@ describe('Basic Lesson Management editor and preview', () => {
     fireEvent.change(within(activityCard).getByLabelText('Verbal phrase'), {
       target: { value: 'The sum of a number and five' },
     });
+    fireEvent.change(within(activityCard).getByLabelText('Activity instructions'), {
+      target: { value: 'Choose the expression that matches the phrase.' },
+    });
     fireEvent.change(within(activityCard).getByLabelText('Expression choice 1'), {
       target: { value: 'n + 5' },
     });
@@ -423,6 +426,7 @@ describe('Basic Lesson Management editor and preview', () => {
             expect.objectContaining({
               type: 'choose-correct-translation',
               prompt: 'The sum of a number and five',
+              instructions: 'Choose the expression that matches the phrase.',
               choices: expect.arrayContaining([
                 expect.objectContaining({ label: 'n + 5' }),
                 expect.objectContaining({ label: 'n - 5' }),

@@ -61,6 +61,7 @@ export function ActivityEditor({
               id: activity.id,
               title: activity.title,
               prompt: activity.prompt,
+              ...(activity.instructions !== undefined ? { instructions: activity.instructions } : {}),
               explanation: activity.explanation,
               ...(nextType !== 'choose-correct-translation' && mathStatement !== undefined
                 ? { mathStatement }
@@ -86,6 +87,15 @@ export function ActivityEditor({
         value={activity.prompt}
         onChange={(e) => onChange({ ...activity, prompt: e.target.value })}
       />
+      {activity.type === 'choose-correct-translation' && (
+        <ValidatedTextareaField
+          label="Activity instructions"
+          validationPath={['instructions']}
+          value={activity.instructions ?? ''}
+          rows={3}
+          onChange={(e) => onChange({ ...activity, instructions: e.target.value })}
+        />
+      )}
       {activity.type !== 'choose-correct-translation' && (
         <ValidatedFormField
           label="Mathematical expression"

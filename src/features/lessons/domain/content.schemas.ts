@@ -53,6 +53,7 @@ const activityBaseSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   prompt: z.string().min(1),
+  instructions: z.string().optional(),
   hint: hintSchema.optional(),
   explanation: explanationSchema.optional(),
   characterDialogue: activityCharacterDialogueSchema.optional(),

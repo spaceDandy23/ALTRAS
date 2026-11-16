@@ -33,6 +33,7 @@ const securityHardeningMigration = '202611110001_secure_username_login_and_activ
 const lessonOrderReconciliationMigration = '202611120001_reconcile_lesson_catalog_orders.sql';
 const publishedLessonLimitMigration = '202611120002_limit_published_admin_lessons.sql';
 const assessmentInstructionsMigration = '202611120004_lesson_assessment_instructions.sql';
+const activityInstructionSemanticsMigration = '20261116175116_activity_instruction_semantics.sql';
 async function asUser(id: string, role = 'authenticated') {
   await pg.exec(`reset role; set role ${role};`);
   await pg.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
@@ -164,6 +165,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonOrderReconciliationMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', publishedLessonLimitMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', assessmentInstructionsMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', activityInstructionSemanticsMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -326,6 +328,7 @@ describe('Basic Lesson Management SQL and RLS', () => {
       type: 'choose-correct-translation',
       title: 'Choose the correct translation',
       prompt: 'The sum of a number and five',
+      instructions: 'Choose the expression that matches the phrase.',
       choices: [
         { id: 'sum-expression', label: 'n + 5' },
         { id: 'difference-expression', label: 'n - 5' },
@@ -346,6 +349,7 @@ describe('Basic Lesson Management SQL and RLS', () => {
     const content = await rpc<AuthoredLesson>('get_lesson_content', [published.lesson_id, null]);
     expect(content.activities[0]).toMatchObject({
       type: 'choose-correct-translation',
+      instructions: 'Choose the expression that matches the phrase.',
       choices: expect.arrayContaining([{ id: 'sum-expression', label: 'n + 5' }]),
     });
     expect(content.activities[0]).not.toHaveProperty('correctChoiceId');
