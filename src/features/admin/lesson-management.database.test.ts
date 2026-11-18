@@ -30,6 +30,7 @@ const vocabularyMigration = '202611040004_vocabulary_word_list_star_thresholds.s
 const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_answers.sql';
 const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
 const securityHardeningMigration = '202611110001_secure_username_login_and_active_time.sql';
+const abandonedAttemptTimeMigration = '20261118060000_allow_abandoned_attempt_time_replay.sql';
 const lessonOrderReconciliationMigration = '202611120001_reconcile_lesson_catalog_orders.sql';
 const publishedLessonLimitMigration = '202611120002_limit_published_admin_lessons.sql';
 const assessmentInstructionsMigration = '202611120004_lesson_assessment_instructions.sql';
@@ -166,6 +167,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', publishedLessonLimitMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', assessmentInstructionsMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', activityInstructionSemanticsMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', abandonedAttemptTimeMigration), 'utf8'));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -1384,6 +1386,36 @@ describe('Basic Lesson Management SQL and RLS', () => {
       [attempt.id],
     );
     expect(recorded.rows[0].active_seconds).toBe(0);
+  });
+
+  it('replays queued active time after an attempt is abandoned, bounded by abandonment time', async () => {
+    await asUser(studentId);
+    const attempt = await rpc<{ id: string }>('start_lesson_attempt', ['lesson-operation-signals']);
+    await rpc('abandon_lesson_attempt', [attempt.id]);
+
+    await pg.exec('reset role');
+    await pg.query(
+      "update public.lesson_attempts set started_at=now()-interval '2 minutes', abandoned_at=now()-interval '1 minute', active_seconds=0 where id=$1",
+      [attempt.id],
+    );
+    await asUser(studentId);
+    const segmentId = randomUUID();
+    await rpc('add_attempt_active_seconds', [attempt.id, 30, segmentId]);
+    await rpc('add_attempt_active_seconds', [attempt.id, 30, segmentId]);
+
+    await pg.exec('reset role');
+    const recorded = await pg.query<{ active_seconds: number }>(
+      'select active_seconds from public.lesson_attempts where id=$1',
+      [attempt.id],
+    );
+    expect(recorded.rows[0].active_seconds).toBe(30);
+
+    await asUser(studentId);
+    await pg.exec('savepoint abandoned_active_time_overflow');
+    await expect(
+      rpc('add_attempt_active_seconds', [attempt.id, 90, randomUUID()]),
+    ).rejects.toThrow('exceeds server-observed attempt duration');
+    await pg.exec('rollback to savepoint abandoned_active_time_overflow');
   });
 
   it('publishes a custom attempt limit and blocks a direct server start at the cap', async () => {
