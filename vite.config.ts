@@ -42,7 +42,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
-        globPatterns: ['**/*.{js,css,html,svg,ico,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,ico,png,webmanifest,woff2}'],
       },
       devOptions: { enabled: true },
     }),

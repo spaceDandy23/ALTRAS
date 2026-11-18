@@ -6,6 +6,7 @@ import { primeCachedVisualPreferences } from '@/features/settings/visual-prefere
 import { preloadSfx } from '@/services/audio/audio.manager';
 import { applyExperienceScope } from '@/features/researcher/researcher-experience';
 import { initializePwaUpdates } from '@/services/pwa-update.service';
+import '@fontsource-variable/inter';
 import '@/styles/index.css';
 
 applyExperienceScope('neutral');

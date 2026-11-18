@@ -2,14 +2,10 @@
 
 :root {
   color-scheme: light;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-brand: Georgia, 'Times New Roman', serif;
+  --font-math: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-family: var(--font-sans);
   color: #2a3b2d;
   background: #f8faec;
   font-synthesis: none;
@@ -525,7 +521,7 @@ h3 {
   display: inline-flex;
   flex-direction: column;
   color: var(--paper);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-brand);
   font-size: 1.7rem;
   font-weight: 800;
   line-height: 0.85;
@@ -539,7 +535,7 @@ h3 {
 .logo small {
   margin-top: 0.45rem;
   color: var(--muted);
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.52rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -620,14 +616,14 @@ h3 {
 .public-kicker { display: block; color: var(--green); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.11em; text-transform: uppercase; }
 .public-hero { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: clamp(2rem, 5vw, 5rem); padding-block: 4.5rem 4rem; }
 .public-hero__copy { min-width: 0; }
-.public-hero h1 { margin-block: 1rem 1.4rem; font-family: Georgia, 'Times New Roman', serif; color: var(--heading); font-size: clamp(2.5rem, 4.15vw, 3.75rem); font-weight: 700; line-height: 1.08; letter-spacing: -0.035em; }
+.public-hero h1 { margin-block: 1rem 1.4rem; color: var(--heading); font-size: clamp(2.5rem, 4.15vw, 3.75rem); font-weight: 700; line-height: 1.08; letter-spacing: -0.035em; }
 .public-hero h1 em { font-style: normal; color: var(--green); text-decoration: underline; text-decoration-color: var(--sunflower); text-decoration-thickness: 3px; text-underline-offset: 0.15em; }
 .public-hero__copy > p:not(.public-kicker) { max-width: 34rem; font-size: 1.1rem; line-height: 1.65; color: var(--muted); }
 .public-hero__copy .public-action { margin-top: 1.8rem; padding-inline: 1.7rem; }
 .public-transformation { display: grid; grid-template-columns: 0.3fr 1fr; gap: 0.6rem; padding: 1.4rem 0.7rem; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 32px 32px; border-radius: 3px; }
 .public-note { padding: 1.4rem 1.8rem; border: 1px solid var(--line); box-shadow: 0 5px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
 .public-note span { font-size: 0.65rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
-.public-note p { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 700; }
+.public-note p { font-style: italic; font-weight: 700; }
 .public-note--words { grid-column: 1 / -1; margin-right: 1.3rem; transform: rotate(-4deg); color: var(--ink); background: color-mix(in srgb, var(--sunflower) 16%, var(--cream)); border-radius: 4px 12px 4px 8px; }
 .public-note--words p { font-size: clamp(1.6rem, 2.4vw, 2.2rem); line-height: 1.35; margin-top: 0.5rem; }
 .public-note--math { grid-column: 2; transform: rotate(3deg); color: var(--paper); background: var(--selection-surface); border-radius: 8px 3px 10px 3px; }
@@ -637,9 +633,9 @@ h3 {
 .public-example > div { border-right: 1px solid var(--line-strong); padding-right: 1rem; }
 .public-example .public-kicker { margin-bottom: 0.4rem; }
 .public-example > div p { font-size: 0.88rem; }
-.public-example blockquote { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(1.25rem, 2vw, 1.65rem); font-style: italic; text-align: center; }
+.public-example blockquote { font-size: clamp(1.25rem, 2vw, 1.65rem); font-style: italic; text-align: center; }
 .public-example > svg { color: var(--green); width: 2rem; }
-.public-example__answer { border-radius: 10px; padding: 0.4rem 1rem; color: var(--green); background: var(--selection-surface); font: italic 700 2rem Georgia, serif; text-align: center; white-space: nowrap; }
+.public-example__answer { border-radius: 10px; padding: 0.4rem 1rem; color: var(--green); background: var(--selection-surface); font: italic 700 2rem var(--font-sans); text-align: center; white-space: nowrap; }
 .public-features { display: grid; gap: clamp(3rem, 8vw, 6rem); padding-block: clamp(3rem, 7vw, 6rem); }
 .public-feature { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(15rem, 0.8fr); align-items: center; gap: clamp(1.75rem, 6vw, 5rem); min-width: 0; }
 .public-feature:nth-child(even) > :first-child { order: 2; }
@@ -684,10 +680,10 @@ h3 {
 .public-image-viewer__close:hover { background: var(--surface-soft); }
 .public-about { display: grid; grid-template-columns: auto auto 1fr; gap: 2rem; align-items: center; padding: 1.8rem 2rem; background: var(--surface-soft); border-radius: 16px; }
 .public-about > svg { width: 3.4rem; height: 3.4rem; stroke-width: 1; color: var(--green); }
-.public-about h2 { font: 700 1.9rem Georgia, serif; color: var(--heading); }
+.public-about h2 { font: 700 1.9rem var(--font-sans); color: var(--heading); }
 .public-about p { border-left: 1px solid var(--line-strong); padding-left: 2rem; line-height: 1.6; font-size: 0.9rem; }
 .public-closing { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 1.5rem 3rem; margin-block: 1.5rem 2rem; padding: 1.7rem 2rem; border-radius: 16px; background: var(--primary); color: var(--on-primary); }
-.public-closing h2 { font: 700 clamp(1.6rem, 2.5vw, 2rem) Georgia, serif; }
+.public-closing h2 { font: 700 clamp(1.6rem, 2.5vw, 2rem) var(--font-sans); }
 .public-closing .public-action { background: var(--cream); border-color: var(--cream); color: var(--ink); }
 .public-closing .public-action:hover { background: var(--sunflower); border-color: var(--sunflower); }
 .public-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; border-top: 1px solid var(--line); padding-block: 1.5rem; }
@@ -695,13 +691,13 @@ h3 {
 .public-footer .logo { font-size: 1.4rem; }
 .public-page--placeholder { display: flex; flex-direction: column; }
 .public-placeholder { flex: 1; padding-block: 6rem; }
-.public-placeholder h1 { font: 700 clamp(2rem, 6vw, 4rem) Georgia, serif; margin-block: 1rem 2rem; overflow-wrap: anywhere; }
+.public-placeholder h1 { font: 700 clamp(2rem, 6vw, 4rem) var(--font-sans); margin-block: 1rem 2rem; overflow-wrap: anywhere; }
 .public-legal { max-width: 52rem; padding-block: clamp(3rem, 8vw, 6rem); }
 .public-legal__loading { min-height: 55svh; }
-.public-legal h1 { font: 700 clamp(2.3rem, 6vw, 4rem) Georgia, serif; color: var(--heading); margin-block: 0.75rem 1.5rem; }
+.public-legal h1 { font: 700 clamp(2.3rem, 6vw, 4rem) var(--font-sans); color: var(--heading); margin-block: 0.75rem 1.5rem; }
 .public-legal__summary, .public-legal section p { max-width: 45rem; color: var(--muted); font-size: 1.05rem; line-height: 1.7; white-space: pre-line; }
 .public-legal section { margin-top: 2rem; }
-.public-legal section h2, .public-legal__child-notice h2 { color: var(--heading); font: 700 1.45rem Georgia, serif; }
+.public-legal section h2, .public-legal__child-notice h2 { color: var(--heading); font: 700 1.45rem var(--font-sans); }
 .public-legal__child-notice { margin-top: 2rem; padding: 1.25rem 1.4rem; border-left: 4px solid var(--sunflower); background: var(--surface-soft); }
 .public-legal__child-notice p { color: var(--ink); line-height: 1.65; }
 .public-legal .public-action { display: inline-flex; margin-top: 2.5rem; }
@@ -751,8 +747,8 @@ h3 {
 .public-content-preview p { overflow-wrap: anywhere; white-space: pre-line; line-height: 1.55; }
 .public-content-preview--landing { background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 90%, var(--selection-surface)), var(--surface)); }
 .public-content-preview__hero { display: grid; gap: 0.65rem; border-bottom: 1px solid var(--line); padding-bottom: 1rem; }
-.public-content-preview__hero h2 { font: 700 clamp(1.8rem, 3vw, 2.5rem) Georgia, serif; }
-.public-content-preview__hero h3 { color: var(--green); font: 700 1.6rem Georgia, serif; }
+.public-content-preview__hero h2 { font: 700 clamp(1.8rem, 3vw, 2.5rem) var(--font-sans); }
+.public-content-preview__hero h3 { color: var(--green); font: 700 1.6rem var(--font-sans); }
 .public-content-preview__features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .public-content-preview__features article { min-width: 0; border-left: 3px solid var(--green); padding-left: 0.55rem; }
 .public-content-preview__features article:nth-child(2) { border-color: var(--blossom); }
@@ -843,7 +839,6 @@ h3 {
   justify-items: center;
   gap: var(--space-3);
   transform: rotate(-1deg);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   text-align: center;
 }
 
@@ -858,7 +853,7 @@ h3 {
 
 .translation-demo__arrow {
   color: var(--red);
-  font-family: sans-serif;
+  font-family: var(--font-sans);
   font-size: 2rem;
   font-weight: 900;
 }
@@ -866,6 +861,7 @@ h3 {
 .translation-demo__math {
   border-bottom: 4px solid var(--yellow);
   color: var(--paper);
+  font-family: var(--font-math);
   font-size: clamp(3.5rem, 6vw, 6rem);
   font-weight: 800;
 }
@@ -877,7 +873,7 @@ h3 {
 .floating-math {
   position: absolute;
   color: rgba(255, 255, 255, 0.14);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: 1.5rem;
   transform: rotate(-8deg);
 }
@@ -1195,7 +1191,7 @@ h3 {
 .algebraic-backdrop__equation {
   position: absolute;
   color: var(--algebraic-backdrop-color, var(--muted));
-  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: var(--algebraic-backdrop-size, clamp(1.1rem, 1.6vw + 0.8rem, 2.8rem));
   font-weight: 700;
   line-height: 1;
@@ -1288,7 +1284,7 @@ h3 {
 .doodle {
   position: absolute;
   color: rgba(255, 255, 255, 0.055);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: 1.1rem;
 }
 
@@ -1605,7 +1601,6 @@ h3 {
   border-radius: 50%;
   color: var(--yellow);
   background: var(--board);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 1.45rem;
   font-weight: 900;
   transform: rotate(-3deg);
@@ -2466,9 +2461,12 @@ h3 {
   border: 3px solid var(--yellow);
   border-radius: 50%;
   color: var(--yellow);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   transform: rotate(-4deg);
   animation: chalk-pulse 1.5s ease-in-out infinite;
+}
+
+.loading-mark {
+  font-family: var(--font-math);
 }
 
 .loading-state p,
@@ -2481,7 +2479,7 @@ h3 {
   position: relative;
   margin-bottom: var(--space-3);
   color: rgba(255, 255, 255, 0.34);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: 2rem;
 }
 
@@ -2643,7 +2641,6 @@ h3 {
   border-radius: 50%;
   color: var(--yellow);
   background: var(--board);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 1.35rem;
   font-weight: 900;
   transform: rotate(-2deg);
@@ -3014,7 +3011,7 @@ h3 {
 .lesson-overview__equation {
   align-self: center;
   color: rgba(255, 255, 255, 0.45);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: 1.25rem;
   text-align: center;
   transform: rotate(-3deg);
@@ -3026,7 +3023,7 @@ h3 {
 
 .lesson-overview__equation-arrow {
   color: var(--yellow);
-  font-family: sans-serif;
+  font-family: var(--font-sans);
   font-size: 2.6rem;
 }
 
@@ -3072,7 +3069,6 @@ h3 {
 }
 
 .lesson-vocabulary__row h3 {
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 1rem;
 }
 
@@ -3137,13 +3133,11 @@ h3 {
 
 .operation-example span {
   color: var(--paper);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 0.78rem;
 }
 
 .operation-example strong {
   color: var(--yellow);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 1.25rem;
 }
 
@@ -3407,7 +3401,6 @@ h3 {
 .math-statement {
   margin: 0.8rem 0 1rem;
   color: white;
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: clamp(3rem, 5vw, 4.7rem);
   font-weight: 800;
   line-height: 1.05;
@@ -3428,14 +3421,13 @@ h3 {
   gap: 0.5rem;
   margin-bottom: 1rem;
   color: var(--paper);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 1rem;
 }
 
 .activity-heading .activity-instruction--translation {
   margin: 0 0 0.5rem;
   color: var(--muted);
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 1rem;
   font-weight: 400;
   font-style: normal;
@@ -3448,7 +3440,7 @@ h3 {
 .activity-heading .activity-title--translation {
   margin: 0 0 0.25rem;
   color: var(--heading);
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 1.125rem;
   font-weight: 600;
   font-style: normal;
@@ -3460,7 +3452,7 @@ h3 {
 .activity-heading h1.activity-question--translation {
   margin: 0 0 1.25rem;
   color: var(--heading);
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: clamp(1.25rem, 2vw, 1.375rem);
   font-weight: 600;
   font-style: normal;
@@ -3983,7 +3975,6 @@ a.almanac-option:hover {
 
 .almanac-option > span {
   color: var(--yellow);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
   font-size: 1.7rem;
 }
 
@@ -4093,7 +4084,7 @@ a.almanac-option:hover {
   flex: none;
   place-items: center;
   color: var(--yellow);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: 1.5rem;
   font-weight: 900;
 }
@@ -4177,7 +4168,7 @@ a.almanac-option:hover {
 
 .word-list-examples strong {
   color: var(--yellow);
-  font-family: 'Segoe Print', 'Comic Sans MS', cursive;
+  font-family: var(--font-math);
   font-size: 1rem;
   white-space: nowrap;
 }
@@ -6052,7 +6043,7 @@ html[data-experience='student'] .loading-state p {
 :root[data-theme='light'] .lesson-overview__equation > .lesson-overview__equation-arrow {
   min-width: 3.4rem;
   background: var(--primary);
-  font-family: sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.65rem;
 }
 

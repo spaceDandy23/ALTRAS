@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import '@fontsource-variable/inter';
+import '@/styles/index.css';
 import { packagedContent } from '../content/packaged-content';
 import { activitySchema, type ChooseCorrectTranslationActivity } from '../domain/content.schemas';
 import { evaluateActivity } from '../domain/evaluation';
@@ -68,6 +70,30 @@ describe('accessible lesson activity interactions', () => {
       'activity-question--translation',
     );
     expect(screen.queryByRole('heading', { name: 'Choose the matching expression', level: 1 })).not.toBeInTheDocument();
+  });
+
+  it('uses the shared Inter typography and keeps translation questions above instruction size', () => {
+    const authored = { ...translationActivity, instructions: 'Choose the matching expression.' };
+    render(
+      <ChooseCorrectTranslationActivityView
+        activity={authored}
+        onSubmit={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const instruction = screen.getByText('Choose the matching expression.');
+    const question = screen.getByRole('heading', { name: 'The sum of a number and five' });
+    const instructionStyle = getComputedStyle(instruction);
+    const questionStyle = getComputedStyle(question);
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--font-sans')).toContain(
+      'Inter Variable',
+    );
+    expect(instructionStyle.fontFamily).toBe('var(--font-sans)');
+    expect(questionStyle.fontFamily).toBe('var(--font-sans)');
+    expect(questionStyle.fontStyle).toBe('normal');
+    expect(instructionStyle.overflowWrap).toBe('anywhere');
+    expect(questionStyle.overflowWrap).toBe('anywhere');
+    expect(parseFloat(questionStyle.fontSize)).toBeGreaterThan(parseFloat(instructionStyle.fontSize));
   });
 
   it.each([
