@@ -80,8 +80,8 @@ describe('User Management page', () => {
       'Actions',
     );
     expect(screen.getByText('Banned')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deactivate' })).toHaveClass('admin-action--danger');
-    expect(screen.getByRole('button', { name: 'Reactivate' })).toHaveClass('admin-action--restore');
+    expect(screen.getByRole('button', { name: 'Deactivate' })).toHaveClass('button--danger');
+    expect(screen.getByRole('button', { name: 'Reactivate' })).toHaveClass('button--secondary');
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(service.listAdminUsers).toHaveBeenLastCalledWith('', 2));
   });

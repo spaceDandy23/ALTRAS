@@ -100,6 +100,9 @@ export function LoginPage() {
       <p className="auth-switch">
         New to ALTRAS? <Link to="/register">Create an account</Link>
       </p>
+      <p className="auth-legal-links">
+        <Link to="/privacy-policy">Privacy Policy</Link> · <Link to="/terms-and-conditions">Terms and Conditions</Link>
+      </p>
     </AuthFrame>
   );
 }

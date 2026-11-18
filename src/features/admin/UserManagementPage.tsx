@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormField } from '@/components/ui/FormField';
+import { AdminFeedbackToast } from './AdminFeedbackToast';
 import { AdminContentLoading } from './AdminContentLoading';
+import { AdminPageHeader } from './AdminPageHeader';
 import {
   ADMIN_USER_PAGE_SIZE,
   listAdminUsers,
@@ -148,38 +151,34 @@ export function UserManagementPage() {
   if (error && !result) {
     return (
       <section className="admin-state panel" aria-labelledby="admin-users-error-title">
-        <p className="researcher-kicker">Administrator workspace</p>
-        <h1 id="admin-users-error-title">Accounts unavailable</h1>
-        <p>{error}</p>
-        <button
-          className="button"
+        <AdminPageHeader
+          id="admin-users-error-title"
+          title="Accounts unavailable"
+          description={error}
+        />
+        <Button
           type="button"
           onClick={() => setRevision((value) => value + 1)}
         >
           Try again
-        </button>
+        </Button>
       </section>
     );
   }
 
   return (
     <section aria-labelledby="admin-users-title">
-      <p className="researcher-kicker">Administrator workspace</p>
-      <h1 id="admin-users-title">User Management</h1>
-      <p>
-        Provision accounts, manage access, and deactivate sign-in without deleting learning or
-        research data.
-      </p>
+      <AdminPageHeader
+        id="admin-users-title"
+        title="User Management"
+        description="Provision accounts, manage access, and deactivate sign-in without deleting learning or research data."
+      />
       {error && (
         <p className="form-alert" role="alert">
           {error}
         </p>
       )}
-      {notice && (
-        <p className="admin-notice" role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <AdminFeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />}
 
       <section className="admin-panel" aria-labelledby="provision-heading">
         <h2 id="provision-heading">Provision account</h2>
@@ -243,9 +242,9 @@ export function UserManagementPage() {
                 Grant admin access
               </label>
             </div>
-            <button className="button" type="submit">
+            <Button type="submit">
               {provisioning ? 'Provisioning…' : 'Provision account'}
-            </button>
+            </Button>
           </fieldset>
         </form>
       </section>
@@ -267,9 +266,9 @@ export function UserManagementPage() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Username, display name, or email"
             />
-            <button className="button button--quiet" type="submit">
+            <Button variant="quiet" type="submit">
               Search
-            </button>
+            </Button>
           </form>
         </div>
         {result && result.users.length ? (
@@ -317,27 +316,29 @@ export function UserManagementPage() {
                     </td>
                     <td data-label="Actions">
                       <div className="admin-user-actions">
-                        <button
+                        <Button
                           type="button"
-                          className={user.banned ? 'admin-action--restore' : 'admin-action--danger'}
+                          variant={user.banned ? 'secondary' : 'danger'}
                           onClick={() => setPending({ kind: 'ban', enabled: !user.banned, user })}
                         >
                           {user.banned ? 'Reactivate' : 'Deactivate'}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="quiet"
                           type="button"
                           onClick={() =>
                             setPending({ kind: 'researcher', enabled: !user.researcher, user })
                           }
                         >
                           {user.researcher ? 'Revoke researcher' : 'Grant researcher'}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="quiet"
                           type="button"
                           onClick={() => setPending({ kind: 'admin', enabled: !user.admin, user })}
                         >
                           {user.admin ? 'Revoke admin' : 'Grant admin'}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -349,23 +350,25 @@ export function UserManagementPage() {
           <p>No accounts match this search.</p>
         )}
         <div className="admin-pagination" aria-label="User list pagination">
-          <button
+          <Button
+            variant="quiet"
             type="button"
             disabled={page <= 1 || loading}
             onClick={() => setPage((value) => value - 1)}
           >
             Previous
-          </button>
+          </Button>
           <span>
             Page {result?.page ?? page} of {lastPage} · {ADMIN_USER_PAGE_SIZE} per page
           </span>
-          <button
+          <Button
+            variant="quiet"
             type="button"
             disabled={page >= lastPage || loading}
             onClick={() => setPage((value) => value + 1)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </section>
       <ConfirmDialog

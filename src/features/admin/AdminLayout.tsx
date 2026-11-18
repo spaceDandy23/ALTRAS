@@ -27,6 +27,7 @@ export function AdminLayout() {
           <NavLink to="/admin/users">Users</NavLink>
           <NavLink to="/admin/lessons">Lesson Management</NavLink>
           <NavLink to="/admin/math-word-list">Math Word List</NavLink>
+          <NavLink to="/admin/content">Content Management</NavLink>
         </nav>
         <div className="admin-sidebar__account">
           <span>{user?.displayName ?? 'Administrator'}</span>
@@ -47,6 +48,9 @@ export function AdminLayout() {
             </NavLink>
             <NavLink to="/admin/math-word-list" onClick={closeMobileMenu}>
               Math Word List
+            </NavLink>
+            <NavLink to="/admin/content" onClick={closeMobileMenu}>
+              Content Management
             </NavLink>
           </nav>
           <div className="admin-mobile-nav__account">

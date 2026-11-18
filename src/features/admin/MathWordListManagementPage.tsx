@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import type { ReferenceEntry } from '@/features/lessons/domain/content.schemas';
 import { listMathWordEntries, saveMathWordEntries } from '@/features/word-list/word-list.service';
+import { AdminFeedbackToast } from './AdminFeedbackToast';
+import { AdminPageHeader } from './AdminPageHeader';
 import { ReferenceRowsEditor } from './ReferenceRowsEditor';
 
 export function MathWordListManagementPage() {
@@ -11,7 +14,14 @@ export function MathWordListManagementPage() {
   useEffect(() => {
     void listMathWordEntries().then(setRows).catch(() => setMessage('Unable to load the Math Word List.'));
   }, []);
-  if (!rows) return message ? <p role="alert">{message}</p> : <LoadingState variant="page" />;
+  if (!rows)
+    return message ? (
+      <section className="admin-state panel">
+        <AdminPageHeader title="Math Word List unavailable" description={message} />
+      </section>
+    ) : (
+      <LoadingState variant="page" />
+    );
   const save = async () => {
     setSaving(true);
     setMessage('');
@@ -25,11 +35,26 @@ export function MathWordListManagementPage() {
     }
   };
   return (
-    <section className="admin-panel admin-reference-page">
-      <header><span className="eyebrow">Administrator workspace</span><h1>Math Word List</h1><p>Edit the global reference shown in the student Almanac.</p></header>
-      <ReferenceRowsEditor rows={rows} onChange={setRows} searchable />
-      <div className="admin-actions"><button type="button" disabled={saving} onClick={() => void save()}>Save Math Word List</button></div>
-      {message && <p role="status">{message}</p>}
-    </section>
+    <>
+      <AdminPageHeader
+        title="Math Word List"
+        description="Edit the global reference shown in the student Almanac."
+      />
+      <section className="admin-panel admin-reference-page" aria-label="Math Word List editor">
+        <ReferenceRowsEditor rows={rows} onChange={setRows} searchable />
+        <div className="admin-actions">
+          <Button variant="secondary" type="button" disabled={saving} onClick={() => void save()}>
+            Save Math Word List
+          </Button>
+        </div>
+      </section>
+      {message && (
+        <AdminFeedbackToast
+          kind={message.startsWith('Unable') ? 'error' : 'success'}
+          message={message}
+          onDismiss={() => setMessage('')}
+        />
+      )}
+    </>
   );
 }

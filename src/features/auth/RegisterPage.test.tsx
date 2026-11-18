@@ -12,6 +12,12 @@ afterEach(() => {
 });
 
 describe('registration password visibility', () => {
+  it('links applicants to the public privacy and terms pages without requiring acceptance', () => {
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy-policy');
+    expect(screen.getByRole('link', { name: 'Terms and Conditions' })).toHaveAttribute('href', '/terms-and-conditions');
+  });
+
   it('independently shows and hides password and confirmation values', async () => {
     const user = userEvent.setup();
     render(

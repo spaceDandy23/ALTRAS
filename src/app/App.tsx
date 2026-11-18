@@ -31,7 +31,8 @@ import { LessonManagementPage } from '@/features/admin/LessonManagementPage';
 import { UserManagementPage } from '@/features/admin/UserManagementPage';
 import { MathWordListManagementPage } from '@/features/admin/MathWordListManagementPage';
 import { NotFoundPage } from './NotFoundPage';
-import { LandingPage, PrivacyPage } from './PublicPages';
+import { LandingPage, PrivacyPage, TermsPage } from './PublicPages';
+import { PublicContentManagementPage } from '@/features/public-content/PublicContentManagementPage';
 import {
   GuestOnlyRoute,
   ProtectedRoute,
@@ -58,6 +59,8 @@ export function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPage />} />
+          <Route path="/terms-and-conditions" element={<TermsPage />} />
           <Route
             path="/admin"
             element={
@@ -72,6 +75,7 @@ export function App() {
             <Route path="users" element={<UserManagementPage />} />
             <Route path="lessons" element={<LessonManagementPage />} />
             <Route path="math-word-list" element={<MathWordListManagementPage />} />
+            <Route path="content" element={<PublicContentManagementPage />} />
             <Route path="assessments" element={<Navigate to="/admin/lessons" replace />} />
           </Route>
           <Route
@@ -135,6 +139,7 @@ export function App() {
               <Route path="participants" element={<ResearcherResultsPage />} />
               <Route path="assessments" element={<ResearcherAssessmentsPage />} />
               <Route path="lessons" element={<ResearcherLessonsPage />} />
+              <Route path="content" element={<PublicContentManagementPage />} />
               <Route path="reports" element={<Navigate to="/researcher" replace />} />
               <Route path="results" element={<Navigate to="/researcher/participants" replace />} />
             </Route>

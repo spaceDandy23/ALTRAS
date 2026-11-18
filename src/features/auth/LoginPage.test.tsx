@@ -17,6 +17,12 @@ afterEach(() => {
 });
 
 describe('post-login routing', () => {
+  it('links students to the public privacy and terms pages', () => {
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy-policy');
+    expect(screen.getByRole('link', { name: 'Terms and Conditions' })).toHaveAttribute('href', '/terms-and-conditions');
+  });
+
   it('shows and hides a typed password without changing its value', async () => {
     const user = userEvent.setup();
     render(

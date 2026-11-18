@@ -10,6 +10,7 @@ const navigation = [
   { to: '/researcher/participants', label: 'Participants' },
   { to: '/researcher/assessments', label: 'Assessments' },
   { to: '/researcher/lessons', label: 'Lessons' },
+  { to: '/researcher/content', label: 'Content Management' },
 ];
 
 export function ResearcherLayout() {

@@ -115,6 +115,9 @@
 .admin-actions {
   margin-block: 1rem;
 }
+.lesson-actions > .button {
+  min-width: 10rem;
+}
 .admin-reorder-item {
   position: relative;
   min-width: 0;
@@ -877,14 +880,6 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
   white-space: normal;
   line-height: 1.2;
 }
-.admin-user-actions .admin-action--danger {
-  border-color: var(--red);
-  color: #fff4f2;
-  background: color-mix(in srgb, var(--red) 20%, var(--control-bg));
-}
-.admin-user-actions .admin-action--restore {
-  border-color: var(--green);
-}
 .admin-status {
   display: inline-flex;
   padding: 0.2rem 0.55rem;
@@ -1090,9 +1085,6 @@ details[open] > summary > .admin-summary-chevron { transform: rotate(180deg); }
   .admin-summary-chevron { transition: none; }
 }
 
-.admin-lesson-management-title {
-  font-size: clamp(2.1rem, 2rem + 0.5vw, 2.5rem);
-}
 .admin-editor h2,
 .admin-preview > h2 {
   font-size: clamp(1.6rem, 1.5rem + 0.35vw, 1.8rem);

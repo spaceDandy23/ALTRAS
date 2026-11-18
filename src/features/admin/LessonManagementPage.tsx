@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, X } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AdminFeedbackToast } from './AdminFeedbackToast';
+import { AdminPageHeader } from './AdminPageHeader';
 import { AdminContentLoading } from './AdminContentLoading';
 import { ActivityEditor } from './ActivityEditor';
 import { InstructionalContentEditor } from './InstructionalContentEditor';
@@ -45,34 +48,6 @@ import './lesson-management.css';
 
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message.trim() ? cause.message : fallback;
-}
-
-function FeedbackToast({
-  kind,
-  message,
-  onDismiss,
-}: {
-  kind: 'success' | 'error';
-  message: string;
-  onDismiss: () => void;
-}) {
-  const Icon = kind === 'success' ? Check : AlertCircle;
-  return (
-    <div className={`admin-feedback-toast admin-feedback-toast--${kind}`}>
-      <span className="admin-feedback-toast__icon" aria-hidden="true">
-        <Icon size={18} />
-      </span>
-      <p role={kind === 'error' ? 'alert' : 'status'}>{message}</p>
-      <button
-        className="admin-feedback-toast__dismiss"
-        type="button"
-        aria-label="Dismiss message"
-        onClick={onDismiss}
-      >
-        <X size={18} aria-hidden="true" />
-      </button>
-    </div>
-  );
 }
 
 function keepOverviewPosition(
@@ -159,6 +134,11 @@ export function LessonManagementPage() {
     return () => cancelAnimationFrame(frame);
   }, [validationIssues, preview]);
   const current = items.find((item) => item.lesson_id === draft?.id);
+  const publicationState = current?.published
+    ? 'published'
+    : current?.published_version
+      ? 'unpublished'
+      : 'draft';
   const publishedLessonCount = items.filter((item) => item.published).length;
   const vocabularyTables =
     draft?.chapters.flatMap((chapter) =>
@@ -305,9 +285,11 @@ export function LessonManagementPage() {
   if (error && items.length === 0 && !draft) {
     return (
       <section className="admin-state panel" aria-labelledby="admin-lessons-error-title">
-        <p className="researcher-kicker">Administrator workspace</p>
-        <h1 id="admin-lessons-error-title">Lessons unavailable</h1>
-        <p>{error}</p>
+        <AdminPageHeader
+          id="admin-lessons-error-title"
+          title="Lessons unavailable"
+          description={error}
+        />
         <button
           className="button"
           type="button"
@@ -325,22 +307,20 @@ export function LessonManagementPage() {
 
   return (
     <>
-      <p className="researcher-kicker">Administrator workspace</p>
-      <h1 className="admin-lesson-management-title">Basic Lesson Management</h1>
-      <p>
-        Create and publish lessons in Operation Words. Maximum {MAX_LESSONS} published lessons and
-        10 activities per lesson.
-      </p>
+      <AdminPageHeader
+        title="Basic Lesson Management"
+        description={`Create and publish lessons in Operation Words. Maximum ${MAX_LESSONS} published lessons and 10 activities per lesson.`}
+      />
       {error && !draft && (
         <p className="form-alert" role="alert">
           {error}
         </p>
       )}
       {notice && !draft && (
-        <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />
+        <AdminFeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />
       )}
       {feedbackError && !draft && (
-        <FeedbackToast
+        <AdminFeedbackToast
           kind="error"
           message={feedbackError}
           onDismiss={() => setFeedbackError('')}
@@ -350,8 +330,7 @@ export function LessonManagementPage() {
         <>
           <div className="admin-actions">
             <div className="lesson-actions">
-              <button
-                className="button"
+              <Button
                 disabled={publishedLessonCount >= MAX_LESSONS}
                 onClick={() => {
                   setDraft(newLesson(Math.max(0, ...items.map((i) => i.draft.displayOrder)) + 1));
@@ -362,13 +341,13 @@ export function LessonManagementPage() {
                 }}
               >
                 Create lesson
-              </button>
+              </Button>
               {publishedLessonCount >= MAX_LESSONS && (
                 <span role="status">Maximum {MAX_LESSONS} published lessons reached.</span>
               )}
-              <button className="button button--quiet" onClick={() => setReload(reload + 1)}>
+              <Button variant="quiet" onClick={() => setReload(reload + 1)}>
                 Refresh list
-              </button>
+              </Button>
             </div>
           </div>
           <div className="admin-table">
@@ -402,7 +381,8 @@ export function LessonManagementPage() {
                         .title ?? 'None'}
                     </td>
                     <td>
-                      <button
+                      <Button
+                        variant="quiet"
                         onClick={() => {
                           setDraft(structuredClone(item.draft));
                           setRevision(item.revision);
@@ -413,7 +393,7 @@ export function LessonManagementPage() {
                         }}
                       >
                         Edit {item.draft.title}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -425,29 +405,39 @@ export function LessonManagementPage() {
         <>
           <div className="admin-actions">
             <div className="lesson-actions">
-              <button
-                className="button button--quiet"
+              <Button
+                variant="quiet"
                 disabled={busy}
                 onClick={() => (dirty ? setLeaving(true) : (setDraft(null), setPreview(false)))}
               >
                 Back to lessons
-              </button>
-              <button className="button button--quiet" onClick={() => setPreview(!preview)}>
+              </Button>
+              <Button variant="quiet" onClick={() => setPreview(!preview)}>
                 {preview ? 'Return to editor' : 'Preview lesson'}
-              </button>
+              </Button>
             </div>
-            <span>
-              {dirty ? 'Unsaved changes' : 'Saved draft'} ·{' '}
-              {current?.published
-                ? 'Live lesson stays unchanged until publishing'
-                : 'Not visible to students'}
+          </div>
+          <div className="admin-publication">
+            <span className={`admin-publication__state admin-publication__state--${publicationState}`}>
+              {publicationState === 'published'
+                ? 'Published'
+                : publicationState === 'unpublished'
+                  ? 'Unpublished draft'
+                  : 'Draft'}
             </span>
+            <p>
+              {dirty
+                ? 'Unsaved changes are visible only here until you save the draft.'
+                : publicationState === 'published'
+                  ? 'This lesson is live for students. Publish again to make saved changes live.'
+                  : 'This lesson is not visible to students until it is published.'}
+            </p>
           </div>
           {notice && (
-            <FeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />
+            <AdminFeedbackToast kind="success" message={notice} onDismiss={() => setNotice('')} />
           )}
           {feedbackError && (
-            <FeedbackToast
+            <AdminFeedbackToast
               kind="error"
               message={feedbackError}
               onDismiss={() => setFeedbackError('')}
@@ -1208,20 +1198,20 @@ export function LessonManagementPage() {
                   </div>
                   <div className="admin-actions">
                     <div className="lesson-actions">
-                      <button className="button" type="submit">
+                      <Button variant="secondary" type="submit">
                         {busy ? 'Saving…' : 'Save draft'}
-                      </button>
-                      <button className="button" type="button" onClick={() => void save(true)}>
+                      </Button>
+                      <Button type="button" onClick={() => void save(true)}>
                         Publish lesson
-                      </button>
+                      </Button>
                       {current?.published && (
-                        <button
-                          className="button button--quiet"
+                        <Button
+                          variant="quiet"
                           type="button"
                           onClick={() => void save(false)}
                         >
                           Unpublish lesson
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>

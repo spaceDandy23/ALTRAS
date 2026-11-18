@@ -85,6 +85,19 @@ function dragAfter(source: HTMLElement, target: HTMLElement) {
 }
 
 describe('Basic Lesson Management editor and preview', () => {
+  it('uses the shared publication state and action variants in the lesson editor', async () => {
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: `Edit ${item().draft.title}` }));
+
+    expect(screen.getByText('Published')).toBeInTheDocument();
+    expect(
+      screen.getByText('This lesson is live for students. Publish again to make saved changes live.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toHaveClass('button--secondary');
+    expect(screen.getByRole('button', { name: 'Publish lesson' })).toHaveClass('button--primary');
+    expect(screen.getByRole('button', { name: 'Unpublish lesson' })).toHaveClass('button--quiet');
+  });
+
   it('blocks publication before the RPC when a published lesson already owns the requested order', async () => {
     const row = item();
     client.rpc.mockImplementation(async (name: string) => ({

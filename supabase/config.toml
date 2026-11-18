@@ -387,6 +387,9 @@ verify_jwt = true
 [functions.username-login]
 verify_jwt = false
 
+[functions.public-content-image]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

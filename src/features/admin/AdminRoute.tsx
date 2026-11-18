@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
 import { applyExperienceScope } from '@/features/researcher/researcher-experience';
@@ -36,9 +37,9 @@ export function AdminRoute({ children }: { children: ReactNode }) {
         </h1>
         <p>Lesson management requires explicit administrator authorization.</p>
         {result.status === 'error' && (
-          <button className="button" onClick={() => setRetry((n) => n + 1)}>
+          <Button onClick={() => setRetry((n) => n + 1)}>
             Try again
-          </button>
+          </Button>
         )}
         <Link to="/">Return home</Link>
       </main>

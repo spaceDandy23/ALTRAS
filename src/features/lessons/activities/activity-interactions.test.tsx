@@ -63,10 +63,11 @@ describe('accessible lesson activity interactions', () => {
     );
 
     expect(screen.getByText(/Choose the matching expression\./)).toHaveClass('activity-instruction--translation');
+    expect(screen.getByRole('heading', { name: 'Choose the matching expression', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The sum of a number and five' })).toHaveClass(
       'activity-question--translation',
     );
-    expect(screen.queryByRole('heading', { name: 'Choose the matching expression' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose the matching expression', level: 1 })).not.toBeInTheDocument();
   });
 
   it.each([

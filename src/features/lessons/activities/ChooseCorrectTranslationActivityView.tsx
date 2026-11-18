@@ -47,12 +47,18 @@ export function ChooseCorrectTranslationActivityView({
   return (
     <div className="activity-card activity-card--choose-translation">
       <div className="activity-heading">
-        <p className="activity-instruction--translation">
-          {hasCustomInstructions ? activity.instructions : activity.prompt}
-        </p>
-        <h1 className="activity-question--translation">
-          {hasCustomInstructions ? activity.prompt : activity.title}
-        </h1>
+        {hasCustomInstructions ? (
+          <>
+            <h2 className="activity-title--translation">{activity.title}</h2>
+            <p className="activity-instruction--translation">{activity.instructions}</p>
+            <h1 className="activity-question--translation">{activity.prompt}</h1>
+          </>
+        ) : (
+          <>
+            <p className="activity-instruction--translation">{activity.prompt}</p>
+            <h1 className="activity-question--translation">{activity.title}</h1>
+          </>
+        )}
       </div>
       <fieldset
         className="find-word-fieldset"
