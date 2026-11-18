@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { LoadingState } from '@/components/ui/LoadingState';
 import type { ReferenceEntry } from '@/features/lessons/domain/content.schemas';
 import { listMathWordEntries, saveMathWordEntries } from '@/features/word-list/word-list.service';
+import { AdminContentLoading } from './AdminContentLoading';
 import { AdminFeedbackToast } from './AdminFeedbackToast';
 import { AdminPageHeader } from './AdminPageHeader';
 import { ReferenceRowsEditor } from './ReferenceRowsEditor';
@@ -20,7 +20,7 @@ export function MathWordListManagementPage() {
         <AdminPageHeader title="Math Word List unavailable" description={message} />
       </section>
     ) : (
-      <LoadingState variant="page" />
+      <AdminContentLoading message="Loading Math Word List…" />
     );
   const save = async () => {
     setSaving(true);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { AdminFeedbackToast } from '@/features/admin/AdminFeedbackToast';
+import { AdminContentLoading } from '@/features/admin/AdminContentLoading';
 import { AdminPageHeader } from '@/features/admin/AdminPageHeader';
 import {
   getDraftShowcaseImageUrl,
@@ -167,15 +168,17 @@ export function PublicContentManagementPage() {
   useEffect(() => { void listContentPages().then(setPages).catch((error: unknown) => { setMessageKind('error'); setMessage(error instanceof Error ? error.message : 'Unable to load public content.'); }); }, []);
   const selected = useMemo(() => pages?.find((page) => page.pageKey === selectedKey) ?? null, [pages, selectedKey]);
   const activeDraft = draft ?? selected?.draftContent ?? null;
-  if (!pages || !selected || !activeDraft)
+  if (!pages || !selected || !activeDraft) {
+    if (!message) return <AdminContentLoading message="Loading content…" />;
     return (
       <section className="public-content-management__loading">
         <AdminPageHeader
           title="Content Management"
-          description={message || 'Loading content…'}
+          description={message}
         />
       </section>
     );
+  }
   const update = (patch: Partial<PublicContent>) => setDraft({ ...activeDraft, ...patch } as PublicContent);
   const uploadShowcase = async (slot: 'understand' | 'apply' | 'reflect', file: File) => {
     setMessage(''); setMessageKind('success');

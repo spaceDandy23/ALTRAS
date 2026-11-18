@@ -607,8 +607,8 @@ h3 {
 .public-nav__brand > svg { width: 2.3rem; height: 2.3rem; stroke-width: 1.5; }
 .public-page .logo { color: var(--green); }
 .public-nav nav, .public-nav__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.4rem; }
-.public-nav nav a, .public-footer > a:last-child { color: var(--paper); font-size: 0.9rem; text-decoration: none; padding-block: 0.75rem; }
-.public-nav nav a:hover, .public-footer > a:last-child:hover { color: var(--green); text-decoration: underline; text-underline-offset: 0.3em; }
+.public-nav nav a, .public-footer > a:not(.public-nav__brand) { color: var(--paper); font-size: 0.9rem; text-decoration: none; padding-block: 0.75rem; }
+.public-nav nav a:hover, .public-footer > a:not(.public-nav__brand):hover { color: var(--green); text-decoration: underline; text-underline-offset: 0.3em; }
 .public-action, .public-login { display: inline-flex; justify-content: center; align-items: center; gap: 0.8rem; min-height: 46px; padding: 0.7rem 1.3rem; border: 1px solid var(--green); border-radius: 999px; font-size: 0.95rem; font-weight: 700; text-decoration: none; line-height: 1.35; }
 .public-action { color: var(--on-primary); background: var(--primary); border-color: var(--primary); }
 .public-action svg { width: 1.15rem; height: 1.15rem; flex-shrink: 0; }

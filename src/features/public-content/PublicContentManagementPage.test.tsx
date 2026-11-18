@@ -23,6 +23,13 @@ const page = {
 };
 
 describe('PublicContentManagementPage', () => {
+  it('uses the shared centered admin loader before content arrives', () => {
+    vi.mocked(service.listContentPages).mockReturnValue(new Promise(() => undefined));
+    render(<PublicContentManagementPage />);
+    expect(screen.getByRole('status')).toHaveClass('loading-state--page', 'admin-content-loading');
+    expect(screen.getByRole('status')).toHaveTextContent('Loading content…');
+  });
+
   it('edits a draft and publishes the approved version', async () => {
     vi.mocked(service.listContentPages).mockResolvedValue([page]);
     vi.mocked(service.saveContentDraft).mockResolvedValue({ ...page, revision: 2 });
