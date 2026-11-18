@@ -41,7 +41,7 @@ export function AdminRoute({ children }: { children: ReactNode }) {
             Try again
           </Button>
         )}
-        <Link to="/">Return home</Link>
+        <Link to="/home">Return home</Link>
       </main>
     );
   return children;

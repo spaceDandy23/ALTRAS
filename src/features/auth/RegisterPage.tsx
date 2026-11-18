@@ -40,7 +40,7 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await register(form);
-      navigate('/', { replace: true });
+      navigate('/home', { replace: true });
     } catch (error) {
       setErrors({ form: error instanceof Error ? error.message : 'Unable to create the account.' });
     } finally {

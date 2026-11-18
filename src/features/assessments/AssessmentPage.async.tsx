@@ -101,7 +101,7 @@ export function AssessmentPage() {
     return (
       <section className="assessment-shell assessment-state panel">
         <h1>Assessment not found</h1>
-        <Link to="/">Return home</Link>
+        <Link to="/home">Return home</Link>
       </section>
     );
   if (!user) return <LoadingState variant="page" />;
@@ -529,7 +529,7 @@ function AssessmentSession({
           </Button>
           <Link
             className="button button--secondary"
-            to={scope ? `/lessons/${scope.lessonId}` : '/'}
+            to={scope ? `/lessons/${scope.lessonId}` : '/home'}
           >
             {scope ? 'Return to lesson' : 'Return home'}
           </Link>
@@ -629,7 +629,7 @@ function AssessmentSession({
         <div className="result-actions">
           <Link
             className="button button--secondary"
-            to={scope ? `/lessons/${scope.lessonId}` : '/'}
+            to={scope ? `/lessons/${scope.lessonId}` : '/home'}
           >
             {scope ? 'Return to lesson' : 'Return home'}
           </Link>
@@ -1121,7 +1121,7 @@ function AssessmentResult({
         ) : (
           <Link
             className="button button--primary assessment-result__return"
-            to="/"
+            to="/home"
             onPointerDown={playNeutralClickOnPointerDown}
             onKeyDown={playNeutralClickOnKeyDown}
           >
