@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useResearcherAccessStore } from '@/stores/researcher-access.store';
 import {
   completeAssessment,
+  AssessmentConflictError,
   getAssessmentAttempt,
   startAssessment,
   syncAssessmentDraft,
@@ -136,6 +137,19 @@ describe('online assessment attempt mapping', () => {
     submitted_revision: null,
     assessment_attempt_answers: [],
   };
+  it.each(['40001', 'P0001'])('preserves the clear assessment conflict for %s on sync and completion', async (code) => {
+    const draft = createAssessmentDraft(toAssessmentAttempt(record), [{ id: 'q', assessment: 'pre-test', displayOrder: 1, prompt: 'Question', choices: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], contentVersion: 1, isPlaceholder: false }]);
+    remote.rpc.mockResolvedValue({ error: { code, message: 'Assessment revision conflict.' } });
+    await expect(syncAssessmentDraft(draft)).rejects.toBeInstanceOf(AssessmentConflictError);
+    await expect(completeAssessment(record.user_id, 'pre-test', record.id, 0))
+      .rejects.toThrow('This test changed in another tab or device.');
+    expect(remote.rpc).toHaveBeenCalledTimes(2);
+  });
+  it('does not classify unrelated P0001 failures as revision conflicts', async () => {
+    remote.rpc.mockResolvedValue({ error: { code: 'P0001', message: 'Invalid snapshot.' } });
+    await expect(syncAssessmentDraft(createAssessmentDraft(toAssessmentAttempt(record), [{ id: 'q', assessment: 'pre-test', displayOrder: 1, prompt: 'Question', choices: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], contentVersion: 1, isPlaceholder: false }])))
+      .rejects.toThrow('Unable to sync the test. We will retry.');
+  });
   it('sends only choices and logical revisions, and requires authoritative acknowledgement', async () => {
     const draft = updateDraftAnswer(
       createAssessmentDraft(toAssessmentAttempt(record), [

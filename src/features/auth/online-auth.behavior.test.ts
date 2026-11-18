@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError, type User } from '@supabase/supabase-js';
 import { captureSyncSession, setSyncIdentity } from '@/services/sync-session';
 import { AuthError } from './auth.errors';
 import {
@@ -162,6 +162,42 @@ describe('Supabase authentication behavior', () => {
       access_token: 'access-token',
       refresh_token: 'refresh-token',
     });
+  });
+
+  it('shows a temporary service error when username login is unavailable', async () => {
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'Invalid login credentials' },
+    });
+    mocks.invoke.mockResolvedValueOnce({
+      data: null,
+      error: new FunctionsHttpError(new Response(null, { status: 503 })),
+    });
+
+    await expect(
+      loginOnlineUser({ username: 'admin', password: 'Password123' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_DATA',
+      message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+    } satisfies Partial<AuthError>);
+  });
+
+  it('shows a temporary service error when username login cannot reach the function', async () => {
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'Invalid login credentials' },
+    });
+    mocks.invoke.mockResolvedValueOnce({
+      data: null,
+      error: new FunctionsFetchError(new TypeError('Network request failed')),
+    });
+
+    await expect(
+      loginOnlineUser({ username: 'admin', password: 'Password123' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_DATA',
+      message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+    } satisfies Partial<AuthError>);
   });
 
   it('maps a manually provisioned user from the authenticated user profile when Auth metadata is absent', async () => {

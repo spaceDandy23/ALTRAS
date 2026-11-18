@@ -215,6 +215,7 @@ export async function completeAssessment(
       p_answering_seconds: answeringSeconds,
     }),
   );
+  if (isRevisionConflict(error)) throw assessmentRevisionConflict();
   if (error)
     throw new AssessmentError(
       'Submission is not yet confirmed. We will check the saved result before retrying.',
@@ -226,6 +227,17 @@ export async function completeAssessment(
 }
 
 export class AssessmentConflictError extends AssessmentError {}
+
+function isRevisionConflict(error: { code?: string; message?: string } | null) {
+  return error?.code === '40001' ||
+    (error?.code === 'P0001' && error.message === 'Assessment revision conflict.');
+}
+
+function assessmentRevisionConflict() {
+  return new AssessmentConflictError(
+    'This test changed in another tab or device. Reload the saved test to review its answers. Your local draft has been kept.',
+  );
+}
 
 export async function syncAssessmentDraft(
   draft: AssessmentDraft,
@@ -245,11 +257,7 @@ export async function syncAssessmentDraft(
       })),
     }),
   );
-  if (error?.code === '40001') {
-    throw new AssessmentConflictError(
-      'This test changed in another tab or device. Reload the saved test to review its answers. Your local draft has been kept.',
-    );
-  }
+  if (isRevisionConflict(error)) throw assessmentRevisionConflict();
   if (error) throw new AssessmentError('Unable to sync the test. We will retry.');
   checkSync();
   const result = await getAssessmentAttempt(

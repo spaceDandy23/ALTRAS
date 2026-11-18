@@ -1,4 +1,9 @@
-import type { User } from '@supabase/supabase-js';
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+  type User,
+} from '@supabase/supabase-js';
 import { z } from 'zod';
 import { getSupabaseClient } from '@/services/supabase.client';
 import { observeSyncAuthIdentity } from '@/services/sync-session';
@@ -86,13 +91,36 @@ const resolvedLoginSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
+function mapUsernameLoginFailure(error: unknown): AuthError {
+  if (error instanceof FunctionsHttpError) {
+    const context: unknown = error.context;
+    const status = context instanceof Response ? context.status : null;
+    if (status === 401)
+      return new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
+    if (status === 429)
+      return new AuthError('INVALID_DATA', 'Too many sign-in attempts. Try again later.');
+    return new AuthError(
+      'INVALID_DATA',
+      'Sign-in is temporarily unavailable. Please try again shortly.',
+    );
+  }
+  if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+    return new AuthError(
+      'INVALID_DATA',
+      'Sign-in is temporarily unavailable. Please try again shortly.',
+    );
+  }
+  return new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
+}
+
 async function resolveManualLogin(username: string, password: string): Promise<User> {
   const supabase = getSupabaseClient();
   const invoked = await supabase.functions.invoke('username-login', {
     body: { username, password },
   });
-  const resolved = invoked.error ? null : resolvedLoginSchema.safeParse(invoked.data);
-  if (!resolved || !resolved.success) {
+  if (invoked.error) throw mapUsernameLoginFailure(invoked.error);
+  const resolved = resolvedLoginSchema.safeParse(invoked.data);
+  if (!resolved.success) {
     throw new AuthError('INVALID_CREDENTIALS', 'Username or password is incorrect.');
   }
   const { data, error } = await supabase.auth.setSession({

@@ -31,6 +31,7 @@ const acceptedTokenSequencesMigration = '202611050002_multi_accepted_organize_an
 const lessonAttemptLimitsMigration = '202611100001_lesson_attempt_limits.sql';
 const securityHardeningMigration = '202611110001_secure_username_login_and_active_time.sql';
 const abandonedAttemptTimeMigration = '20261118060000_allow_abandoned_attempt_time_replay.sql';
+const saveLessonRevisionLockMigration = '20261118090339_save_admin_lesson_revision_lock_precheck.sql';
 const lessonOrderReconciliationMigration = '202611120001_reconcile_lesson_catalog_orders.sql';
 const publishedLessonLimitMigration = '202611120002_limit_published_admin_lessons.sql';
 const assessmentInstructionsMigration = '202611120004_lesson_assessment_instructions.sql';
@@ -161,6 +162,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070003_revert_chapter_vocabulary_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611070004_optional_chapter_teaching_tables.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations/202611090001_optional_lesson_activity_feedback.sql'), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations/202611090002_assessment_answering_time.sql'), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonAttemptLimitsMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', securityHardeningMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', lessonOrderReconciliationMigration), 'utf8'));
@@ -168,6 +170,21 @@ beforeAll(async () => {
   await pg.exec(readFileSync(resolve('supabase/migrations', assessmentInstructionsMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', activityInstructionSemanticsMigration), 'utf8'));
   await pg.exec(readFileSync(resolve('supabase/migrations', abandonedAttemptTimeMigration), 'utf8'));
+  await pg.exec(readFileSync(resolve('supabase/migrations', saveLessonRevisionLockMigration), 'utf8'));
+  const functionSnapshot = () => pg.query<{ signature: string; definition: string; permissions: string }>(`
+    select oid::regprocedure::text as signature, pg_get_functiondef(oid) as definition,
+      proacl::text as permissions from pg_proc
+    where pronamespace='public'::regnamespace and proname in
+      ('save_admin_lesson','set_lesson_publication','sync_assessment_draft','complete_assessment_revision')
+    order by signature`);
+  const functionsBefore = await functionSnapshot();
+  await pg.exec(readFileSync(resolve('supabase/migrations/20261118100441_nonretrying_revision_conflicts.sql'), 'utf8'));
+  const functionsAfter = await functionSnapshot();
+  expect(functionsAfter.rows).toHaveLength(5);
+  // Apart from error codes and whitespace, bodies and permissions must stay identical.
+  const canonical = (definition: string) => definition.replace(/errcode\s*=\s*'40001'/g, "errcode = 'P0001'").replace(/\s+/g, ' ');
+  expect(functionsAfter.rows.map((row) => ({ ...row, definition: canonical(row.definition) })))
+    .toEqual(functionsBefore.rows.map((row) => ({ ...row, definition: canonical(row.definition) })));
   await pg.exec("update public.lesson_definitions set pre_assessment_version=null where lesson_id='lesson-order-matters'");
   await pg.query('insert into public.admin_users(user_id) values($1)', [adminId]);
   await pg.query('insert into public.admin_users(user_id) values($1),($2)', [
@@ -188,6 +205,79 @@ afterAll(async () => {
   await pg?.close();
 });
 describe('Basic Lesson Management SQL and RLS', () => {
+  it('rejects stale save and publication revisions with P0001 and leaves the lesson unchanged', async () => {
+    const saved = await save(draft({ prerequisiteLessonId: undefined }));
+    const before = await rpc<ManagedLesson[]>('get_admin_lessons');
+    for (const action of [
+      () => save({ ...saved.draft, title: 'Must not overwrite' }, saved.revision - 1),
+      () => rpc('set_lesson_publication', [saved.lesson_id, true, saved.revision - 1]),
+    ]) {
+      await pg.exec('savepoint conflict');
+      await expect(action()).rejects.toMatchObject({ code: 'P0001' });
+      await pg.exec('rollback to savepoint conflict');
+      expect(await rpc('get_admin_lessons')).toEqual(before);
+    }
+  });
+
+  it('rejects stale assessment sync and both completion overloads without changing answers or results', async () => {
+    const item = await publish(await save(draft({
+      prerequisiteLessonId: undefined,
+      assessments: { preTest: 'pre-test' },
+      assessmentQuestions: {
+        'pre-test': [{ id: 'conflict-question', prompt: 'Question',
+          choices: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+          correctChoiceId: 'a', isPlaceholder: false }],
+        'post-test': [],
+      },
+    })));
+    await asUser(studentId);
+    const lesson = await rpc<{ id: string }>('start_lesson_attempt', [item.lesson_id]);
+    const assessment = await rpc<{ id: string }>('start_assessment', ['pre-test', lesson.id]);
+    const question = (await pg.query<{ id: string; choices: { id: string }[] }>(
+      'select id,choices from public.get_assessment_questions($1,$2)', ['pre-test', lesson.id],
+    )).rows[0];
+    await rpc('sync_assessment_draft', [assessment.id, 0, 1, randomUUID(),
+      [{ question_id: question.id, selected_choice_id: question.choices[0].id }]]);
+    const snapshot = async () => {
+      await pg.exec('reset role');
+      const data = {
+        attempt: (await pg.query('select * from public.assessment_attempts where id=$1', [assessment.id])).rows,
+        answers: (await pg.query('select * from public.assessment_attempt_answers where attempt_id=$1', [assessment.id])).rows,
+      };
+      await asUser(studentId);
+      return data;
+    };
+    const before = await snapshot();
+    for (const action of [
+      () => rpc('sync_assessment_draft', [assessment.id, 0, 2, randomUUID(),
+        [{ question_id: question.id, selected_choice_id: question.choices[1].id }]]),
+      () => rpc('complete_assessment_revision', [assessment.id, 0]),
+      () => rpc('complete_assessment_revision', [assessment.id, 0, 99]),
+    ]) {
+      await pg.exec('savepoint conflict');
+      await expect(action()).rejects.toMatchObject({ code: 'P0001', message: 'Assessment revision conflict.' });
+      await pg.exec('rollback to savepoint conflict');
+      expect(await snapshot()).toEqual(before);
+    }
+  });
+
+  it('checks the submitted lesson revision before and after the global advisory lock', () => {
+    const migrationSql = readFileSync(
+      resolve('supabase/migrations', saveLessonRevisionLockMigration),
+      'utf8',
+    );
+    const precheck = migrationSql.indexOf('select * into existing from public.lesson_catalog');
+    const lock = migrationSql.indexOf('pg_advisory_xact_lock(20260912, 2)');
+    const lockedRecheck = migrationSql.indexOf(
+      'select * into existing from public.lesson_catalog where lesson_id = p_lesson->>\'id\' for update',
+    );
+
+    expect(precheck).toBeGreaterThan(-1);
+    expect(lock).toBeGreaterThan(precheck);
+    expect(lockedRecheck).toBeGreaterThan(lock);
+    expect(migrationSql.match(/This lesson changed in another session\. Reload before saving\./g)).toHaveLength(2);
+  });
+
   it('publishes mixed chapter teaching tables without moving the Overview, and skips empty teaching', async () => {
     const base = structuredClone(packagedContent.lessons[0]);
     const overview = { id: 'overview-reference', type: 'vocabulary-table' as const, title: 'Vocabulary', rows: [], tables: [{
@@ -800,6 +890,21 @@ describe('Basic Lesson Management SQL and RLS', () => {
     const edited = await save({ ...original, title: 'Edited title' }, saved.revision);
     expect(edited.draft.title).toBe('Edited title');
     await expect(save(original, saved.revision)).rejects.toThrow('changed in another session');
+  });
+  it('allows only one simultaneous save for the same revision', async () => {
+    const original = draft({ prerequisiteLessonId: undefined });
+    const saved = await save(original);
+
+    const outcomes = await Promise.allSettled([
+      save({ ...original, title: 'Concurrent save A' }, saved.revision),
+      save({ ...original, title: 'Concurrent save B' }, saved.revision),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
+    expect(rejected?.status).toBe('rejected');
+    if (rejected?.status === 'rejected')
+      expect(String(rejected.reason)).toContain('changed in another session');
   });
   it('adds, edits, deletes and reorders both supported activity types', async () => {
     const lesson = draft({
