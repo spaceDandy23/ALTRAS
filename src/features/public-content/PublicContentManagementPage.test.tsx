@@ -6,7 +6,8 @@ import * as service from './public-content.service';
 
 vi.mock('./public-content.service', async () => {
   const actual = await vi.importActual<typeof import('./public-content.service')>('./public-content.service');
-  return { ...actual, listContentPages: vi.fn(), saveContentDraft: vi.fn(), publishContent: vi.fn() };
+  return { ...actual, listContentPages: vi.fn(), saveContentDraft: vi.fn(), publishContent: vi.fn(),
+    uploadLandingShowcaseImage: vi.fn(), getDraftShowcaseImageUrl: vi.fn().mockResolvedValue('/preview.webp') };
 });
 
 const page = {
@@ -23,6 +24,25 @@ const page = {
 };
 
 describe('PublicContentManagementPage', () => {
+  it('adds screenshots, edits alternative text, removes one, and saves the stack without changing other sections', async () => {
+    vi.mocked(service.listContentPages).mockResolvedValue([page]);
+    vi.mocked(service.uploadLandingShowcaseImage).mockResolvedValueOnce('landing/understand/first.webp').mockResolvedValueOnce('landing/understand/second.webp');
+    vi.mocked(service.saveContentDraft).mockResolvedValue({ ...page, revision: 2 });
+    const user = userEvent.setup();
+    render(<PublicContentManagementPage />);
+    const add = await screen.findByLabelText('Add Understand screenshot');
+    await user.upload(add, new File(['image'], 'first.webp', { type: 'image/webp' }));
+    const alt = await screen.findByLabelText('Understand 1 image alternative text');
+    await user.type(alt, 'Chapter teaching');
+    await user.upload(add, new File(['image'], 'second.webp', { type: 'image/webp' }));
+    await screen.findByLabelText('Understand 2 image alternative text');
+    await user.click(screen.getAllByRole('button', { name: 'Remove screenshot' })[1]);
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(service.saveContentDraft).toHaveBeenCalledWith('landing', expect.objectContaining({
+      showcaseImages: { understand: [{ path: 'landing/understand/first.webp', alt: 'Chapter teaching' }] },
+      learnHeading: 'Learn', practiceHeading: 'Practice', understandImagePath: null,
+    }), 1));
+  });
   it('uses the shared centered admin loader before content arrives', () => {
     vi.mocked(service.listContentPages).mockReturnValue(new Promise(() => undefined));
     render(<PublicContentManagementPage />);

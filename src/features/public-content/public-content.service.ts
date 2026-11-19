@@ -8,6 +8,11 @@ export const landingShowcaseSlots = ['understand', 'apply', 'reflect'] as const;
 export type LandingShowcaseSlot = (typeof landingShowcaseSlots)[number];
 
 const landingContentSchema = z.object({
+  showcaseImages: z.object({
+    understand: z.array(z.object({ path: z.string().min(1), alt: z.string().max(300) })).max(8).optional(),
+    apply: z.array(z.object({ path: z.string().min(1), alt: z.string().max(300) })).max(8).optional(),
+    reflect: z.array(z.object({ path: z.string().min(1), alt: z.string().max(300) })).max(8).optional(),
+  }).optional(),
   heroHeading: z.string().min(1),
   heroEmphasis: z.string().min(1),
   heroDescription: z.string().min(1),
@@ -37,6 +42,12 @@ const legalContentSchema = z.object({
 });
 
 export type LandingContent = z.infer<typeof landingContentSchema>;
+export function getShowcaseImages(content: LandingContent, slot: LandingShowcaseSlot) {
+  const images = content.showcaseImages?.[slot];
+  if (images) return images;
+  const path = content[`${slot}ImagePath`];
+  return path ? [{ path, alt: content[`${slot}ImageAlt`] ?? '' }] : [];
+}
 export type LegalContent = z.infer<typeof legalContentSchema>;
 export type PublicContent = LandingContent | LegalContent;
 

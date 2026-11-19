@@ -25,7 +25,14 @@ Deno.serve(async (request) => {
     return new Response('Not found', { status: 404 });
   }
 
-  if (!permittedPaths.some((key) => (published as Record<string, unknown>)[key] === path)) {
+  const content = published as Record<string, unknown>;
+  const stacks = content.showcaseImages;
+  const publishedInStack = stacks && typeof stacks === 'object' &&
+    ['understand', 'apply', 'reflect'].some((slot) => {
+      const images = (stacks as Record<string, unknown>)[slot];
+      return Array.isArray(images) && images.some((image) => image && typeof image === 'object' && image.path === path);
+    });
+  if (!publishedInStack && !permittedPaths.some((key) => content[key] === path)) {
     return new Response('Not found', { status: 404 });
   }
 

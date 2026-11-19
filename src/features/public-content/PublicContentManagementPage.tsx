@@ -5,6 +5,7 @@ import { AdminContentLoading } from '@/features/admin/AdminContentLoading';
 import { AdminPageHeader } from '@/features/admin/AdminPageHeader';
 import {
   getDraftShowcaseImageUrl,
+  getShowcaseImages,
   isLegalContent,
   listContentPages,
   pageKeys,
@@ -120,13 +121,36 @@ function ShowcaseEditor({
     return () => { active = false; };
   }, [path]);
   return <fieldset className="public-content-showcase"><legend>{title}</legend><p>{context}. Upload an actual gameplay screenshot; it remains private until this landing draft is published.</p>
-    <div className="public-content-field"><label htmlFor={`landing-${title.toLowerCase()}-image`}>{title} screenshot</label><p>WebP, PNG, or JPEG, up to 5 MB. Between 320×180 and 3840×3840 pixels.</p><input id={`landing-${title.toLowerCase()}-image`} type="file" accept="image/webp,image/png,image/jpeg" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; setUploading(true); void onUpload(file).catch(() => undefined).finally(() => { setUploading(false); event.currentTarget.value = ''; }); }} />{path && preview && <img className="public-content-showcase__image" src={preview} alt={alt || `${title} screenshot preview`} />}</div>
+    <div className="public-content-field"><label htmlFor={`landing-${title.toLowerCase()}-image`}>{title} screenshot</label><p>WebP, PNG, or JPEG, up to 5 MB. Between 320×180 and 3840×3840 pixels.</p><input id={`landing-${title.toLowerCase()}-image`} type="file" accept="image/webp,image/png,image/jpeg" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; setUploading(true); const input = event.currentTarget; void onUpload(file).catch(() => undefined).finally(() => { setUploading(false); input.value = ''; }); }} />{path && preview && <img className="public-content-showcase__image" src={preview} alt={alt || `${title} screenshot preview`} />}</div>
     <TextField label={`${title} image alternative text`} description="Describe what is visible for screen readers." value={alt} onChange={(imageAlt) => onChange({ imageAlt })} />
     {path && <Button type="button" variant="quiet" onClick={() => onChange({ imagePath: null })}>Remove screenshot</Button>}
   </fieldset>;
 }
 
-function LandingEditor({ draft, update, onUpload }: { draft: LandingContent; update: (patch: Partial<LandingContent>) => void; onUpload: (slot: 'understand' | 'apply' | 'reflect', file: File) => Promise<void> }) {
+function ShowcaseGallery({ title, context, images, onChange, onUpload }: {
+  title: string; context: string; images: Array<{ path: string; alt: string }>;
+  onChange: (images: Array<{ path: string; alt: string }>) => void;
+  onUpload: (file: File) => Promise<string>;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const upload = async (file: File, index?: number) => {
+    setUploading(true);
+    try {
+      const path = await onUpload(file);
+      onChange(index === undefined ? [...images, { path, alt: '' }] : images.map((image, i) => i === index ? { ...image, path } : image));
+    } finally { setUploading(false); }
+  };
+  return <fieldset disabled={uploading}><legend>{title} screenshot stack ({images.length} / 8)</legend>
+    <p>Drag the front screenshot to the back on the public page. Changes appear after publishing.</p>
+    {images.map((image, index) => <ShowcaseEditor key={image.path} title={title + ' ' + (index + 1)} context={context}
+      path={image.path} alt={image.alt} onUpload={(file) => upload(file, index)}
+      onChange={({ imagePath, imageAlt }) => onChange(imagePath === null ? images.filter((_, i) => i !== index) : images.map((entry, i) => i === index ? { ...entry, ...(imageAlt !== undefined ? { alt: imageAlt } : {}) } : entry))} />)}
+    {images.length < 8 && <div className="public-content-field"><label htmlFor={'add-' + title}>Add {title} screenshot</label>
+      <input id={'add-' + title} type="file" accept="image/webp,image/png,image/jpeg" onChange={(event) => { const input = event.currentTarget; const file = input.files?.[0]; if (file) void upload(file).catch(() => undefined).finally(() => { input.value = ''; }); }} /></div>}
+  </fieldset>;
+}
+
+function LandingEditor({ draft, update, onUpload }: { draft: LandingContent; update: (patch: Partial<LandingContent>) => void; onUpload: (slot: 'understand' | 'apply' | 'reflect', file: File) => Promise<string> }) {
   return <>
     <section className="public-content-editor-section" aria-labelledby="landing-hero-fields"><header><h2 id="landing-hero-fields">Hero</h2><p>Shown at the top of the public home page.</p></header><div className="public-content-editor-section__fields">
       <TextField label="Hero heading" description="The first large line visitors see." value={draft.heroHeading} onChange={(heroHeading) => update({ heroHeading })} />
@@ -134,7 +158,7 @@ function LandingEditor({ draft, update, onUpload }: { draft: LandingContent; upd
       <TextField label="Hero description" description="Short introduction below the hero heading." multiline value={draft.heroDescription} onChange={(heroDescription) => update({ heroDescription })} />
     </div></section>
     <section className="public-content-editor-section" aria-labelledby="landing-feature-fields"><header><h2 id="landing-feature-fields">Gameplay showcase</h2><p>These sections use real student-interface screenshots when an approved image is published. Existing illustrations remain until then.</p></header><div className="public-content-editor-section__fields">
-      {landingShowcaseFields.map((section) => <fieldset key={section.slot}><legend>{section.label}</legend><TextField label={`${section.label} title`} description="Title next to this screenshot." value={draft[section.heading]} onChange={(value) => update({ [section.heading]: value })} /><TextField label={`${section.label} description`} description="Supporting text next to this screenshot." multiline value={draft[section.description]} onChange={(value) => update({ [section.description]: value })} /><ShowcaseEditor title={section.label} context={section.context} path={draft[section.path] ?? null} alt={draft[section.alt] ?? ''} onUpload={(file) => onUpload(section.slot, file)} onChange={({ imagePath, imageAlt }) => update({ ...(imagePath !== undefined ? { [section.path]: imagePath } : {}), ...(imageAlt !== undefined ? { [section.alt]: imageAlt } : {}) })} /></fieldset>)}
+      {landingShowcaseFields.map((section) => <fieldset key={section.slot}><legend>{section.label}</legend><TextField label={`${section.label} title`} description="Title next to this screenshot." value={draft[section.heading]} onChange={(value) => update({ [section.heading]: value })} /><TextField label={`${section.label} description`} description="Supporting text next to this screenshot." multiline value={draft[section.description]} onChange={(value) => update({ [section.description]: value })} /><ShowcaseGallery title={section.label} context={section.context} images={getShowcaseImages(draft, section.slot)} onUpload={(file) => onUpload(section.slot, file)} onChange={(images) => update({ [section.path]: null, [section.alt]: "", showcaseImages: { [section.slot]: images } })} /></fieldset>)}
     </div></section>
     <section className="public-content-editor-section" aria-labelledby="landing-about-fields"><header><h2 id="landing-about-fields">About and closing</h2><p>Shown near the bottom of the landing page.</p></header><div className="public-content-editor-section__fields">
       <TextField label="About title" description="Heading for the ALTRAS project description." value={draft.aboutTitle} onChange={(aboutTitle) => update({ aboutTitle })} />
@@ -179,14 +203,17 @@ export function PublicContentManagementPage() {
       </section>
     );
   }
-  const update = (patch: Partial<PublicContent>) => setDraft({ ...activeDraft, ...patch } as PublicContent);
+  const update = (patch: Partial<PublicContent>) => setDraft((current) => {
+    const base = current ?? activeDraft;
+    return { ...base, ...patch, ...('showcaseImages' in patch ? { showcaseImages: { ...(base as LandingContent).showcaseImages, ...patch.showcaseImages } } : {}) } as PublicContent;
+  });
   const uploadShowcase = async (slot: 'understand' | 'apply' | 'reflect', file: File) => {
     setMessage(''); setMessageKind('success');
     try {
       const imagePath = await uploadLandingShowcaseImage(slot, file);
-      const key = `${slot}ImagePath` as 'understandImagePath' | 'applyImagePath' | 'reflectImagePath';
-      setDraft((current) => ({ ...((current ?? activeDraft) as LandingContent), [key]: imagePath }));
+
       setMessage('Screenshot uploaded. Save the draft to keep this change.');
+      return imagePath;
     } catch (error) {
       setMessageKind('error');
       setMessage(error instanceof Error ? error.message : 'Unable to upload screenshot.');

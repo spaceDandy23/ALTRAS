@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useAuthStore } from '@/stores/auth.store';
@@ -8,6 +8,7 @@ describe('public pages', () => {
   afterEach(() => useAuthStore.setState({ status: 'guest', user: null }));
 
   it('gives visitors landing content, legal links, and authentication links', () => {
+    useAuthStore.setState({ status: 'guest', user: null });
     render(<MemoryRouter><LandingPage /></MemoryRouter>);
     expect(document.querySelector('.public-page')).toHaveClass('public-page');
     expect(screen.getByText('Math is a language.', { selector: 'h1' })).toBeInTheDocument();
@@ -17,6 +18,24 @@ describe('public pages', () => {
     expect(screen.getByRole('link', { name: 'Log In' })).toHaveAttribute('href', '/login');
     expect(screen.getAllByRole('link', { name: 'Privacy Policy' })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: 'Terms' })).toHaveLength(2);
+  });
+
+  it.each(['idle', 'loading'] as const)('does not flash Log In while auth is %s', (status) => {
+    useAuthStore.setState({ status, user: null });
+    render(<MemoryRouter><LandingPage /></MemoryRouter>);
+    expect(screen.queryByRole('link', { name: 'Log In' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    act(() => useAuthStore.setState({ status: 'authenticated' }));
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/home');
+    expect(screen.queryByRole('link', { name: 'Log In' })).not.toBeInTheDocument();
+  });
+
+  it('shows Log In after session restoration confirms a guest', () => {
+    useAuthStore.setState({ status: 'loading', user: null });
+    render(<MemoryRouter><LandingPage /></MemoryRouter>);
+    act(() => useAuthStore.setState({ status: 'guest' }));
+    expect(screen.getByRole('link', { name: 'Log In' })).toHaveAttribute('href', '/login');
   });
 
   it('sends an authenticated visitor to the existing protected learning route', () => {

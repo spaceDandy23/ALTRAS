@@ -2,11 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, Check, CornerDownRight, X } from 'lucide-react';
 import { AltrasLogo } from '@/components/brand/AltrasLogo';
+import { ScreenshotStack } from './ScreenshotStack';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStore } from '@/stores/auth.store';
 import { applyExperienceScope } from '@/features/researcher/researcher-experience';
 import {
   getPublishedContent,
+  getShowcaseImages,
   getPublishedShowcaseImageUrl,
   type LandingContent,
   type LandingShowcaseSlot,
@@ -54,11 +56,12 @@ function DecorativePreview({ slot }: { slot: LandingShowcaseSlot }) {
 function LearningFeatures({ content, onOpenImage }: { content: LandingContent; onOpenImage: (source: string, alt: string) => void }) {
   return <section id="explore" className="public-features public-page__content" aria-label="Explore ALTRAS">
     {showcaseSections.map((section) => {
-      const path = content[section.path];
-      const alt = content[section.alt] || `${section.label} ALTRAS gameplay screenshot`;
-      const source = path ? getPublishedShowcaseImageUrl(path) : '';
+      const images = getShowcaseImages(content, section.slot).map((image) => ({
+        source: getPublishedShowcaseImageUrl(image.path),
+        alt: image.alt || section.label + ' ALTRAS gameplay screenshot',
+      })).filter((image) => image.source);
       return <article key={section.slot} className="public-feature">
-        {source ? <button className="public-showcase" type="button" onClick={() => onOpenImage(source, alt)} aria-label={`Open ${section.label} screenshot`}><img src={source} alt={alt} /></button> : <DecorativePreview slot={section.slot} />}
+        {images.length ? <ScreenshotStack key={images.map((image) => image.source).join()} images={images} label={section.label} onOpen={onOpenImage} /> : <DecorativePreview slot={section.slot} />}
         <div className="public-feature__copy"><span className="public-kicker">{section.number} / {section.label}</span><h2>{content[section.heading]}</h2><p>{content[section.description]}</p></div>
       </article>;
     })}
@@ -82,7 +85,9 @@ function ScreenshotViewer({ source, alt, onClose }: { source: string; alt: strin
 }
 
 export function LandingPage() {
-  const authenticated = useAuthStore((state) => state.status === 'authenticated');
+  const authStatus = useAuthStore((state) => state.status);
+  const authenticated = authStatus === 'authenticated';
+  const authResolved = authStatus === 'guest' || authenticated;
   const [content, setContent] = useState<LandingContent>(landingFallback);
   const [viewer, setViewer] = useState<{ source: string; alt: string } | null>(null);
   const destination = authenticated ? '/home' : '/login';
@@ -90,7 +95,7 @@ export function LandingPage() {
   useEffect(() => { void getPublishedContent<LandingContent>('landing').then((published) => { if (published) setContent(published); }).catch(() => undefined); }, []);
   return <div className="public-page">
     <a className="public-skip" href="#main-content">Skip to content</a>
-    <header className="public-nav public-page__content"><Link className="public-nav__brand" to="/" aria-label="ALTRAS home"><BookOpen aria-hidden="true" /><AltrasLogo linked={false} /></Link><nav aria-label="Public navigation"><a href="#explore">Explore</a><a href="#about">About</a><Link to="/privacy-policy">Privacy Policy</Link><Link to="/terms-and-conditions">Terms</Link></nav><div className="public-nav__actions"><Link className="public-login" to={destination}>{authenticated ? 'Dashboard' : 'Log In'}</Link><LearningLink to={destination} /></div></header>
+    <header className="public-nav public-page__content"><Link className="public-nav__brand" to="/" aria-label="ALTRAS home"><BookOpen aria-hidden="true" /><AltrasLogo linked={false} /></Link><nav aria-label="Public navigation"><a href="#explore">Explore</a><a href="#about">About</a><Link to="/privacy-policy">Privacy Policy</Link><Link to="/terms-and-conditions">Terms</Link></nav><div className="public-nav__actions"><span className="public-login-slot">{authResolved ? <Link className="public-login" to={destination}>{authenticated ? 'Dashboard' : 'Log In'}</Link> : <span className="public-login" role="status" aria-label="Checking session" aria-busy="true">…</span>}</span><LearningLink to={destination} /></div></header>
     <main id="main-content"><section className="public-hero public-page__content" aria-labelledby="landing-title"><div className="public-hero__copy"><p className="public-kicker">A little language. A little algebra.</p><h1 id="landing-title">{content.heroHeading}<br /><em>{content.heroEmphasis}</em></h1><p>{content.heroDescription}</p><LearningLink to={destination} /></div><figure className="public-transformation" aria-label="Twice a number, plus five translates to 2x + 5"><div className="public-note public-note--words"><span>In words</span><p>Twice a number,<br />plus five.</p></div><CornerDownRight className="public-transformation__arrow" aria-hidden="true" /><div className="public-note public-note--math"><span>In algebra</span><p>2x + 5</p></div></figure></section>
       <section className="public-example public-page__content" aria-label="Algebraic translation example"><div><span className="public-kicker">Example</span><p>Algebraic translation</p></div><blockquote>“Seven more than a number”</blockquote><ArrowRight aria-hidden="true" /><p className="public-example__answer">x + 7</p></section>
       <LearningFeatures content={content} onOpenImage={(source, alt) => setViewer({ source, alt })} />
