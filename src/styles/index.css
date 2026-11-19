@@ -640,6 +640,7 @@ h3 {
 .public-example__answer { border-radius: 10px; padding: 0.4rem 1rem; color: var(--green); background: var(--selection-surface); font: italic 700 2rem var(--font-sans); text-align: center; white-space: nowrap; }
 .public-features { display: grid; gap: clamp(3rem, 8vw, 6rem); padding-block: clamp(3rem, 7vw, 6rem); }
 .public-feature { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(15rem, 0.8fr); align-items: center; gap: clamp(1.75rem, 6vw, 5rem); min-width: 0; }
+.public-feature:nth-child(even) { grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.2fr); }
 .public-feature:nth-child(even) > :first-child { order: 2; }
 .public-showcase { display: block; width: 100%; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 14px; padding: 0; background: var(--surface); box-shadow: 0 7px 0 color-mix(in srgb, var(--ink) 10%, transparent); cursor: zoom-in; }
 .public-showcase:hover { border-color: var(--green); }
@@ -794,7 +795,7 @@ h3 {
   .public-example blockquote { text-align: left; }
   .public-example > svg { display: none; }
   .public-example__answer { padding-inline: 0.6rem; font-size: 1.6rem; }
-  .public-feature { grid-template-columns: 1fr; gap: 1.5rem; }
+  .public-feature, .public-feature:nth-child(even) { grid-template-columns: 1fr; gap: 1.5rem; }
   .public-feature:nth-child(even) > :first-child { order: initial; }
   .public-features { gap: 3rem; padding-block: 2.5rem; }
   .public-preview { min-height: 165px; }
